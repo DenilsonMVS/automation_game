@@ -109,3 +109,8 @@ impl GlType for u32 {
 	const ENUM: GlTypeEnum = GlTypeEnum::UnsignedInt;
     const FIELD_TYPE_SIZE: i32 = 1;
 }
+
+impl GlType for u16 {
+	const ENUM: GlTypeEnum = GlTypeEnum::UnsignedShort;
+    const FIELD_TYPE_SIZE: i32 = 1;
+}

@@ -74,6 +74,7 @@ impl Graphics {
         glfw.window_hint(glfw::WindowHint::ContextVersion(4, 6));
         glfw.window_hint(glfw::WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
         glfw.window_hint(glfw::WindowHint::OpenGlForwardCompat(true));
+        glfw.window_hint(glfw::WindowHint::Samples(Some(4)));
 
         #[cfg(debug_assertions)]
         glfw.window_hint(glfw::WindowHint::OpenGlDebugContext(true));

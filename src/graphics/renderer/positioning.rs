@@ -69,12 +69,41 @@ impl RenderBox {
         return Self { min, max };
     }
 
+    pub fn new_simple(
+        position: glm::Vec2,
+        position_mode: PositionMode,
+        size: glm::Vec2,
+    ) -> Self {
+        let offset = match position_mode {
+            PositionMode::TopLeft      => glm::vec2(0.0, -size.y),
+            PositionMode::TopCenter    => glm::vec2(-size.x / 2.0, -size.y),
+            PositionMode::TopRight     => glm::vec2(-size.x, -size.y),
+            
+            PositionMode::CenterLeft   => glm::vec2(0.0, -size.y / 2.0),
+            PositionMode::Center       => glm::vec2(-size.x / 2.0, -size.y / 2.0),
+            PositionMode::CenterRight  => glm::vec2(-size.x, -size.y / 2.0),
+            
+            PositionMode::BottomLeft   => glm::vec2(0.0, 0.0),
+            PositionMode::BottomCenter => glm::vec2(-size.x / 2.0, 0.0),
+            PositionMode::BottomRight  => glm::vec2(-size.x, 0.0),
+        };
+
+        let min = position + offset;
+        let max = min + size;
+
+        return Self { min, max };
+    }
+
     pub fn get_top_right(&self) -> glm::Vec2 {
         self.max
     }
 
     pub fn get_top_left(&self) -> glm::Vec2 {
         glm::vec2(self.min.x, self.max.y)
+    }
+
+    pub fn get_bottom_right(&self) -> glm::Vec2 {
+        glm::vec2(self.max.x, self.min.y)
     }
 }
 
@@ -123,6 +152,43 @@ impl OrientedBox {
         let half_right = right * half_w;
 
         return OrientedBox {
+            top_left:  center + half_up - half_right,
+            top_right: center + half_up + half_right,
+            bot_left:  center - half_up - half_right,
+            bot_right: center - half_up + half_right,
+        };
+    }
+
+    pub fn new_rotated(
+        position: glm::Vec2,
+        position_mode: PositionMode,
+        size: glm::Vec2,
+        up_vector: glm::Vec2,
+    ) -> Self {
+        let up = glm::normalize(&up_vector);
+        let right = glm::vec2(up.y, -up.x);
+
+        let half_w = size.x / 2.0;
+        let half_h = size.y / 2.0;
+
+        let center_offset = match position_mode {
+            PositionMode::TopLeft      => right * half_w - up * half_h,
+            PositionMode::TopCenter    => -up * half_h,
+            PositionMode::TopRight     => -right * half_w - up * half_h,
+            PositionMode::CenterLeft   => right * half_w,
+            PositionMode::Center       => glm::vec2(0.0, 0.0),
+            PositionMode::CenterRight  => -right * half_w,
+            PositionMode::BottomLeft   => right * half_w + up * half_h,
+            PositionMode::BottomCenter => up * half_h,
+            PositionMode::BottomRight  => -right * half_w + up * half_h,
+        };
+
+        let center = position + center_offset;
+
+        let half_up = up * half_h;
+        let half_right = right * half_w;
+
+        return Self {
             top_left:  center + half_up - half_right,
             top_right: center + half_up + half_right,
             bot_left:  center - half_up - half_right,

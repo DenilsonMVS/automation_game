@@ -11,6 +11,7 @@ pub mod fonts;
 pub mod atlas;
 pub mod positioning;
 pub mod simple_texture;
+pub mod simple_shape_renderer;
 
 trait GlEnum: Sized {
     fn to_gl_enum(&self) -> u32;
@@ -51,6 +52,7 @@ pub enum Capability {
 	DepthTest,
 	StencilTest,
 	ScissorTest,
+	Multisample,
 }
 
 impl GlEnum for Capability {
@@ -61,6 +63,7 @@ impl GlEnum for Capability {
 			gl::DEPTH_TEST => Some(Self::DepthTest),
 			gl::STENCIL_TEST => Some(Self::StencilTest),
 			gl::SCISSOR_TEST => Some(Self::ScissorTest),
+			gl::MULTISAMPLE => Some(Self::Multisample),
 			_ => None,
 		}
 	}
@@ -72,10 +75,50 @@ impl GlEnum for Capability {
 			Self::DepthTest => gl::DEPTH_TEST,
 			Self::StencilTest => gl::STENCIL_TEST,
 			Self::ScissorTest => gl::SCISSOR_TEST,
+			Self::Multisample => gl::MULTISAMPLE,
 		}
 	}
 }
 
+pub enum DepthFunc {
+	Never,
+    Less,
+    Equal,
+    Lequal,
+    Greater,
+    NotEqual,
+    Gequal,
+    Always,
+}
+
+impl GlEnum for DepthFunc {
+	fn from_gl_enum(value: u32) -> Option<Self> {
+		match value {
+			gl::NEVER    => Some(Self::Never),
+			gl::LESS     => Some(Self::Less),
+			gl::EQUAL    => Some(Self::Equal),
+			gl::LEQUAL   => Some(Self::Lequal),
+			gl::GREATER  => Some(Self::Greater),
+			gl::NOTEQUAL => Some(Self::NotEqual),
+			gl::GEQUAL   => Some(Self::Gequal),
+			gl::ALWAYS   => Some(Self::Always),
+			_ => None,			
+		}
+	}
+
+	fn to_gl_enum(&self) -> u32 {
+		match self {
+            Self::Never    => gl::NEVER,
+            Self::Less     => gl::LESS,
+            Self::Equal    => gl::EQUAL,
+            Self::Lequal   => gl::LEQUAL,
+            Self::Greater  => gl::GREATER,
+            Self::NotEqual => gl::NOTEQUAL,
+            Self::Gequal   => gl::GEQUAL,
+            Self::Always   => gl::ALWAYS,
+        }
+	}
+}
 
 pub enum BlendFactor {
 	Zero,
@@ -136,6 +179,12 @@ impl Renderer {
         }
     }
 
+	pub fn clear_depth(&self, depth: u16) {
+        unsafe {
+            gl::ClearDepth(depth as f64);
+        }
+    }
+
     pub fn clear(&self, fields: &[ClearField]) {
         let combined_mask = fields.iter().fold(0u32, |prev, cur| prev | cur.to_gl_enum());
         unsafe {
@@ -158,6 +207,12 @@ impl Renderer {
     pub fn blend_func(&self, s_factor: BlendFactor, d_factor: BlendFactor) {
 		unsafe {
 			gl::BlendFunc(s_factor.to_gl_enum(), d_factor.to_gl_enum());
+		}
+	}
+
+	pub fn depth_func(&self, func: DepthFunc) {
+		unsafe {
+			gl::DepthFunc(func.to_gl_enum());
 		}
 	}
 }
