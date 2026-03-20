@@ -9,8 +9,8 @@ const QUADS_PER_RENDER: usize = 1 << 10;
 #[derive(GlVertex, Debug)]
 #[vertex(divisor = 1)]
 struct TextureVertex {
-    center: glm::I16Vec2,
-    top_edge: glm::I16Vec2,
+    top_left: glm::Vec2,
+    top_right: glm::Vec2,
     uv_min: glm::U16Vec2,
     uv_max: glm::U16Vec2,
 }
@@ -91,8 +91,8 @@ impl<'a, Atlas: TypedAtlas> SimpleTexture<'a, Atlas> {
         let simple_box = RenderBox::new(position, position_mode, original_size, base_dimension);
         
         self.vbo.write(&TextureVertex {
-            center: simple_box.get_center(),
-            top_edge: simple_box.get_top_edge(),
+            top_right: simple_box.get_top_right(),
+            top_left: simple_box.get_top_left(),
             uv_min: uv_data.min,
             uv_max: uv_data.max,
         });
@@ -110,32 +110,35 @@ impl<'a, Atlas: TypedAtlas> SimpleTexture<'a, Atlas> {
         let uv_data = frame_info.get_uv();
         let simple_box = RenderBox::new(position, position_mode, original_size, base_dimension);
 
-        let (top_edge, uv_min, uv_max) = match transform {
-            SimpleTransform::None => (
-                simple_box.get_top_edge(),
+        let (uv_min, uv_max) = match transform {
+            SimpleTransform::None | SimpleTransform::Rotate180 => (
                 uv_data.min, 
-                uv_data.max
+                uv_data.max,
             ),
             SimpleTransform::FlipHorizontal => (
-                simple_box.get_top_edge(),
                 glm::vec2(uv_data.max.x, uv_data.min.y),
                 glm::vec2(uv_data.min.x, uv_data.max.y),
             ),
             SimpleTransform::FlipVertical => (
-                simple_box.get_top_edge(),
                 glm::vec2(uv_data.min.x, uv_data.max.y),
                 glm::vec2(uv_data.max.x, uv_data.min.y),
             ),
+        };
+
+        let (top_right, top_left) = match transform {
+            SimpleTransform::None | SimpleTransform::FlipHorizontal | SimpleTransform::FlipVertical => (
+                simple_box.get_top_right(),
+                simple_box.get_top_left(),
+            ),
             SimpleTransform::Rotate180 => (
-                -simple_box.get_top_edge(),
-                uv_data.min,
-                uv_data.max
-            )
+                simple_box.get_top_left(),
+                simple_box.get_top_right(),
+            ),
         };
 
         self.vbo.write(&TextureVertex {
-            center: simple_box.get_center(),
-            top_edge,
+            top_right,
+            top_left,
             uv_min,
             uv_max,
         });
@@ -153,8 +156,8 @@ impl<'a, Atlas: TypedAtlas> SimpleTexture<'a, Atlas> {
             position, position_mode, original_size, base_dimension, up_vector);
         
         self.vbo.write(&TextureVertex {
-            center: oriented_box.get_center(),
-            top_edge: oriented_box.get_top_edge(),
+            top_right: oriented_box.top_right,
+            top_left: oriented_box.top_left,
             uv_min: uv_data.min,
             uv_max: uv_data.max,
         });

@@ -69,12 +69,12 @@ impl RenderBox {
         return Self { min, max };
     }
 
-    pub fn get_center(&self) -> glm::I16Vec2 {
-        vec_to_short(&((self.max + self.min) * 0.5))
+    pub fn get_top_right(&self) -> glm::Vec2 {
+        self.max
     }
 
-    pub fn get_top_edge(&self) -> glm::I16Vec2 {
-        vec_to_short(&(glm::vec2(self.max.x - self.min.x, 0.0)))
+    pub fn get_top_left(&self) -> glm::Vec2 {
+        glm::vec2(self.min.x, self.max.y)
     }
 }
 
@@ -130,12 +130,12 @@ impl OrientedBox {
         };
     }
 
-    pub fn get_center(&self) -> glm::I16Vec2 {
-        vec_to_short(&((self.top_right + self.bot_left) * 0.5))
+    pub fn get_top_right(&self) -> glm::Vec2 {
+        self.top_right
     }
 
-    pub fn get_top_edge(&self) -> glm::I16Vec2 {
-        vec_to_short(&(self.top_right - self.top_left))
+    pub fn get_bottom_left(&self) -> glm::Vec2 {
+        self.bot_left
     }
 }
 
