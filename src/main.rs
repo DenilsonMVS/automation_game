@@ -51,6 +51,25 @@ impl Camera {
         let view = glm::translate(&scaled, &glm::vec3(-self.position.x, -self.position.y, 0.0));
         return view;
     }
+
+    fn handle_keyboard_input(&mut self, window: &PWindow, delta: f32) {
+        let camera_keys = [
+            (Key::W, glm::vec2( 0.0f32,  1.0f32)),
+            (Key::A, glm::vec2(-1.0f32,  0.0f32)),
+            (Key::S, glm::vec2( 0.0f32, -1.0f32)),
+            (Key::D, glm::vec2( 1.0f32,  0.0f32)),
+        ];
+
+        for (key, change) in camera_keys {
+            if window.get_key(key) == Action::Press {
+                self.position += change / self.zoom * delta * CAMERA_MOVEMENT_SENSITIVITY;
+            }
+        }
+    }
+
+    fn handle_scroll(&mut self, scroll: f32) {
+        self.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * scroll)
+    }
 }
 
 fn get_mouse_pos(window: &PWindow, window_size: glm::Vec2, i_projection_matrix: &glm::Mat4) -> glm::Vec2 {
@@ -118,25 +137,11 @@ fn main() {
         let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
         for (_, event) in messages.iter() {
             match event {
-                WindowEvent::Scroll(_, y_offset) => {
-                    camera.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * *y_offset as f32);
-                }
+                WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
                 _ => {}
             }
         }
-
-        let camera_keys = [
-            (Key::W, glm::vec2( 0.0f32,  1.0f32)),
-            (Key::A, glm::vec2(-1.0f32,  0.0f32)),
-            (Key::S, glm::vec2( 0.0f32, -1.0f32)),
-            (Key::D, glm::vec2( 1.0f32,  0.0f32)),
-        ];
-
-        for (key, change) in camera_keys {
-            if window.get_key(key) == Action::Press {
-                camera.position += change / camera.zoom * delta * CAMERA_MOVEMENT_SENSITIVITY;
-            }
-        }
+        camera.handle_keyboard_input(window, delta);
 
 
         simple_shape_renderer.reset();
