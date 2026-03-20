@@ -1,11 +1,17 @@
 
 pub mod graphics;
 pub mod sounds;
+pub mod game;
 
-use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
+const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
+const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
+
+use std::time;
+
+use glfw::{Action, Context, Glfw, GlfwReceiver, Key, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::graphics::renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, positioning::{PositionMode, screen_pos_to_world_pos}, simple_shape_renderer::SimpleShapeRenderer};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -25,6 +31,28 @@ fn get_projection_matrix(window_size: glm::Vec2) -> glm::Mat4 {
     return projection;
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Camera {
+    position: glm::Vec2,
+    zoom: f32,
+}
+
+impl Camera {
+    fn new() -> Self {
+        Self {
+            position: glm::vec2(0.0, 0.0),
+            zoom: 1.0,
+        }
+    }
+
+    fn get_view_matrix(&self) -> glm::Mat4 {
+        let identity = glm::identity();
+        let scaled = glm::scale(&identity, &glm::vec3(self.zoom, self.zoom, 1.0));
+        let view = glm::translate(&scaled, &glm::vec3(-self.position.x, -self.position.y, 0.0));
+        return view;
+    }
+}
+
 fn get_mouse_pos(window: &PWindow, window_size: glm::Vec2, i_projection_matrix: &glm::Mat4) -> glm::Vec2 {
     let (x, y) = window.get_cursor_pos();
     return screen_pos_to_world_pos(glm::vec2(x as f32, y as f32), window_size, i_projection_matrix);
@@ -40,12 +68,15 @@ pub struct MainContext<'a, 'b> {
 
     // 'a long lifetime
     pub renderer: &'a Renderer,
+    pub simple_shape_renderer: &'b mut SimpleShapeRenderer<'a>,
     
     pub proj_matrix: Mat4,
     pub i_proj_matrix: Mat4,
+    pub vp_matrix: Mat4,
     pub now: std::time::Instant,
     pub window_size: glm::Vec2,
     pub mouse_pos: glm::Vec2,
+    pub delta: f32,
 }
 
 fn main() {
@@ -63,81 +94,75 @@ fn main() {
     renderer.clear_color(&glm::vec4(0.1, 0.12, 0.2, 0.0));
 
     let mut simple_shape_renderer = SimpleShapeRenderer::new(renderer);
-    
+    let mut camera = Camera::new();
+    let mut scene = MainScene::new();
+    let mut previous_frame = time::Instant::now();
+
     while !window.should_close() {
+
+        let now = time::Instant::now();
+        let delta = now.duration_since(previous_frame).as_secs_f32();
+        previous_frame = now;
 
         let window_size = get_window_size(window);
         unsafe { gl::Viewport(0, 0, window_size.x as i32, window_size.y as i32); }
 
         let proj_matrix = get_projection_matrix(window_size);
+        let view_matrix = camera.get_view_matrix();
+        let vp_matrix = view_matrix * proj_matrix;
         let i_proj_matrix = glm::inverse(&proj_matrix);
         let mouse_pos = get_mouse_pos(window, window_size, &i_proj_matrix);
 
-        // let mut main_context = MainContext {
-        //     glfw, window, events, renderer,
-        //     proj_matrix,
-        //     i_proj_matrix,
-        //     now: time::Instant::now(),
-        //     window_size,
-        //     mouse_pos,
-        // };
-
+        
         glfw.poll_events();
+        let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
+        for (_, event) in messages.iter() {
+            match event {
+                WindowEvent::Scroll(_, y_offset) => {
+                    camera.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * *y_offset as f32);
+                }
+                _ => {}
+            }
+        }
+
+        let camera_keys = [
+            (Key::W, glm::vec2( 0.0f32,  1.0f32)),
+            (Key::A, glm::vec2(-1.0f32,  0.0f32)),
+            (Key::S, glm::vec2( 0.0f32, -1.0f32)),
+            (Key::D, glm::vec2( 1.0f32,  0.0f32)),
+        ];
+
+        for (key, change) in camera_keys {
+            if window.get_key(key) == Action::Press {
+                camera.position += change / camera.zoom * delta * CAMERA_MOVEMENT_SENSITIVITY;
+            }
+        }
+
 
         simple_shape_renderer.reset();
-        simple_shape_renderer.send_rectangle(
-            glm::vec2(0.0, 0.0),
-            glm::vec2(0.5, 0.3),
-            PositionMode::Center,
-            glm::vec4(200, 50, 50, 255),
-            50,
-        );
-        simple_shape_renderer.send_rectangle(
-            glm::vec2(0.1, 0.1),
-            glm::vec2(0.5, 0.3),
-            PositionMode::Center,
-            glm::vec4(200, 250, 50, 255),
-            51,
-        );
 
-        simple_shape_renderer.send_symmetrical_triangle(
-            glm::vec2(0.4, 0.4),
-            glm::vec2(0.25, 0.25),
-            0.1, glm::vec4(200, 250, 250, 200),
-            10,
-        );
+        {
+            let mut main_context = MainContext {
+                glfw, window, events, renderer,
+                proj_matrix,
+                i_proj_matrix,
+                vp_matrix,
+                now,
+                window_size,
+                mouse_pos,
+                simple_shape_renderer: &mut simple_shape_renderer,
+                delta,
+            };
 
-        simple_shape_renderer.send_arbitrary_triangle(
-            &[
-                glm::vec2(-0.5, -0.5),
-                glm::vec2( 0.0,  0.5),
-                glm::vec2( 0.5, -0.5),
-            ],
-            glm::vec4(1, 250, 100, 100),
-            1,
-        );
-
-        simple_shape_renderer.send_ellipse(
-            glm::vec2(-0.8, 0.8),
-            glm::vec2(0.2, 0.1),
-            PositionMode::Center,
-            glm::vec4(10, 10, 10, 255),
-            100,
-        );
-
-        simple_shape_renderer.send_rotated_ellipse(
-            glm::vec2(0.8, 0.8),
-            glm::vec2(0.2, 0.1),
-            PositionMode::Center,
-            glm::vec2(0.5, -0.5),
-            glm::vec4(10, 10, 10, 255),
-            100,
-        );
+            scene.handle_input(&mut main_context);
+            scene.game_logic(&mut main_context);
+            scene.generate_output(&mut main_context);
+        }
         
         renderer.clear(&[ClearField::Color, ClearField::Depth]);
 
         simple_shape_renderer.finish();
-        simple_shape_renderer.draw(&proj_matrix);
+        simple_shape_renderer.draw(&vp_matrix);
 
         window.swap_buffers();
     }

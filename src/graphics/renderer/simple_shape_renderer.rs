@@ -10,7 +10,7 @@ const FORMS_PER_RENDER: usize = 1 << 10;
 	frag = "../../../res/shaders/simple_color.frag"
 )]
 struct SimpleRectangleProgram {
-    u_projection: glm::Mat4,
+    u_vp: glm::Mat4,
 }
 
 #[program_interface(
@@ -18,7 +18,7 @@ struct SimpleRectangleProgram {
 	frag = "../../../res/shaders/simple_color.frag"
 )]
 struct SimpleTriangleProgram {
-    u_projection: glm::Mat4,
+    u_vp: glm::Mat4,
 }
 
 #[program_interface(
@@ -26,7 +26,7 @@ struct SimpleTriangleProgram {
 	frag = "../../../res/shaders/ellipse.frag"
 )]
 struct SimpleEllipseProgram {
-    u_projection: glm::Mat4,
+    u_vp: glm::Mat4,
 }
 
 #[repr(C)]
@@ -103,21 +103,21 @@ impl<'a> SimpleShapeRenderer<'a> {
         };
     }
 
-    pub fn draw(&mut self, projection_matrix: &glm::Mat4) {
+    pub fn draw(&mut self, vp_matrix: &glm::Mat4) {
         self.rec_program.bind();
-        self.rec_program.set_u_projection(projection_matrix);
+        self.rec_program.set_u_vp(vp_matrix);
 
         self.rec_vao.draw_instanced(4, self.rec_vbo.get_len() as i32, DrawMode::TriangleStrip);
         self.rec_vbo.lock();
 
         self.tri_program.bind();
-        self.tri_program.set_u_projection(projection_matrix);
+        self.tri_program.set_u_vp(vp_matrix);
 
         self.tri_vao.draw_instanced(3, self.tri_vbo.get_len() as i32, DrawMode::TriangleStrip);
         self.tri_vbo.lock();
 
         self.ell_program.bind();
-        self.ell_program.set_u_projection(projection_matrix);
+        self.ell_program.set_u_vp(vp_matrix);
 
         self.ell_vao.draw_instanced(4, self.ell_vbo.get_len() as i32, DrawMode::TriangleStrip);
         self.ell_vbo.lock();
