@@ -1,0 +1,28 @@
+[package]
+name = "automation_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gl = "0.14.0"
+glfw = "0.61.0"
+image = "0.25.9"
+msdfgen = "0.2.1"
+ttf-parser = "0.18.1"
+nalgebra-glm = "0.20.0"
+macros = { path = "./macros" }
+rodio = "0.21.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+rand = "0.9.2"
+anyhow = "1.0.100"
+
+[workspace]
+members = ["macros"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
