@@ -3,15 +3,12 @@ pub mod graphics;
 pub mod sounds;
 pub mod game;
 
-const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
-const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
-
 use std::time;
 
-use glfw::{Action, Context, Glfw, GlfwReceiver, Key, PWindow, WindowEvent};
+use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -29,47 +26,6 @@ fn get_projection_matrix(window_size: glm::Vec2) -> glm::Mat4 {
     };
 
     return projection;
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Camera {
-    position: glm::Vec2,
-    zoom: f32,
-}
-
-impl Camera {
-    fn new() -> Self {
-        Self {
-            position: glm::vec2(0.0, 0.0),
-            zoom: 1.0,
-        }
-    }
-
-    fn get_view_matrix(&self) -> glm::Mat4 {
-        let identity = glm::identity();
-        let scaled = glm::scale(&identity, &glm::vec3(self.zoom, self.zoom, 1.0));
-        let view = glm::translate(&scaled, &glm::vec3(-self.position.x, -self.position.y, 0.0));
-        return view;
-    }
-
-    fn handle_keyboard_input(&mut self, window: &PWindow, delta: f32) {
-        let camera_keys = [
-            (Key::W, glm::vec2( 0.0f32,  1.0f32)),
-            (Key::A, glm::vec2(-1.0f32,  0.0f32)),
-            (Key::S, glm::vec2( 0.0f32, -1.0f32)),
-            (Key::D, glm::vec2( 1.0f32,  0.0f32)),
-        ];
-
-        for (key, change) in camera_keys {
-            if window.get_key(key) == Action::Press {
-                self.position += change / self.zoom * delta * CAMERA_MOVEMENT_SENSITIVITY;
-            }
-        }
-    }
-
-    fn handle_scroll(&mut self, scroll: f32) {
-        self.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * scroll)
-    }
 }
 
 fn get_mouse_pos(window: &PWindow, window_size: glm::Vec2, i_projection_matrix: &glm::Mat4) -> glm::Vec2 {

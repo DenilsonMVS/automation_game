@@ -1,5 +1,6 @@
 
 pub mod renderer;
+pub mod camera;
 
 use std::{ffi::CStr, sync::atomic::{AtomicBool, Ordering}};
 
