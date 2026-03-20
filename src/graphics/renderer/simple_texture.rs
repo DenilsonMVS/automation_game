@@ -1,6 +1,6 @@
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
-use crate::graphics::renderer::{Renderer, atlas::{FrameInfo, TypedAtlas, UvInfo}, buffer::{DynamicBuffer}, drawable::DrawMode, positioning::{BaseDimensions, OrientedBox, PositionMode, RenderBox, SCALE_FACTOR, SimpleTransform}, program::{Program, ShaderType}, texture::{MagFiltering, MinFiltering, Texture, TextureWrap}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}};
+use crate::graphics::renderer::{Renderer, atlas::{FrameInfo, TypedAtlas, UvInfo}, buffer::{DynamicBuffer}, drawable::DrawMode, positioning::{BaseDimensions, OrientedBox, PositionMode, RenderBox, SimpleTransform}, program::{Program, ShaderType}, texture::{MagFiltering, MinFiltering, Texture, TextureWrap}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}};
 use anyhow::Result;
 
 const QUADS_PER_RENDER: usize = 1 << 10;
@@ -33,7 +33,6 @@ impl<'a> SimpleTextureRenderer<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let program = TextureProgram::init(renderer).unwrap();
         program.set_u_texture(&0);
-        program.set_u_world_scale(&(1.0 / SCALE_FACTOR));
 
         return Self { program };
     }
