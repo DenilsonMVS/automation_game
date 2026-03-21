@@ -11,17 +11,8 @@ out vec4 v_color;
 
 uniform mat4 u_vp;
 
-const vec2 OFFSETS[4] = vec2[](
-	vec2(0.0, 0.0),
-	vec2(0.0, 1.0),
-	vec2(1.0, 0.0),
-	vec2(1.0, 1.0)
-);
-
 void main() {
-    vec2 offset = OFFSETS[gl_VertexID % 4];
-    vec2 center = (a_top_left + a_bottom_right) * 0.5;
-    vec2 bottom_left = 2 * center - a_top_right;
+    vec2 bottom_left = a_top_left + a_bottom_right - a_top_right;
     vec2 positions[4] = vec2[](
         a_top_left,
         bottom_left,
