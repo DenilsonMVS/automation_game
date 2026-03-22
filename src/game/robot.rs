@@ -1,11 +1,11 @@
 
 use nalgebra_glm::{self as glm};
+use num_traits::WrappingSub;
 
 use crate::{game::instruction::Instruction, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
 
 const MEMORY_RANK: usize = 4;
 const MEMORY_SIZE: usize = 1 << MEMORY_RANK;
-const MEMORY_MASK: usize = MEMORY_SIZE - 1;
 const PROGRAM_COUNTER_IDX: usize = 0;
 const ROBOT_SIZE: f32 = 0.9;
 const WEEL_DIAMETER: f32 = 0.3;
@@ -24,55 +24,56 @@ const PROPORTIONAL: f32 = 10.0;
 const DERIVATIVE: f32 = -6.0;
 
 #[derive(Debug)]
-pub struct Memory<const SIZE: usize> {
-    memory: [u8; SIZE],
+pub struct Memory<T: Copy + Default, const SIZE: usize> {
+    memory: [T; SIZE],
 }
 
-impl<const SIZE: usize> Memory<SIZE> {
+impl<T: Copy + Default, const SIZE: usize> Memory<T, SIZE> {
     fn new() -> Self {
         Self {
-            memory: [0; SIZE]
+            memory: [T::default(); SIZE]
         }
     }
 
-    fn read_memory<T: Into<usize>>(&self, address: T) -> u8 {
+    fn read_memory<ADDR: Into<usize>>(&self, address: ADDR) -> T {
         self.memory[address.into() & (SIZE - 1)]
     }
 
-    fn write_memory<T: Into<usize>>(&mut self, address: T, value: u8) {
+    fn write_memory<ADDR: Into<usize>>(&mut self, address: ADDR, value: T) {
         self.memory[address.into() & (SIZE - 1)] = value;
     }
 
-    pub fn inst1<T, F>(&mut self, input_addr: T, out_addr: T, func: F)
+    pub fn inst1<ADDR, F>(&mut self, input_addr: ADDR, out_addr: ADDR, func: F)
     where
-        T: Into<usize> + Copy,
-        F: Fn(u8) -> u8, 
+        ADDR: Into<usize> + Copy,
+        F: Fn(T) -> T, 
     {
         let val = self.read_memory(input_addr);
         let result = func(val);
         self.write_memory(out_addr, result);
     }
 
-    pub fn inst2<T, F>(&mut self, input_addr1: T, input_addr2: T, out_addr: T, func: F)
+    pub fn inst2<ADDR, F>(&mut self, input_addr1: ADDR, input_addr2: ADDR, out_addr: ADDR, func: F)
     where
-        T: Into<usize> + Copy,
-        F: Fn(u8, u8) -> u8, 
+        ADDR: Into<usize> + Copy,
+        F: Fn(T, T) -> T, 
     {
         let val1 = self.read_memory(input_addr1);
         let val2 = self.read_memory(input_addr2);
         let result = func(val1, val2);
         self.write_memory(out_addr, result);
     }
+}
 
-    pub fn cond_jump<T, F>(&mut self, input_addr1: T, input_addr2: T, jump: u8, func: F)
+impl<T: Copy + Default + Into<usize> + TryFrom<usize> + WrappingSub, const SIZE: usize> Memory<T, SIZE> {
+    pub fn cond_jump<F>(&mut self, input_addr1: T, input_addr2: T, jump: T, func: F)
     where
-        T: Into<usize> + Copy,
-        F: Fn(u8, u8) -> bool,
+        F: Fn(T, T) -> bool,
     {
         let val1 = self.read_memory(input_addr1);
         let val2 = self.read_memory(input_addr2);
         if func(val1, val2) {
-            self.write_memory(PROGRAM_COUNTER_IDX, jump.wrapping_sub(1));
+            self.write_memory(PROGRAM_COUNTER_IDX, jump.wrapping_sub(&T::try_from(1).unwrap_or_default()));
         }
     }
 }
@@ -90,8 +91,8 @@ pub struct Robot {
     position: glm::Vec2,
     speed: glm::Vec2,
     target: glm::Vec2,
-    memory: Memory<MEMORY_SIZE>,
-    instructions: [Instruction; MEMORY_SIZE],
+    memory: Memory<u8, MEMORY_SIZE>,
+    instructions: Memory<Instruction, MEMORY_SIZE>,
     color: glm::U8Vec3,
 }
 
@@ -102,18 +103,18 @@ impl Robot {
             position: glm::vec2(0.0, 0.0),
             speed: glm::vec2(0.0, 0.0),
             target: glm::vec2(0.0, 0.0),
-            instructions: [Instruction::NoOp; MEMORY_SIZE],
+            instructions: Memory::new(),
             color: glm::vec3(200, 200, 190),
         }
     }
 
     pub fn set_instruction(mut self, idx: usize, instruction: Instruction) -> Self {
-        self.instructions[(idx as usize) & MEMORY_MASK] = instruction;
+        self.instructions.write_memory(idx, instruction);
         return self;
     }
 
     pub fn read_instruction(&self, idx: u8) -> Instruction {
-        self.instructions[(idx as usize) & MEMORY_MASK]
+        self.instructions.read_memory(idx)
     }
 
     pub fn run_instruction(&mut self) {

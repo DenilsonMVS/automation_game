@@ -44,3 +44,9 @@ pub enum Instruction {
     SmallerJump(u8, u8, u8),
     SmallerEqJump(u8, u8, u8),
 }
+
+impl Default for Instruction {
+    fn default() -> Self {
+        Self::NoOp
+    }
+}

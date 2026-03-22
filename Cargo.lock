@@ -112,6 +112,7 @@ dependencies = [
  "macros",
  "msdfgen",
  "nalgebra-glm",
+ "num-traits",
  "rand",
  "rodio",
  "serde",
