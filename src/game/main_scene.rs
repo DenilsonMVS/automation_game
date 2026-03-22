@@ -14,10 +14,22 @@ impl MainScene {
     pub fn new() -> Self {
         Self { 
             robot: Robot::new()
-                .set_instruction(0, Instruction::MoveLeft)
-                .set_instruction(1, Instruction::MoveTop)
-                .set_instruction(2, Instruction::MoveRight)
-                .set_instruction(3, Instruction::MoveBottom),
+                .set_instruction(0, Instruction::Write(10, 10))
+                .set_instruction(1, Instruction::Write(1, 11))
+                .set_instruction(2, Instruction::Write(0, 12))
+
+                .set_instruction(3, Instruction::MoveLeft)
+                .set_instruction(4, Instruction::Sub(10, 11, 10))
+                .set_instruction(5, Instruction::DiffJump(10, 12, 3))
+
+                .set_instruction(6, Instruction::MoveTop)
+
+                .set_instruction(7, Instruction::Write(10, 10))
+                .set_instruction(8, Instruction::MoveRight)
+                .set_instruction(9, Instruction::Sub(10, 11, 10))
+                .set_instruction(10, Instruction::DiffJump(10, 12, 8))
+
+                .set_instruction(11, Instruction::MoveBottom),
             last_instruction_execution: time::Instant::now(),
         }
     }
