@@ -1,18 +1,17 @@
 use std::time;
 use nalgebra_glm as glm;
-use crate::game::{graph::Graph, instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene};
+use crate::{game::{graph::Graph, instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene}, graphics::renderer::Renderer};
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
-#[derive(Debug)]
-pub struct MainScene {
+pub struct MainScene<'a> {
     robot: Robot,
-    graph: Graph,
+    graph: Graph<'a>,
     last_instruction_execution: time::Instant,
 }
 
-impl MainScene {
-    pub fn new() -> Self {
+impl<'a> MainScene<'a> {
+    pub fn new(renderer: &'a Renderer) -> Self {
         let x0 = RegisterAddress::new(0);
         let x2 = RegisterAddress::new(2);
         return Self { 
@@ -31,9 +30,12 @@ impl MainScene {
 
                 .set_instruction(9, Instruction::new_sys(2)),
             graph: Graph::new(
+                renderer,
                 glm::vec2(0.0, 0.0),
                 glm::vec2(0.8, 0.6),
-                glm::vec4(200, 30, 30, 255),
+                glm::vec2(-1.0, 0.0),
+                glm::vec2(1.0, 1.0),
+                glm::vec4(0, 229, 255, 255),
                 glm::vec4(150, 150, 150, 255),
             ),
             last_instruction_execution: time::Instant::now(),
@@ -41,7 +43,7 @@ impl MainScene {
     }
 }
 
-impl Scene for MainScene {
+impl<'a> Scene for MainScene<'a> {
     fn game_logic(&mut self, context: &mut crate::MainContext) {
         self.robot.movement_logic(context.delta);
 
@@ -54,7 +56,7 @@ impl Scene for MainScene {
     fn generate_output(&mut self, context: &mut crate::MainContext) {
         let simple_shape_renderer = &mut context.simple_shape_renderer;
         self.robot.draw(simple_shape_renderer);
-        self.graph.draw(simple_shape_renderer);
+        self.graph.draw(&context.proj_matrix, simple_shape_renderer);
     }
 
     fn handle_input(&mut self, context: &mut crate::MainContext) {

@@ -105,6 +105,11 @@ impl GlType for glm::Vec2 {
     const FIELD_TYPE_SIZE: i32 = 2;
 }
 
+impl GlType for glm::Vec4 {
+	const ENUM: GlTypeEnum = GlTypeEnum::Float;
+    const FIELD_TYPE_SIZE: i32 = 4;
+}
+
 impl GlType for u32 {
 	const ENUM: GlTypeEnum = GlTypeEnum::UnsignedInt;
     const FIELD_TYPE_SIZE: i32 = 1;

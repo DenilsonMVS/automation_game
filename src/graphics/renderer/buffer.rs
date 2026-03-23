@@ -3,8 +3,10 @@ use crate::graphics::renderer::{Renderer, vertex_array_object::{FieldType, Stati
 
 pub trait GenericBuffer: VertexLayout {
     fn get_id(&self) -> u32;
+    fn bind_as_storage(&self, binding_point: u32);
 }
 
+#[derive(Debug)]
 pub struct StaticBuffer<'a, T: StaticVertexLayout> {
     id: u32,
     _marker: PhantomData<&'a T>,
@@ -25,6 +27,12 @@ impl<'a, T: StaticVertexLayout> VertexLayout for StaticBuffer<'a, T> {
 impl<'a, T: StaticVertexLayout> GenericBuffer for StaticBuffer<'a, T> {
     fn get_id(&self) -> u32 {
         self.id
+    }
+
+    fn bind_as_storage(&self, binding_point: u32) {
+        unsafe {
+            gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, binding_point, self.id);
+        }
     }
 }
 
@@ -56,7 +64,7 @@ impl<'a, T: StaticVertexLayout> StaticBuffer<'a, T> {
     }
 }
 
-
+#[derive(Debug)]
 pub struct DynamicBuffer<'a, T: StaticVertexLayout> {
     id: u32,
     ptr: *mut T,
@@ -80,6 +88,12 @@ impl<'a, T: StaticVertexLayout> VertexLayout for DynamicBuffer<'a, T> {
 impl<'a, T: StaticVertexLayout> GenericBuffer for DynamicBuffer<'a, T> {
     fn get_id(&self) -> u32 {
         self.id
+    }
+
+    fn bind_as_storage(&self, binding_point: u32) {
+        unsafe {
+            gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, binding_point, self.id);
+        }
     }
 }
 

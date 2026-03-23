@@ -29,6 +29,12 @@ impl UniformValue for glm::Vec3 {
 	}
 }
 
+impl UniformValue for glm::Vec4 {
+	fn set_program_uniform(&self, program_id: u32, location: i32) {
+		unsafe { gl::ProgramUniform4f(program_id, location, self[0], self[1], self[2], self[3]); }
+	}
+}
+
 impl UniformValue for glm::Mat4 {
 	fn set_program_uniform(&self, program_id: u32, location: i32) {
 		unsafe { gl::ProgramUniformMatrix4fv(program_id, location, 1, gl::FALSE, self.as_ptr()); }

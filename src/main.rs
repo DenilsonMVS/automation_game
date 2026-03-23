@@ -72,35 +72,35 @@ fn main() {
     let font = fonts.new_font(renderer, include_bytes!("../res/fonts/DejaVuSans.ttf")).unwrap();
     let mut simple_shape_renderer = SimpleShapeRenderer::new(renderer);
     let mut camera = Camera::new();
-    let mut scene = MainScene::new();
+    let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
 
-    let vbo = font.create_text_vbo(renderer, &[
-        TextRenderConfig::new(
-            "Teste",
-            glm::vec2(0.0, 0.0),
-            0.2,
-            glm::vec3(20, 30, 200)
-        ),
-        TextRenderConfig::new(
-            "Teste",
-            glm::vec2(0.0, 0.5),
-            0.2,
-            glm::vec3(20, 30, 200)
-        ).set_rotation(1.0),
-        TextRenderConfig::new(
-            "Teste",
-            glm::vec2(0.0, 0.5),
-            0.2,
-            glm::vec3(20, 30, 200)
-        ).set_rotation(0.5),
-        TextRenderConfig::new(
-            "Teste",
-            glm::vec2(0.0, 0.5),
-            0.2,
-            glm::vec3(20, 30, 200)
-        ).set_rotation(0.0),
-    ]);
+    // let vbo = font.create_text_vbo(renderer, &[
+    //     TextRenderConfig::new(
+    //         "Teste",
+    //         glm::vec2(0.0, 0.0),
+    //         0.2,
+    //         glm::vec3(20, 30, 200)
+    //     ),
+    //     TextRenderConfig::new(
+    //         "Teste",
+    //         glm::vec2(0.0, 0.5),
+    //         0.2,
+    //         glm::vec3(20, 30, 200)
+    //     ).set_rotation(1.0),
+    //     TextRenderConfig::new(
+    //         "Teste",
+    //         glm::vec2(0.0, 0.5),
+    //         0.2,
+    //         glm::vec3(20, 30, 200)
+    //     ).set_rotation(0.5),
+    //     TextRenderConfig::new(
+    //         "Teste",
+    //         glm::vec2(0.0, 0.5),
+    //         0.2,
+    //         glm::vec3(20, 30, 200)
+    //     ).set_rotation(0.0),
+    // ]);
 
     while !window.should_close() {
 
@@ -131,6 +131,8 @@ fn main() {
 
         simple_shape_renderer.reset();
 
+        renderer.clear(&[ClearField::Color, ClearField::Depth]);
+
         {
             let mut main_context = MainContext {
                 glfw, window, events, renderer,
@@ -148,15 +150,13 @@ fn main() {
             scene.game_logic(&mut main_context);
             scene.generate_output(&mut main_context);
         }
-        
-        renderer.clear(&[ClearField::Color, ClearField::Depth]);
 
         simple_shape_renderer.finish();
         renderer.enable(Capability::DepthTest);
         simple_shape_renderer.draw(&vp_matrix);
 
         renderer.disable(Capability::DepthTest);
-        fonts.draw_buffer(&font, &vbo, &proj_matrix);
+        // fonts.draw_buffer(&font, &vbo, &proj_matrix);
 
         window.swap_buffers();
     }
