@@ -1,12 +1,13 @@
 use std::time;
-
-use crate::game::{instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene};
+use nalgebra_glm as glm;
+use crate::game::{graph::Graph, instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene};
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
 #[derive(Debug)]
 pub struct MainScene {
     robot: Robot,
+    graph: Graph,
     last_instruction_execution: time::Instant,
 }
 
@@ -16,19 +17,25 @@ impl MainScene {
         let x2 = RegisterAddress::new(2);
         return Self { 
             robot: Robot::new()
-                .set_instruction(0, Instruction::new_lui(x2, 2))
+                .set_instruction(0, Instruction::new_lui(x2, 10))
                 .set_instruction(1, Instruction::new_sys(3))
                 .set_instruction(2, Instruction::new_subi(x2, x2, 1))
                 .set_instruction(3, Instruction::new_bne(x2, x0, 14))
 
                 .set_instruction(4, Instruction::new_sys(1))
 
-                .set_instruction(5, Instruction::new_lui(x2, 2))
+                .set_instruction(5, Instruction::new_lui(x2, 10))
                 .set_instruction(6, Instruction::new_sys(4))
                 .set_instruction(7, Instruction::new_subi(x2, x2, 1))
                 .set_instruction(8, Instruction::new_bne(x2, x0, 14))
 
                 .set_instruction(9, Instruction::new_sys(2)),
+            graph: Graph::new(
+                glm::vec2(0.0, 0.0),
+                glm::vec2(0.8, 0.6),
+                glm::vec4(200, 30, 30, 255),
+                glm::vec4(150, 150, 150, 255),
+            ),
             last_instruction_execution: time::Instant::now(),
         };
     }
@@ -47,6 +54,7 @@ impl Scene for MainScene {
     fn generate_output(&mut self, context: &mut crate::MainContext) {
         let simple_shape_renderer = &mut context.simple_shape_renderer;
         self.robot.draw(simple_shape_renderer);
+        self.graph.draw(simple_shape_renderer);
     }
 
     fn handle_input(&mut self, context: &mut crate::MainContext) {

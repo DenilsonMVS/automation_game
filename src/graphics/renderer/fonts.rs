@@ -7,7 +7,7 @@ use crate::graphics::renderer::{
     Renderer, 
     buffer::{DynamicBuffer, StaticBuffer}, 
     drawable::DrawMode, 
-    positioning::{BaseDimensions, PositionMode, RenderBox, SCALE_FACTOR, vec_to_short}, 
+    positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short}, 
     program::{Program, ShaderType}, 
     texture::Texture, 
     uniform::UniformValue, 
@@ -22,8 +22,9 @@ const GLYPHS_PER_RENDER: usize = 1 << 10;
 #[derive(GlVertex)]
 #[vertex(divisor = 1)]
 pub struct GlyphAttrs {
-    pub bound_min: glm::I16Vec2,
-    pub bound_max: glm::I16Vec2,
+    pub top_left: glm::I16Vec2,
+    pub top_right: glm::I16Vec2,
+    pub bottom_right: glm::I16Vec2,
     #[normalized]
     pub color: glm::U8Vec3,
     pub character_idx: u8,
@@ -153,6 +154,7 @@ pub struct TextRenderConfig<'a> {
     pub text: &'a str,
     pub position: glm::Vec2,
     pub line_height: f32,
+    pub rotation: f32,
     pub position_mode: PositionMode,
     pub color: glm::U8Vec3,
 }
@@ -165,12 +167,18 @@ impl<'a> TextRenderConfig<'a> {
             line_height,
             position_mode: PositionMode::Center,
             color,
+            rotation: 0.0,
         }
     }
 
-    pub fn with_mode(mut self, mode: PositionMode) -> Self {
+    pub fn set_mode(mut self, mode: PositionMode) -> Self {
         self.position_mode = mode;
-        self
+        return self;
+    }
+
+    pub fn set_rotation(mut self, rotation: f32) -> Self {
+        self.rotation = rotation;
+        return self;
     }
 }
 
@@ -255,43 +263,12 @@ impl<'a> Font<'a> {
     }
 
     pub fn add_text(&mut self, text: &TextRenderConfig) {
-        let font_height = self.ascender - self.descender;
-        let total_width = text.text.chars().fold(0.0f32, |acc, c| {
-            if let Some(idx) = map_char_to_index(c) {
-                acc + self.glyphs[idx].advance
-            } else {
-                acc
-            }
-        });
-
-        let text_block_box = RenderBox::new(
-            text.position,
-            text.position_mode,
-            glm::vec2(total_width, font_height),
-            BaseDimensions::Height(text.line_height),
-        );
-
-        let scale = text.line_height / font_height;
-        let mut cursor_x = text_block_box.min.x;
-        let baseline_y = text_block_box.min.y - (self.descender * scale);
-
-        for c in text.text.chars() {
-            if let Some(idx) = map_char_to_index(c) {
-                let info = &self.glyphs[idx];
-                
-                let min_pos = glm::vec2(cursor_x, baseline_y) + info.bound_min * scale;
-                let max_pos = glm::vec2(cursor_x, baseline_y) + info.bound_max * scale;
-
-                self.vbo.write(&GlyphAttrs {
-                    bound_min: vec_to_short(&min_pos),
-                    bound_max: vec_to_short(&max_pos),
-                    character_idx: idx as u8,
-                    color: text.color
-                });
-
-                cursor_x += info.advance * scale;
-            }
-        }
+        let glyphs = &self.glyphs;
+        let ascender = self.ascender;
+        let descender = self.descender;
+        let vbo = &mut self.vbo;
+        Self::generate_vertex(glyphs, ascender, descender, text,
+            |vertex| vbo.write(&vertex));
     }
 
     pub fn create_text_vbo<'b>(&self, renderer: &'b Renderer, rendered_text: &[TextRenderConfig]) -> FontVbo<'b> {
@@ -299,45 +276,12 @@ impl<'a> Font<'a> {
             rendered_text.iter().fold(0usize, |prev, cur| prev + cur.text.len())
         );
         
-        let font_height = self.ascender - self.descender;
-
+        let glyphs = &self.glyphs;
+        let ascender = self.ascender;
+        let descender = self.descender;
+        let mut on_generation = |vertex: GlyphAttrs| glyph_buffer_data.push(vertex);
         for config in rendered_text {
-            let total_width = config.text.chars().fold(0.0f32, |acc, c| {
-                if let Some(idx) = map_char_to_index(c) {
-                    acc + self.glyphs[idx].advance
-                } else {
-                    acc
-                }
-            });
-
-            let text_block_box = RenderBox::new(
-                config.position,
-                config.position_mode,
-                glm::vec2(total_width, font_height),
-                BaseDimensions::Height(config.line_height),
-            );
-
-            let scale = config.line_height / font_height;
-            let mut cursor_x = text_block_box.min.x;
-            let baseline_y = text_block_box.min.y - (self.descender * scale);
-
-            for c in config.text.chars() {
-                if let Some(idx) = map_char_to_index(c) {
-                    let info = &self.glyphs[idx];
-                    
-                    let min_pos = glm::vec2(cursor_x, baseline_y) + info.bound_min * scale;
-                    let max_pos = glm::vec2(cursor_x, baseline_y) + info.bound_max * scale;
-
-                    glyph_buffer_data.push(GlyphAttrs {
-                        bound_min: vec_to_short(&min_pos),
-                        bound_max: vec_to_short(&max_pos),
-                        character_idx: idx as u8,
-                        color: config.color
-                    });
-
-                    cursor_x += info.advance * scale;
-                }
-            }
+            Self::generate_vertex(glyphs, ascender, descender, config, &mut on_generation);
         }
 
         let vbo = StaticBuffer::<GlyphAttrs>::new(renderer, &glyph_buffer_data);
@@ -347,6 +291,61 @@ impl<'a> Font<'a> {
             _vbo: vbo,
             vao,
             amount: glyph_buffer_data.len() as i32
+        }
+    }
+
+    fn generate_vertex(
+        glyphs: &[GlyphInfo; WESTERN_CHAR_COUNT],
+        ascender: f32,
+        descender: f32,
+        config: &TextRenderConfig, 
+        mut on_generation: impl FnMut(GlyphAttrs)
+    ) {   
+        let font_height = ascender - descender;
+
+        let cos = config.rotation.cos();
+        let sin = config.rotation.sin();
+        let dir_x = glm::vec2(cos, sin);
+        let dir_y = glm::vec2(-sin, cos);
+
+        let total_width = config.text.chars().fold(0.0f32, |acc, c|
+            map_char_to_index(c).map_or(acc, |idx| acc + glyphs[idx].advance));
+
+        let scale = config.line_height / font_height;
+        let full_size = glm::vec2(total_width * scale, font_height * scale);
+
+        let obox = OrientedBox::new_rotated(
+            config.position,
+            config.position_mode,
+            full_size,
+            dir_y
+        );
+
+        let mut cursor_pos = obox.bot_left - (dir_y * (descender * scale));
+
+        for c in config.text.chars() {
+            if let Some(idx) = map_char_to_index(c) {
+                let info = &glyphs[idx];
+                
+                let lx0 = info.bound_min.x * scale;
+                let lx1 = info.bound_max.x * scale;
+                let ly0 = info.bound_min.y * scale;
+                let ly1 = info.bound_max.y * scale;
+
+                let tl = cursor_pos + (dir_x * lx0) + (dir_y * ly1);
+                let tr = cursor_pos + (dir_x * lx1) + (dir_y * ly1);
+                let br = cursor_pos + (dir_x * lx1) + (dir_y * ly0);
+
+                on_generation(GlyphAttrs {
+                    top_left: vec_to_short(&tl),
+                    top_right: vec_to_short(&tr),
+                    bottom_right: vec_to_short(&br),
+                    character_idx: idx as u8,
+                    color: config.color,
+                });
+
+                cursor_pos += dir_x * (info.advance * scale);
+            }
         }
     }
 

@@ -113,7 +113,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         self.tri_program.bind();
         self.tri_program.set_u_vp(vp_matrix);
 
-        self.tri_vao.draw_instanced(3, self.tri_vbo.get_len() as i32, DrawMode::TriangleStrip);
+        self.tri_vao.draw_instanced(3,self.tri_vbo.get_len() as i32, DrawMode::Triangles);
         self.tri_vbo.lock();
 
         self.ell_program.bind();
