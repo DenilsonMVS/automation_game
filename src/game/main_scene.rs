@@ -1,6 +1,6 @@
 use std::time;
 
-use crate::game::{instruction::Instruction, robot::Robot, scene::Scene};
+use crate::game::{instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene};
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
@@ -12,26 +12,25 @@ pub struct MainScene {
 
 impl MainScene {
     pub fn new() -> Self {
-        Self { 
+        let x0 = RegisterAddress::new(0);
+        let x2 = RegisterAddress::new(2);
+        return Self { 
             robot: Robot::new()
-                .set_instruction(0, Instruction::Write(10, 10))
-                .set_instruction(1, Instruction::Write(1, 11))
-                .set_instruction(2, Instruction::Write(0, 12))
+                .set_instruction(0, Instruction::new_lui(x2, 2))
+                .set_instruction(1, Instruction::new_sys(3))
+                .set_instruction(2, Instruction::new_subi(x2, x2, 1))
+                .set_instruction(3, Instruction::new_bne(x2, x0, 14))
 
-                .set_instruction(3, Instruction::MoveLeft)
-                .set_instruction(4, Instruction::Sub(10, 11, 10))
-                .set_instruction(5, Instruction::DiffJump(10, 12, 3))
+                .set_instruction(4, Instruction::new_sys(1))
 
-                .set_instruction(6, Instruction::MoveTop)
+                .set_instruction(5, Instruction::new_lui(x2, 2))
+                .set_instruction(6, Instruction::new_sys(4))
+                .set_instruction(7, Instruction::new_subi(x2, x2, 1))
+                .set_instruction(8, Instruction::new_bne(x2, x0, 14))
 
-                .set_instruction(7, Instruction::Write(10, 10))
-                .set_instruction(8, Instruction::MoveRight)
-                .set_instruction(9, Instruction::Sub(10, 11, 10))
-                .set_instruction(10, Instruction::DiffJump(10, 12, 8))
-
-                .set_instruction(11, Instruction::MoveBottom),
+                .set_instruction(9, Instruction::new_sys(2)),
             last_instruction_execution: time::Instant::now(),
-        }
+        };
     }
 }
 

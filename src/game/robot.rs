@@ -1,12 +1,12 @@
 
 use nalgebra_glm::{self as glm};
-use num_traits::WrappingSub;
 
-use crate::{game::instruction::Instruction, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{game::instruction::{Instruction, UnpackedInstruction}, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
 
 const MEMORY_RANK: usize = 4;
 const MEMORY_SIZE: usize = 1 << MEMORY_RANK;
-const PROGRAM_COUNTER_IDX: usize = 0;
+const ZERO_IDX: usize = 0;
+pub const PROGRAM_COUNTER_IDX: usize = 1;
 const ROBOT_SIZE: f32 = 0.9;
 const WEEL_DIAMETER: f32 = 0.3;
 const WEEL_DISTANCE: f32 = 0.43;
@@ -40,6 +40,13 @@ impl<T: Copy + Default, const SIZE: usize> Memory<T, SIZE> {
     }
 
     fn write_memory<ADDR: Into<usize>>(&mut self, address: ADDR, value: T) {
+        let address = address.into();
+        if address != ZERO_IDX {
+            self.memory[address & (SIZE - 1)] = value;
+        }
+    }
+
+    fn write_instruction_memory<ADDR: Into<usize>>(&mut self, address: ADDR, value: T) {
         self.memory[address.into() & (SIZE - 1)] = value;
     }
 
@@ -63,18 +70,17 @@ impl<T: Copy + Default, const SIZE: usize> Memory<T, SIZE> {
         let result = func(val1, val2);
         self.write_memory(out_addr, result);
     }
-}
 
-impl<T: Copy + Default + Into<usize> + TryFrom<usize> + WrappingSub, const SIZE: usize> Memory<T, SIZE> {
-    pub fn cond_jump<F>(&mut self, input_addr1: T, input_addr2: T, jump: T, func: F)
+    pub fn inst3<ADDR, F>(&mut self, input_addr1: ADDR, input_addr2: ADDR, input_addr3: ADDR, out_addr: ADDR, func: F)
     where
-        F: Fn(T, T) -> bool,
+        ADDR: Into<usize> + Copy,
+        F: Fn(T, T, T) -> T, 
     {
         let val1 = self.read_memory(input_addr1);
         let val2 = self.read_memory(input_addr2);
-        if func(val1, val2) {
-            self.write_memory(PROGRAM_COUNTER_IDX, jump.wrapping_sub(&T::try_from(1).unwrap_or_default()));
-        }
+        let val3 = self.read_memory(input_addr3);
+        let result = func(val1, val2, val3);
+        self.write_memory(out_addr, result);
     }
 }
 
@@ -109,7 +115,7 @@ impl Robot {
     }
 
     pub fn set_instruction(mut self, idx: usize, instruction: Instruction) -> Self {
-        self.instructions.write_memory(idx, instruction);
+        self.instructions.write_instruction_memory(idx, instruction);
         return self;
     }
 
@@ -122,49 +128,52 @@ impl Robot {
             return;
         }
 
-        let center = self.position.map(|x| x.round());
-        match self.read_instruction(self.memory.read_memory(PROGRAM_COUNTER_IDX)) {
-            Instruction::MoveBottom => self.target = center + glm::vec2( 0.0, -1.0),
-            Instruction::MoveTop    => self.target = center + glm::vec2( 0.0,  1.0),
-            Instruction::MoveLeft   => self.target = center + glm::vec2(-1.0,  0.0),
-            Instruction::MoveRight  => self.target = center + glm::vec2( 1.0,  0.0),
+        let unpacked_instruction = self.read_instruction(self.memory.read_memory(PROGRAM_COUNTER_IDX)).unpack();
+        match unpacked_instruction {
+            UnpackedInstruction::Lui(rd, imm) =>
+                self.memory.write_memory(rd.get_raw(), imm),
+            UnpackedInstruction::AddI(rs, rd, imm) =>
+                self.memory.inst1(rs.get_raw(), rd.get_raw(), |x| x.wrapping_add(imm)),
+            UnpackedInstruction::SubI(rs, rd, imm) =>
+                self.memory.inst1(rs.get_raw(), rd.get_raw(), |x| x.wrapping_sub(imm)),
+            UnpackedInstruction::Add(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a.wrapping_add(b)),
+            UnpackedInstruction::Sub(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a.wrapping_sub(b)),
+            UnpackedInstruction::Mul(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a.wrapping_mul(b)),
+            UnpackedInstruction::Div(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a / replace_zero(b, 1)),
+            UnpackedInstruction::Rem(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a % replace_zero(b, 1)),
+            UnpackedInstruction::Slt(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| (a < b) as u8),
+            UnpackedInstruction::Sle(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| (a <= b) as u8),
+            UnpackedInstruction::Beq(r1, r2, imm) =>
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a == b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+            UnpackedInstruction::Bne(r1, r2, imm) =>
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a != b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+            UnpackedInstruction::Blt(r1, r2, imm) =>
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a < b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+            UnpackedInstruction::Ble(r1, r2, imm) =>
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a <= b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+            UnpackedInstruction::Jr(rs) =>
+                self.memory.inst1(rs.get_raw(), PROGRAM_COUNTER_IDX as u16, |x| x.wrapping_sub(1)),
 
-            Instruction::Write(value, addr) => self.memory.write_memory(addr, value),
-            Instruction::Goto(inst) => self.memory.write_memory(PROGRAM_COUNTER_IDX, inst.wrapping_sub(1)),
-            Instruction::Move(src, dest) => self.memory.inst1(src, dest, |x| x),
-           
-            Instruction::Add(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a.wrapping_add(b)),
-            Instruction::Sub(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a.wrapping_sub(b)),
-            Instruction::Mul(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a.wrapping_mul(b)),
-            Instruction::Div(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a / replace_zero(b,1)),
-            Instruction::Rem(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a % replace_zero(b,1)),
-           
-            Instruction::And(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a > 0 && b > 0) as u8),
-            Instruction::Or(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a > 0 || b > 0) as u8),
-            Instruction::Diff(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a != b) as u8),
-            Instruction::Eq(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a == b) as u8),
-            Instruction::Not(addr, dest) => self.memory.inst1(addr, dest, |x| (x == 0) as u8),
-            Instruction::Greater(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a > b) as u8),
-            Instruction::GreaterEq(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a >= b) as u8),
-            Instruction::Smaller(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a < b) as u8),
-            Instruction::SmallerEq(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| (a <= b) as u8),
-
-            Instruction::BitAnd(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a & b),
-            Instruction::BitOr(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a | b),
-            Instruction::BitXor(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| a ^ b),
-            Instruction::BitEq(addr1, addr2, dest) => self.memory.inst2(addr1, addr2, dest, |a, b| !(a ^ b)),
-            Instruction::BitNot(addr, dest) => self.memory.inst1(addr, dest, |x| !x),
-
-            Instruction::EqJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a == b),
-            Instruction::DiffJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a != b),
-            Instruction::GreaterJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a > b),
-            Instruction::GreaterEqJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a >= b),
-            Instruction::SmallerJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a < b),
-            Instruction::SmallerEqJump(addr1, addr2, dest) => self.memory.cond_jump(addr1, addr2, dest, |a, b| a <= b),
-            _ => {}
+            UnpackedInstruction::Sys(code) => {
+                let center = self.position.map(|x| x.round());
+                match code {
+                    1 => self.target = center + glm::vec2( 0.0,  1.0),
+                    2 => self.target = center + glm::vec2( 0.0, -1.0),
+                    3 => self.target = center + glm::vec2(-1.0,  0.0),
+                    4 => self.target = center + glm::vec2( 1.0,  0.0),
+                    _ => {}
+                };
+            }
         }
 
-        self.memory.write_memory(PROGRAM_COUNTER_IDX, self.memory.read_memory(PROGRAM_COUNTER_IDX).wrapping_add(1));
+        self.memory.inst1(PROGRAM_COUNTER_IDX, PROGRAM_COUNTER_IDX, |x| x.wrapping_add(1));
     }
 
     fn on_movement_instruction(&self) -> bool {
