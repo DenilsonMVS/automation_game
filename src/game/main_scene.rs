@@ -33,7 +33,7 @@ impl<'a> MainScene<'a> {
                 renderer,
                 glm::vec2(0.0, 0.0),
                 glm::vec2(0.8, 0.6),
-                glm::vec2(-1.0, 0.0),
+                glm::vec2(-1.0, -1.0),
                 glm::vec2(1.0, 1.0),
                 glm::vec4(0, 229, 255, 255),
                 glm::vec4(150, 150, 150, 255),

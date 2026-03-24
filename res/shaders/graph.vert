@@ -1,9 +1,15 @@
-
 #version 460 core
 
-uniform vec2 u_center;
-uniform vec2 u_dimensions;
 uniform mat4 u_projection;
+
+layout(std430, binding = 0) buffer GraphData {
+    vec2 center;
+    vec2 dimensions;
+    vec4 primary_color;
+    vec2 view_min;
+    vec2 view_max;
+    float y_values[];
+};
 
 out vec2 v_coord;
 
@@ -15,14 +21,9 @@ void main() {
         vec2(0, 1)
     );
 
-    const vec2 bottom_left = u_center - u_dimensions * 0.5;
-    const vec2 vertices[] = vec2[](
-        bottom_left + u_dimensions * mults[0],
-        bottom_left + u_dimensions * mults[1],
-        bottom_left + u_dimensions * mults[2],
-        bottom_left + u_dimensions * mults[3]
-    );
+    vec2 bottom_left = center - dimensions * 0.5;
+    vec2 pos = bottom_left + dimensions * mults[gl_VertexID % 4];
 
-    gl_Position = u_projection * vec4(vertices[gl_VertexID % 4], 0, 1);
+    gl_Position = u_projection * vec4(pos, 0, 1);
     v_coord = mults[gl_VertexID % 4];
 }

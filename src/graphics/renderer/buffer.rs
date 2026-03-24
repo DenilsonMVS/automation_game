@@ -1,13 +1,13 @@
 use std::{marker::PhantomData, os::raw::c_void};
 use crate::graphics::renderer::{Renderer, vertex_array_object::{FieldType, StaticVertexLayout, VertexLayout}};
 
-pub trait GenericBuffer: VertexLayout {
+pub trait GenericBuffer {
     fn get_id(&self) -> u32;
     fn bind_as_storage(&self, binding_point: u32);
 }
 
 #[derive(Debug)]
-pub struct StaticBuffer<'a, T: StaticVertexLayout> {
+pub struct StaticBuffer<'a, T> {
     id: u32,
     _marker: PhantomData<&'a T>,
 }
@@ -24,7 +24,7 @@ impl<'a, T: StaticVertexLayout> VertexLayout for StaticBuffer<'a, T> {
 	}
 }
 
-impl<'a, T: StaticVertexLayout> GenericBuffer for StaticBuffer<'a, T> {
+impl<'a, T> GenericBuffer for StaticBuffer<'a, T> {
     fn get_id(&self) -> u32 {
         self.id
     }
@@ -36,7 +36,7 @@ impl<'a, T: StaticVertexLayout> GenericBuffer for StaticBuffer<'a, T> {
     }
 }
 
-impl<'a, T: StaticVertexLayout> Drop for StaticBuffer<'a, T> {
+impl<'a, T> Drop for StaticBuffer<'a, T> {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteBuffers(1, &self.id);
@@ -44,7 +44,7 @@ impl<'a, T: StaticVertexLayout> Drop for StaticBuffer<'a, T> {
     }
 }
 
-impl<'a, T: StaticVertexLayout> StaticBuffer<'a, T> {
+impl<'a, T> StaticBuffer<'a, T> {
     pub fn new(_renderer: &'a Renderer, data: &[T]) -> Self {
         let mut id = 0u32;
         unsafe {
@@ -65,7 +65,7 @@ impl<'a, T: StaticVertexLayout> StaticBuffer<'a, T> {
 }
 
 #[derive(Debug)]
-pub struct DynamicBuffer<'a, T: StaticVertexLayout> {
+pub struct DynamicBuffer<'a, T> {
     id: u32,
     ptr: *mut T,
     index: usize,
@@ -85,7 +85,7 @@ impl<'a, T: StaticVertexLayout> VertexLayout for DynamicBuffer<'a, T> {
 	}
 }
 
-impl<'a, T: StaticVertexLayout> GenericBuffer for DynamicBuffer<'a, T> {
+impl<'a, T> GenericBuffer for DynamicBuffer<'a, T> {
     fn get_id(&self) -> u32 {
         self.id
     }
@@ -97,7 +97,7 @@ impl<'a, T: StaticVertexLayout> GenericBuffer for DynamicBuffer<'a, T> {
     }
 }
 
-impl<'a, T: StaticVertexLayout> Drop for DynamicBuffer<'a, T> {
+impl<'a, T> Drop for DynamicBuffer<'a, T> {
     fn drop(&mut self) {
         unsafe {
             if !self.sync_obj.is_null() {
@@ -109,7 +109,7 @@ impl<'a, T: StaticVertexLayout> Drop for DynamicBuffer<'a, T> {
     }
 }
 
-impl<'a, T: StaticVertexLayout> DynamicBuffer<'a, T> {
+impl<'a, T> DynamicBuffer<'a, T> {
     pub fn new(_renderer: &'a Renderer, size: usize) -> Self {
         let mut id = 0u32;
         let byte_size = (std::mem::size_of::<T>() * size) as isize;

@@ -29,7 +29,7 @@ pub trait StaticVertexLayout: Sized {
     fn get_divisor() -> u32;
 }
 
-pub trait VertexLayout {
+pub trait VertexLayout: GenericBuffer {
     fn get_fields(&self) -> &'static [FieldType];
     fn get_stride(&self) -> i32;
     fn get_divisor(&self) -> u32 { 0 }
@@ -41,7 +41,7 @@ pub struct VertexArrayObject<'a> {
 }
 
 impl<'a> VertexArrayObject<'a> {
-    pub fn new(_renderer: &'a Renderer, buffers: &[& (dyn GenericBuffer + 'a)]) -> Self {
+    pub fn new(_renderer: &'a Renderer, buffers: &[& (dyn VertexLayout + 'a)]) -> Self {
         let mut id: u32 = 0u32;
         unsafe {
             gl::CreateVertexArrays(1, &mut id);
