@@ -44,7 +44,6 @@ struct GlyphInfo {
 struct FontProgram {
     u_texture: i32,
     u_projection: glm::Mat4,
-    u_px_range: f32,
     u_glyph_size: u32,
     u_glyph_margin: u32,
     u_world_scale: f32,
@@ -60,7 +59,6 @@ impl<'a> Fonts<'a> {
         let font_program = FontProgram::init(renderer).unwrap();
         font_program.bind();
         font_program.set_u_texture(&0);
-        font_program.set_u_px_range(&PX_RANGE);
         font_program.set_u_glyph_size(&(GLYPH_SIZE as u32));
         font_program.set_u_glyph_margin(&(GLYPYH_MARGIN as u32));
         font_program.set_u_world_scale(&(1.0 / SCALE_FACTOR));
@@ -134,8 +132,8 @@ const fn calculate_atlas_params(char_amount: usize) -> (usize, usize, usize) {
     (rows * SPACE_PER_GLYPH, columns * SPACE_PER_GLYPH, columns)
 }
 
-pub const GLYPH_SIZE: usize = 31;
-pub const GLYPYH_MARGIN: usize = 1;
+pub const GLYPH_SIZE: usize = 32;
+pub const GLYPYH_MARGIN: usize = 0;
 pub const SPACE_PER_GLYPH: usize = GLYPH_SIZE + GLYPYH_MARGIN;
 pub const PX_RANGE: f32 = 4.0;
 pub const UTF_8_START: usize = 0x0020;

@@ -41,7 +41,8 @@ void main() {
 	uint row = a_glyph_index / columns;
 
 	vec2 base_pixel = vec2(float(col * glyph_space), float(row * glyph_space));
+	vec2 inset = base_pixel + 0.5;
 
-	v_tex_coord = (base_pixel + offset * float(u_glyph_size)) / vec2(atlas_size);
+	v_tex_coord = (inset + offset * float(u_glyph_size - 1)) / vec2(atlas_size);
 	v_color = a_color;
 }

@@ -8,6 +8,7 @@ pub struct MainScene<'a> {
     robot: Robot,
     graph: Graph<'a>,
     last_instruction_execution: time::Instant,
+    time_start: time::Instant,
 }
 
 impl<'a> MainScene<'a> {
@@ -37,8 +38,10 @@ impl<'a> MainScene<'a> {
                 glm::vec2(1.0, 1.0),
                 glm::vec4(0, 229, 255, 255),
                 glm::vec4(150, 150, 150, 255),
+                0.01, 0.1,
             ),
             last_instruction_execution: time::Instant::now(),
+            time_start: time::Instant::now(),
         };
     }
 }
@@ -54,9 +57,16 @@ impl<'a> Scene for MainScene<'a> {
     }
 
     fn generate_output(&mut self, context: &mut crate::MainContext) {
+        let sq = |x: f32| x * x;
         let simple_shape_renderer = &mut context.simple_shape_renderer;
         self.robot.draw(simple_shape_renderer);
-        self.graph.draw(&context.proj_matrix, simple_shape_renderer);
+        context.graph_renderer.draw(
+            &self.graph,
+            &context.proj_matrix,
+            simple_shape_renderer,
+            context.font,
+            sq(context.now.duration_since(self.time_start).as_secs_f32().sin()),
+        );
     }
 
     fn handle_input(&mut self, context: &mut crate::MainContext) {

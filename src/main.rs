@@ -8,7 +8,7 @@ use std::time;
 use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, fonts::{Fonts, TextRenderConfig}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, fonts::{Font, Fonts, TextRenderConfig}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -44,6 +44,8 @@ pub struct MainContext<'a, 'b> {
     // 'a long lifetime
     pub renderer: &'a Renderer,
     pub simple_shape_renderer: &'b mut SimpleShapeRenderer<'a>,
+    pub graph_renderer: &'b GraphRenderer<'a>,
+    pub font: &'b mut Font<'a>,
     
     pub proj_matrix: Mat4,
     pub i_proj_matrix: Mat4,
@@ -69,38 +71,12 @@ fn main() {
     renderer.clear_color(&glm::vec4(0.1, 0.12, 0.2, 0.0));
 
     let fonts = Fonts::new(renderer);
-    let font = fonts.new_font(renderer, include_bytes!("../res/fonts/DejaVuSans.ttf")).unwrap();
-    let mut simple_shape_renderer = SimpleShapeRenderer::new(renderer);
+    let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/DejaVuSans.ttf")).unwrap();
+    let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
+    let graph_renderer = GraphRenderer::new(renderer).unwrap();
     let mut camera = Camera::new();
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
-
-    // let vbo = font.create_text_vbo(renderer, &[
-    //     TextRenderConfig::new(
-    //         "Teste",
-    //         glm::vec2(0.0, 0.0),
-    //         0.2,
-    //         glm::vec3(20, 30, 200)
-    //     ),
-    //     TextRenderConfig::new(
-    //         "Teste",
-    //         glm::vec2(0.0, 0.5),
-    //         0.2,
-    //         glm::vec3(20, 30, 200)
-    //     ).set_rotation(1.0),
-    //     TextRenderConfig::new(
-    //         "Teste",
-    //         glm::vec2(0.0, 0.5),
-    //         0.2,
-    //         glm::vec3(20, 30, 200)
-    //     ).set_rotation(0.5),
-    //     TextRenderConfig::new(
-    //         "Teste",
-    //         glm::vec2(0.0, 0.5),
-    //         0.2,
-    //         glm::vec3(20, 30, 200)
-    //     ).set_rotation(0.0),
-    // ]);
 
     while !window.should_close() {
 
@@ -143,6 +119,8 @@ fn main() {
                 window_size,
                 mouse_pos,
                 simple_shape_renderer: &mut simple_shape_renderer,
+                graph_renderer: &graph_renderer,
+                font: &mut font,
                 delta,
             };
 
@@ -156,7 +134,7 @@ fn main() {
         simple_shape_renderer.draw(&vp_matrix);
 
         renderer.disable(Capability::DepthTest);
-        // fonts.draw_buffer(&font, &vbo, &proj_matrix);
+        fonts.draw(&mut font, &proj_matrix);
 
         window.swap_buffers();
     }
