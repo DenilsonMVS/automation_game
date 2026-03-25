@@ -162,7 +162,7 @@ impl<'a> Texture<'a> {
         }
     }
 
-    pub fn from_font_raw(_renderer: &'a Renderer, bytes: &[glm::U8Vec4], width: usize) -> Self {
+    pub fn from_font_raw(_renderer: &'a Renderer, bytes: &[glm::U8Vec3], width: usize) -> Self {
         let mut id = 0u32;
 
         let height = bytes.len() / width;
@@ -176,11 +176,11 @@ impl<'a> Texture<'a> {
             gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
-                gl::RGBA8 as i32,
+                gl::RGB8 as i32,
                 width as i32,
                 height as i32,
                 0,
-                gl::RGBA,
+                gl::RGB,
                 gl::UNSIGNED_BYTE,
                 bytes.as_ptr() as *const c_void
             );

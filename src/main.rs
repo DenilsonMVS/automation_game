@@ -8,7 +8,7 @@ use std::time;
 use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, fonts::{Font, Fonts, TextRenderConfig}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -62,8 +62,9 @@ fn main() {
     let (glfw, window, events, renderer) = setup.get();
 
     renderer.enable(Capability::Multisample);
+
     renderer.enable(Capability::Blend);
-    renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+    
 
     renderer.enable(Capability::DepthTest);
     renderer.depth_func(DepthFunc::Less);
@@ -71,7 +72,7 @@ fn main() {
     renderer.clear_color(&glm::vec4(0.1, 0.12, 0.2, 0.0));
 
     let fonts = Fonts::new(renderer);
-    let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/DejaVuSans.ttf")).unwrap();
+    let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
     let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
     let graph_renderer = GraphRenderer::new(renderer).unwrap();
     let mut camera = Camera::new();
@@ -106,8 +107,11 @@ fn main() {
 
 
         simple_shape_renderer.reset();
+        font.reset();
 
         renderer.clear(&[ClearField::Color, ClearField::Depth]);
+        renderer.enable(Capability::DepthTest);
+        renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
         {
             let mut main_context = MainContext {
@@ -130,10 +134,13 @@ fn main() {
         }
 
         simple_shape_renderer.finish();
-        renderer.enable(Capability::DepthTest);
+        font.finish();
+
         simple_shape_renderer.draw(&vp_matrix);
 
         renderer.disable(Capability::DepthTest);
+        renderer.enable(Capability::Blend);
+        renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
         fonts.draw(&mut font, &proj_matrix, window_size);
 
         window.swap_buffers();

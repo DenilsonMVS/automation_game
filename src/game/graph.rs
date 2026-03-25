@@ -2,7 +2,7 @@
 use macros::program_interface;
 use nalgebra_glm as glm;
 
-use crate::graphics::renderer::{Renderer, buffer::{GenericBuffer, StaticBuffer}, drawable::DrawMode, fonts::{Font, FontVbo, TextRenderConfig}, positioning::PositionMode, program::{Program, ShaderType}, simple_shape_renderer::SimpleShapeRenderer, uniform::UniformValue, vertex_array_object::VertexArrayObject};
+use crate::graphics::renderer::{Renderer, buffer::{GenericBuffer, StaticBuffer}, drawable::DrawMode, fonts::{Font, TextRenderConfig}, positioning::PositionMode, program::{Program, ShaderType}, simple_shape_renderer::SimpleShapeRenderer, uniform::UniformValue, vertex_array_object::VertexArrayObject};
 use anyhow::Result;
 
 const Y_BUFFER_SIZE: usize = 1 << 7;
@@ -109,7 +109,7 @@ impl<'a> GraphRenderer<'a> {
                     text: &format!("{:.1}", *horizontal_line),
                     position: min_pos + glm::vec2(-0.01, pos),
                     position_mode: PositionMode::CenterRight,
-                    line_height: 0.04,
+                    line_height: 0.2,
                     rotation: 0.0,
                     color: glm::vec3(graph.secondary_color.x, graph.secondary_color.y, graph.secondary_color.z),
                 });

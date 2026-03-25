@@ -53,6 +53,7 @@ pub enum Capability {
 	StencilTest,
 	ScissorTest,
 	Multisample,
+	FramebufferSRGB,
 }
 
 impl GlEnum for Capability {
@@ -64,6 +65,7 @@ impl GlEnum for Capability {
 			gl::STENCIL_TEST => Some(Self::StencilTest),
 			gl::SCISSOR_TEST => Some(Self::ScissorTest),
 			gl::MULTISAMPLE => Some(Self::Multisample),
+			gl::FRAMEBUFFER_SRGB => Some(Self::FramebufferSRGB),
 			_ => None,
 		}
 	}
@@ -76,6 +78,7 @@ impl GlEnum for Capability {
 			Self::StencilTest => gl::STENCIL_TEST,
 			Self::ScissorTest => gl::SCISSOR_TEST,
 			Self::Multisample => gl::MULTISAMPLE,
+			Self::FramebufferSRGB => gl::FRAMEBUFFER_SRGB,
 		}
 	}
 }
@@ -131,6 +134,7 @@ pub enum BlendFactor {
 	OneMinusSrcAlpha,
 	DstAlpha,
 	OneMinusDstAlpha,
+	OneMinusSrc1Color,
 }
 
 impl GlEnum for BlendFactor {
@@ -146,6 +150,7 @@ impl GlEnum for BlendFactor {
 			gl::ONE_MINUS_SRC_ALPHA => Some(Self::OneMinusSrcAlpha),
 			gl::DST_ALPHA => Some(Self::DstAlpha),
 			gl::ONE_MINUS_DST_ALPHA => Some(Self::OneMinusDstAlpha),
+			gl::ONE_MINUS_SRC1_COLOR => Some(Self::OneMinusSrc1Color),
 			_ => None,
 		}
 	}
@@ -162,6 +167,7 @@ impl GlEnum for BlendFactor {
 			Self::OneMinusSrcAlpha => gl::ONE_MINUS_SRC_ALPHA,
 			Self::DstAlpha => gl::DST_ALPHA,
 			Self::OneMinusDstAlpha => gl::ONE_MINUS_DST_ALPHA,
+			Self::OneMinusSrc1Color => gl::ONE_MINUS_SRC1_COLOR,
 		}
 	}
 }
