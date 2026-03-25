@@ -134,7 +134,7 @@ fn main() {
         simple_shape_renderer.draw(&vp_matrix);
 
         renderer.disable(Capability::DepthTest);
-        fonts.draw(&mut font, &proj_matrix);
+        fonts.draw(&mut font, &proj_matrix, window_size);
 
         window.swap_buffers();
     }

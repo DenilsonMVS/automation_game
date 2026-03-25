@@ -53,6 +53,12 @@ impl UniformValue for u32 {
 	}
 }
 
+impl UniformValue for glm::UVec4 {
+	fn set_program_uniform(&self, program_id: u32, location: i32) {
+		unsafe { gl::ProgramUniform4ui(program_id, location, self[0], self[1], self[2], self[3]); }
+	}
+}
+
 
 pub struct Uniform<T: UniformValue> {
 	location: i32,

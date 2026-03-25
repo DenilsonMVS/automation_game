@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use image::{ImageBuffer, Luma};
 use msdfgen::{Bitmap, FillRule, FontExt, MsdfGeneratorConfig, Range};
 use ttf_parser::Face;
 use macros::{GlVertex, program_interface};
@@ -47,6 +48,12 @@ struct FontProgram {
     u_glyph_size: u32,
     u_glyph_margin: u32,
     u_world_scale: f32,
+    u_px_range: f32,
+    u_screen_size: glm::Vec2,
+    u_sample_20: glm::UVec4,
+    u_sample_12: glm::UVec4,
+    u_sample_8: glm::UVec4,
+    u_sample_4: glm::UVec4,
 }
 
 pub struct Fonts<'a> {
@@ -57,11 +64,15 @@ pub struct Fonts<'a> {
 impl<'a> Fonts<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let font_program = FontProgram::init(renderer).unwrap();
-        font_program.bind();
         font_program.set_u_texture(&0);
         font_program.set_u_glyph_size(&(GLYPH_SIZE as u32));
         font_program.set_u_glyph_margin(&(GLYPYH_MARGIN as u32));
         font_program.set_u_world_scale(&(1.0 / SCALE_FACTOR));
+        font_program.set_u_px_range(&PX_RANGE);
+        font_program.set_u_sample_20(&msdf_config_to_vec(&SUB_MSDF_CONFIGS[0]));
+        font_program.set_u_sample_12(&msdf_config_to_vec(&SUB_MSDF_CONFIGS[1]));
+        font_program.set_u_sample_8(&msdf_config_to_vec(&SUB_MSDF_CONFIGS[2]));
+        font_program.set_u_sample_4(&msdf_config_to_vec(&SUB_MSDF_CONFIGS[3]));
 
         return Self {
             font_program,
@@ -73,16 +84,18 @@ impl<'a> Fonts<'a> {
         Font::from_bytes(renderer, bytes)
     }
 
-    pub fn draw_buffer(&self, font: &Font, buffer: &FontVbo, proj_matrix: &glm::Mat4) {
+    pub fn draw_buffer(&self, font: &Font, buffer: &FontVbo, proj_matrix: &glm::Mat4, window_size: glm::Vec2) {
         self.font_program.bind();
         self.font_program.set_u_projection(proj_matrix);
+        self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
         buffer.vao.draw_instanced(4, buffer.amount, DrawMode::TriangleStrip);
     }
 
-    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4) {
+    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4, window_size: glm::Vec2) {
         self.font_program.bind();
         self.font_program.set_u_projection(proj_matrix);
+        self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
         font.vao.draw_instanced(4, font.vbo.get_len() as i32, DrawMode::TriangleStrip);
         font.vbo.lock();
@@ -132,6 +145,10 @@ const fn calculate_atlas_params(char_amount: usize) -> (usize, usize, usize) {
     (rows * SPACE_PER_GLYPH, columns * SPACE_PER_GLYPH, columns)
 }
 
+fn msdf_config_to_vec(config: &(usize, usize, usize, usize)) -> glm::UVec4 {
+    glm::vec4(config.0 as u32, config.1 as u32, config.2 as u32, config.3 as u32)
+}
+
 pub const GLYPH_SIZE: usize = 32;
 pub const GLYPYH_MARGIN: usize = 0;
 pub const SPACE_PER_GLYPH: usize = GLYPH_SIZE + GLYPYH_MARGIN;
@@ -141,6 +158,12 @@ pub const UTF_8_END: usize = 0x007F;
 pub const EXTRA_START: usize = 0x00A0;
 pub const EXTRA_END: usize = 0x0100;
 pub const WESTERN_CHAR_COUNT: usize = UTF_8_END - UTF_8_START + EXTRA_END - EXTRA_START;
+pub const SUB_MSDF_CONFIGS: [(usize, usize, usize, usize); 4] = [
+    (20, 0, 0, 28),
+    (12, 20, 0, 17),
+    (8, 0, 22, 11),
+    (4, 24, 24, 7),
+];
 
 const ATLAS_PARAMS: (usize, usize, usize) = calculate_atlas_params(WESTERN_CHAR_COUNT);
 pub const ATLAS_HEIGHT: usize = ATLAS_PARAMS.0;
@@ -184,12 +207,14 @@ impl<'a> Font<'a> {
     fn from_bytes(renderer: &'a Renderer, bytes: &[u8]) -> Result<Self> {
         let font = Face::parse(bytes, 0)?;
 
-        let mut raw_image_data = [glm::U8Vec3::new(0, 0, 0); ATLAS_HEIGHT * ATLAS_WIDTH];
+        let mut raw_image_data = [glm::vec4(0, 0, 0, 0); ATLAS_HEIGHT * ATLAS_WIDTH];
         let mut glyphs = [GlyphInfo::default(); WESTERN_CHAR_COUNT];
 
         for (idx, c) in get_western_iterator().enumerate() {
             let info = &mut glyphs[idx];
             let idx = map_char_to_index(c).unwrap();
+            let start_y = (idx / ATLAS_COLUMNS) * SPACE_PER_GLYPH;
+            let start_x = (idx % ATLAS_COLUMNS) * SPACE_PER_GLYPH;
 
             if let Some(glyph_id) = font.glyph_index(c) {
                 info.advance = font.glyph_hor_advance(glyph_id).unwrap_or(0) as f32;
@@ -209,9 +234,6 @@ impl<'a> Font<'a> {
                         shape.correct_sign(&mut bitmap, &framing, FillRule::default());
                         shape.correct_msdf_error(&mut bitmap, &framing, &config);
 
-                        let start_y = (idx / ATLAS_COLUMNS) * SPACE_PER_GLYPH;
-                        let start_x = (idx % ATLAS_COLUMNS) * SPACE_PER_GLYPH;
-
                         for y in 0..GLYPH_SIZE {
                             for x in 0..GLYPH_SIZE {
                                 let pixel = bitmap.pixel(x as u32, (GLYPH_SIZE - y - 1) as u32);
@@ -220,7 +242,7 @@ impl<'a> Font<'a> {
                                 let b = (pixel.b * 255.0).clamp(0.0, 255.0) as u8;
 
                                 raw_image_data[(start_y + y) * ATLAS_WIDTH + start_x + x] = 
-                                    glm::U8Vec3::new(r, g, b);
+                                    glm::vec4(r, g, b, 0);
                             }
                         }
 
@@ -232,6 +254,30 @@ impl<'a> Font<'a> {
                             GLYPH_SIZE as f32 / scale.x as f32,
                             GLYPH_SIZE as f32 / scale.y as f32
                         );
+                    }
+
+                    for (size, f_x, f_y, _) in SUB_MSDF_CONFIGS.iter() {
+                        if let Some(framing) = shape.get_bound().autoframe(
+                            *size as u32,
+                            *size as u32,
+                            Range::Px(1.0),
+                            None
+                        ) {
+                            let mut bitmap = Bitmap::new(*size as u32, *size as u32);
+                            let config = MsdfGeneratorConfig::default();
+
+                            shape.edge_coloring_simple(3.0, 0);
+                            shape.generate_sdf(&mut bitmap, &framing, &config);
+                            shape.correct_sign(&mut bitmap, &framing, FillRule::default());
+
+                            for y in 0..*size {
+                                for x in 0..*size {
+                                    let pixel = bitmap.pixel(x as u32, (*size - y - 1) as u32).v;
+                                    raw_image_data[(start_y + y + f_y) * ATLAS_WIDTH + start_x + f_x + x].w =
+                                        (pixel * 255.0).clamp(0.0, 255.0) as u8;
+                                }
+                            }
+                        }
                     }
                 }
             }
