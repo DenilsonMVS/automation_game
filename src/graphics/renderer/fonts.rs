@@ -5,7 +5,7 @@ use ttf_parser::Face;
 use macros::{GlVertex, program_interface};
 use crate::graphics::renderer::{
     Renderer, 
-    buffer::{DynamicBuffer, StaticBuffer}, 
+    buffer::{DynamicBuffer, GenericBuffer, StaticBuffer}, 
     drawable::DrawMode, 
     positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short}, 
     program::{Program, ShaderType}, 
@@ -28,6 +28,22 @@ pub struct GlyphAttrs {
     #[normalized]
     pub color: glm::U8Vec3,
     pub character_idx: u8,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct UvData {
+    min: glm::Vec2,
+    max: glm::Vec2,
+}
+
+impl Default for UvData {
+    fn default() -> Self {
+        Self {
+            min: glm::vec2(0.0, 0.0),
+            max: glm::vec2(0.0, 0.0),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -78,6 +94,7 @@ impl<'a> Fonts<'a> {
         self.font_program.set_u_projection(proj_matrix);
         self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
+        font.uv_buf.bind_as_storage(5);
         buffer.vao.draw_instanced(4, buffer.amount, DrawMode::TriangleStrip);
     }
 
@@ -86,6 +103,7 @@ impl<'a> Fonts<'a> {
         self.font_program.set_u_projection(proj_matrix);
         self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
+        font.uv_buf.bind_as_storage(5);
         font.vao.draw_instanced(4, font.vbo.get_len() as i32, DrawMode::TriangleStrip);
         font.vbo.lock();
     }
@@ -104,6 +122,7 @@ pub struct Font<'a> {
     descender: f32,
     vbo: DynamicBuffer<'a, GlyphAttrs>,
     vao: VertexArrayObject<'a>,
+    uv_buf: StaticBuffer<'a, UvData>,
 }
 
 const fn map_char_to_index(c: char) -> Option<usize> {
@@ -188,12 +207,16 @@ impl<'a> Font<'a> {
 
         let mut raw_image_data = [glm::vec3(0, 0, 0); ATLAS_HEIGHT * ATLAS_WIDTH];
         let mut glyphs = [GlyphInfo::default(); WESTERN_CHAR_COUNT];
+        let mut uvs = [UvData::default(); WESTERN_CHAR_COUNT];
+        let atlas_size = glm::vec2(ATLAS_WIDTH as f32, ATLAS_HEIGHT as f32);
 
         for (idx, c) in get_western_iterator().enumerate() {
             let info = &mut glyphs[idx];
             let idx = map_char_to_index(c).unwrap();
             let start_y = (idx / ATLAS_COLUMNS) * SPACE_PER_GLYPH;
             let start_x = (idx % ATLAS_COLUMNS) * SPACE_PER_GLYPH;
+            let vstart = glm::vec2(start_x, start_y).map(|x| x as f32);
+
 
             if let Some(glyph_id) = font.glyph_index(c) {
                 info.advance = font.glyph_hor_advance(glyph_id).unwrap_or(0) as f32;
@@ -228,11 +251,24 @@ impl<'a> Font<'a> {
                         let scale = framing.projection.scale;
                         let translate = framing.projection.translate;
 
-                        info.bound_min = glm::vec2(-translate.x as f32, -translate.y as f32);
-                        info.bound_max = info.bound_min + glm::vec2(
-                            GLYPH_SIZE as f32 / scale.x as f32,
-                            GLYPH_SIZE as f32 / scale.y as f32
-                        );
+                        let scale = glm::vec2(scale.x, scale.y)
+                            .map(|x| x as f32);
+                        let translate = glm::vec2(translate.x, translate.y)
+                            .map(|x| x as f32);
+
+                        let bb = font.glyph_bounding_box(glyph_id).unwrap();
+
+                        info.bound_min = glm::vec2(bb.x_min, bb.y_max)
+                            .map(|x| x as f32);
+                        info.bound_max = glm::vec2(bb.x_max, bb.y_min)
+                            .map(|x| x as f32);
+
+                        uvs[idx] = UvData {
+                            min: (vstart + (translate + info.bound_min).component_mul(&scale))
+                                .component_div(&atlas_size),
+                            max: (vstart + (translate + info.bound_max).component_mul(&scale))
+                                .component_div(&atlas_size),
+                        };
                     }
                 }
             }
@@ -241,6 +277,7 @@ impl<'a> Font<'a> {
         let texture = Texture::from_font_raw(renderer, raw_image_data.as_slice(), ATLAS_WIDTH);
         let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
         let vao = VertexArrayObject::new(renderer, &[&vbo]);
+        let uv_buf = StaticBuffer::new(renderer, &uvs);
 
         return Ok(Self {
             texture,
@@ -249,6 +286,7 @@ impl<'a> Font<'a> {
             descender: font.descender() as f32,
             vbo,
             vao,
+            uv_buf,
         });
     }
 

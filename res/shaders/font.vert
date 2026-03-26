@@ -6,6 +6,15 @@ layout (location = 2) in ivec2 a_bottom_right;
 layout (location = 3) in vec3 a_color;
 layout (location = 4) in uint a_glyph_index;
 
+struct UvInfo {
+    vec2 min;
+    vec2 max;
+};
+
+layout(std430, binding = 5) buffer Uv {
+    UvInfo info[];
+};
+
 out vec2 v_tex_coord;
 out vec3 v_color;
 
@@ -31,14 +40,6 @@ void main() {
 
 	gl_Position = u_projection * vec4(positions[gl_VertexID % 4], 0, 1);
 
-    ivec2 atlas_size = textureSize(u_texture, 0);
-    uint glyph_space = u_glyph_size + u_glyph_margin;
-    uint columns = uint(atlas_size.x) / glyph_space;
-
-    uint col = a_glyph_index % columns;
-    uint row = a_glyph_index / columns;
-	
-    vec2 base_pixel = vec2(float(col * glyph_space), float(row * glyph_space));
-    v_tex_coord = (base_pixel + 0.5 + OFFSETS[gl_VertexID % 4] * float(glyph_space - 1)) / vec2(atlas_size);
+    v_tex_coord = mix(info[a_glyph_index].min, info[a_glyph_index].max, OFFSETS[gl_VertexID % 4]);
     v_color = a_color;
 }

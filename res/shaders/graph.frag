@@ -39,8 +39,14 @@ void main() {
     uint i1 = min(i0 + 1, count - 1);
     float buffer_y_at_x = mix(y_values[i0], y_values[i1], fract(float_idx));
 
+    ivec2 sampling_window = ivec2(int(i0) - 3, int(i0) + 3);
+    sampling_window += max(-sampling_window.x, 0);
+    sampling_window += min(int(count) - 2 - sampling_window.y, 0);
+    sampling_window.x = max(sampling_window.x, 0);
+    sampling_window.y = min(sampling_window.y, int(count) - 2);
+
     float min_dist = 1e10;
-    for (uint i = 0; i + 1 < count; i++) {
+    for (uint i = sampling_window.x; i <= sampling_window.y; i++) {
         vec2 a = vec2(mix(view_min.x, view_max.x, float(i) / float(count - 1)), y_values[i]);
         vec2 b = vec2(mix(view_min.x, view_max.x, float(i + 1) / float(count - 1)), y_values[i + 1]);
         min_dist = min(min_dist, dist_to_segment(p, a, b));
