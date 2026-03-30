@@ -20,7 +20,7 @@ void main() {
     vec3 msd = texture(u_texture, v_tex_coord).rgb;
     float dist = median(msd.r, msd.g, msd.b);
 
-    float dx = dFdx(dist);
+    float dx = dFdxFine(dist);
 
     vec3 subpixel_dist = vec3(
         dist - dx * 0.333,
@@ -28,7 +28,7 @@ void main() {
         dist + dx * 0.333
     );
 
-    float edge_width = fwidth(dist) * 0.5;     
+    float edge_width = fwidthFine(dist) * 0.5;
     vec3 coverage = smoothstep(0.5 - edge_width, 0.5 + edge_width, subpixel_dist);
 
     out_color = vec4(v_color.rgb * coverage, 1.0);

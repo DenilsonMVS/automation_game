@@ -106,9 +106,9 @@ impl Robot {
     pub fn new() -> Self {
         Self {
             memory: Memory::new(),
-            position: glm::vec2(0.0, 0.0),
+            position: glm::vec2(-1.0, 0.0),
             speed: glm::vec2(0.0, 0.0),
-            target: glm::vec2(0.0, 0.0),
+            target: glm::vec2(1.0, 0.0),
             instructions: Memory::new(),
             color: glm::vec3(200, 200, 190),
         }
@@ -200,7 +200,7 @@ impl Robot {
                 glm::vec2(WEEL_DIAMETER, WEEL_DIAMETER),
                 PositionMode::Center,
                 glm::vec4(WEEL_COLOR[0], WEEL_COLOR[1], WEEL_COLOR[2], 255),
-                WEELS_DEPTH,
+                WEELS_DEPTH, 0
             );
         }
 
@@ -209,7 +209,7 @@ impl Robot {
             glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
             PositionMode::Center,
             glm::vec4(self.color.x, self.color.y, self.color.z, 255),
-            ROBOT_DEPTH,
+            ROBOT_DEPTH, 0
         );
     }
 

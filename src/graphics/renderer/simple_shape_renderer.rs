@@ -70,73 +70,108 @@ struct EllipseVertex {
 
 pub struct SimpleShapeRenderer<'a> {
     rec_program: SimpleRectangleProgram<'a>,
-    rec_vbo: DynamicBuffer<'a, RectangleVertex>,
-    rec_vao: VertexArrayObject<'a>,
+    rec_buffs: [(DynamicBuffer<'a, RectangleVertex>, VertexArrayObject<'a>); 2],
 
     tri_program: SimpleTriangleProgram<'a>,
-    tri_vbo: DynamicBuffer<'a, TriangleVertex>,
-    tri_vao: VertexArrayObject<'a>,
+    tri_buffs: [(DynamicBuffer<'a, TriangleVertex>, VertexArrayObject<'a>); 2],
 
     ell_program: SimpleEllipseProgram<'a>,
-    ell_vbo: DynamicBuffer<'a, EllipseVertex>,
-    ell_vao: VertexArrayObject<'a>,
+    ell_buffs: [(DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>); 2],
 }
 
 impl<'a> SimpleShapeRenderer<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let rec_program = SimpleRectangleProgram::init(renderer).unwrap();
-        let rec_vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-        let rec_vao = VertexArrayObject::new(renderer, &[&rec_vbo]);
+        let rec_buffs = std::array::from_fn(|_| {
+            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
+            let vao = VertexArrayObject::new(renderer, &[&vbo]);
+            return (vbo, vao);
+        });
 
         let tri_program = SimpleTriangleProgram::init(renderer).unwrap();
-        let tri_vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-        let tri_vao = VertexArrayObject::new(renderer, &[&tri_vbo]);
+        let tri_buffs = std::array::from_fn(|_| {
+            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
+            let vao = VertexArrayObject::new(renderer, &[&vbo]);
+            return (vbo, vao);
+        });
 
         let ell_program = SimpleEllipseProgram::init(renderer).unwrap();
-        let ell_vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-        let ell_vao = VertexArrayObject::new(renderer, &[&ell_vbo]);
+        let ell_buffs = std::array::from_fn(|_| {
+            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
+            let vao = VertexArrayObject::new(renderer, &[&vbo]);
+            return (vbo, vao);
+        });
         
         return Self {
-            rec_program, rec_vbo, rec_vao,
-            tri_program, tri_vbo, tri_vao,
-            ell_program, ell_vbo, ell_vao,
+            rec_program, rec_buffs,
+            tri_program, tri_buffs,
+            ell_program, ell_buffs,
         };
     }
 
-    pub fn draw(&mut self, vp_matrix: &glm::Mat4) {
+    pub fn draw(&mut self, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
         self.rec_program.bind();
-        self.rec_program.set_u_vp(vp_matrix);
+        for (i, (vbo, vao)) in self.rec_buffs.iter_mut().enumerate() {
+            if i == 0 {
+                self.rec_program.set_u_vp(vp_matrix);
+            } else {
+                self.rec_program.set_u_vp(proj_matrix);
+            }
 
-        self.rec_vao.draw_instanced(4, self.rec_vbo.get_len() as i32, DrawMode::TriangleStrip);
-        self.rec_vbo.lock();
+            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+            vbo.lock();
+        }
 
         self.tri_program.bind();
-        self.tri_program.set_u_vp(vp_matrix);
+        for (i, (vbo, vao)) in self.tri_buffs.iter_mut().enumerate() {
+            if i == 0 {
+                self.tri_program.set_u_vp(vp_matrix);
+            } else {
+                self.tri_program.set_u_vp(proj_matrix);
+            }
 
-        self.tri_vao.draw_instanced(3,self.tri_vbo.get_len() as i32, DrawMode::Triangles);
-        self.tri_vbo.lock();
+            vao.draw_instanced(3, vbo.get_len() as i32, DrawMode::Triangles);
+            vbo.lock();
+        }
 
         self.ell_program.bind();
-        self.ell_program.set_u_vp(vp_matrix);
+        for (i, (vbo, vao)) in self.ell_buffs.iter_mut().enumerate() {
+            if i == 0 {
+                self.ell_program.set_u_vp(vp_matrix);
+            } else {
+                self.ell_program.set_u_vp(proj_matrix);
+            }
 
-        self.ell_vao.draw_instanced(4, self.ell_vbo.get_len() as i32, DrawMode::TriangleStrip);
-        self.ell_vbo.lock();
+            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+            vbo.lock();
+        }
     }
 
     pub fn reset(&mut self) {
-        self.rec_vbo.wait();
-        self.tri_vbo.wait();
-        self.ell_vbo.wait();
-
-        self.rec_vbo.reset_index();
-        self.tri_vbo.reset_index();
-        self.ell_vbo.reset_index();
+        for (vbo, _) in self.rec_buffs.iter_mut() {
+            vbo.wait();
+            vbo.reset_index();
+        }
+        for (vbo, _) in self.tri_buffs.iter_mut() {
+            vbo.wait();
+            vbo.reset_index();
+        }
+        for (vbo, _) in self.ell_buffs.iter_mut() {
+            vbo.wait();
+            vbo.reset_index();
+        }
     }
 
     pub fn finish(&self) {
-        self.rec_vbo.flush();
-        self.tri_vbo.flush();
-        self.ell_vbo.flush();
+        for (vbo, _) in self.rec_buffs.iter() {
+            vbo.flush();
+        }
+        for (vbo, _) in self.tri_buffs.iter() {
+            vbo.flush();
+        }
+        for (vbo, _) in self.ell_buffs.iter() {
+            vbo.flush();
+        }
     }
 
     pub fn send_rotated_rectangle(
@@ -147,9 +182,10 @@ impl<'a> SimpleShapeRenderer<'a> {
         up_vector: glm::Vec2,
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
         let oriented_box = OrientedBox::new_rotated(position, position_mode, size, up_vector);
-        self.rec_vbo.write(&RectangleVertex {
+        self.rec_buffs[group].0.write(&RectangleVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -164,9 +200,10 @@ impl<'a> SimpleShapeRenderer<'a> {
         position_mode: PositionMode,
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
-        self.rec_vbo.write(&RectangleVertex {
+        self.rec_buffs[group].0.write(&RectangleVertex {
             top_left: simple_box.get_top_left(),
             top_right: simple_box.get_top_right(),
             bottom_right: simple_box.get_bottom_right(),
@@ -181,6 +218,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         width: f32,
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
         let to_centroid = centroid - apex;
         let dist_r = glm::length(&to_centroid);
@@ -193,7 +231,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         let vertex_b = base_midpoint + (unit_w * half_width);
         let vertex_c = base_midpoint - (unit_w * half_width);
 
-        self.tri_vbo.write(&TriangleVertex {
+        self.tri_buffs[group].0.write(&TriangleVertex {
             v1: apex,
             v2: vertex_b,
             v3: vertex_c,
@@ -207,8 +245,9 @@ impl<'a> SimpleShapeRenderer<'a> {
         vertices: &[glm::Vec2; 3],
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
-        self.tri_vbo.write(&TriangleVertex {
+        self.tri_buffs[group].0.write(&TriangleVertex {
             v1: vertices[0],
             v2: vertices[1],
             v3: vertices[2],
@@ -225,9 +264,10 @@ impl<'a> SimpleShapeRenderer<'a> {
         up_vector: glm::Vec2,
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
         let oriented_box = OrientedBox::new_rotated(position, position_mode, size, up_vector);
-        self.ell_vbo.write(&EllipseVertex {
+        self.ell_buffs[group].0.write(&EllipseVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -242,9 +282,10 @@ impl<'a> SimpleShapeRenderer<'a> {
         position_mode: PositionMode,
         color: glm::U8Vec4,
         depth: u16,
+        group: usize,
     ) {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
-        self.ell_vbo.write(&EllipseVertex {
+        self.ell_buffs[group].0.write(&EllipseVertex {
             top_left: simple_box.get_top_left(),
             top_right: simple_box.get_top_right(),
             bottom_right: simple_box.get_bottom_right(),

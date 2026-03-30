@@ -76,6 +76,7 @@ fn main() {
     let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
     let graph_renderer = GraphRenderer::new(renderer).unwrap();
     let mut camera = Camera::new();
+    camera.handle_scroll(-10.0);
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
     let mut is_fullscreen = false;
@@ -162,12 +163,12 @@ fn main() {
         simple_shape_renderer.finish();
         font.finish();
 
-        simple_shape_renderer.draw(&vp_matrix);
+        simple_shape_renderer.draw(&proj_matrix, &vp_matrix);
 
         renderer.disable(Capability::DepthTest);
         renderer.enable(Capability::Blend);
         renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
-        fonts.draw(&mut font, &proj_matrix, window_size);
+        fonts.draw(&mut font, &proj_matrix, &vp_matrix);
 
         window.swap_buffers();
     }

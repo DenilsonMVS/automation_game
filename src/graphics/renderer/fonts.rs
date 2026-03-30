@@ -63,7 +63,6 @@ struct FontProgram {
     u_glyph_size: u32,
     u_glyph_margin: u32,
     u_world_scale: f32,
-    u_screen_size: glm::Vec2,
 }
 
 pub struct Fonts<'a> {
@@ -89,23 +88,27 @@ impl<'a> Fonts<'a> {
         Font::from_bytes(renderer, bytes)
     }
 
-    pub fn draw_buffer(&self, font: &Font, buffer: &FontVbo, proj_matrix: &glm::Mat4, window_size: glm::Vec2) {
+    pub fn draw_buffer(&self, font: &Font, buffer: &FontVbo, proj_matrix: &glm::Mat4) {
         self.font_program.bind();
         self.font_program.set_u_projection(proj_matrix);
-        self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
         font.uv_buf.bind_as_storage(5);
         buffer.vao.draw_instanced(4, buffer.amount, DrawMode::TriangleStrip);
     }
 
-    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4, window_size: glm::Vec2) {
+    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
         self.font_program.bind();
-        self.font_program.set_u_projection(proj_matrix);
-        self.font_program.set_u_screen_size(&window_size);
         font.texture.bind_to_unit(0);
         font.uv_buf.bind_as_storage(5);
-        font.vao.draw_instanced(4, font.vbo.get_len() as i32, DrawMode::TriangleStrip);
-        font.vbo.lock();
+        for (i, (vbo, vao)) in font.buffs.iter_mut().enumerate() {
+            if i == 0 {
+                self.font_program.set_u_projection(vp_matrix);
+            } else {
+                self.font_program.set_u_projection(proj_matrix);
+            }
+            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+            vbo.lock();
+        }
     }
 }
 
@@ -120,8 +123,7 @@ pub struct Font<'a> {
     glyphs: [GlyphInfo; WESTERN_CHAR_COUNT],
     ascender: f32,
     descender: f32,
-    vbo: DynamicBuffer<'a, GlyphAttrs>,
-    vao: VertexArrayObject<'a>,
+    buffs: [(DynamicBuffer<'a, GlyphAttrs>, VertexArrayObject<'a>); 2],
     uv_buf: StaticBuffer<'a, UvData>,
 }
 
@@ -176,6 +178,7 @@ pub struct TextRenderConfig<'a> {
     pub rotation: f32,
     pub position_mode: PositionMode,
     pub color: glm::U8Vec3,
+    pub group: usize,
 }
 
 impl<'a> TextRenderConfig<'a> {
@@ -187,11 +190,17 @@ impl<'a> TextRenderConfig<'a> {
             position_mode: PositionMode::Center,
             color,
             rotation: 0.0,
+            group: 0,
         }
     }
 
     pub fn set_mode(mut self, mode: PositionMode) -> Self {
         self.position_mode = mode;
+        return self;
+    }
+
+    pub fn set_group(mut self, group: usize) -> Self {
+        self.group = group;
         return self;
     }
 
@@ -275,8 +284,11 @@ impl<'a> Font<'a> {
         }
 
         let texture = Texture::from_font_raw(renderer, raw_image_data.as_slice(), ATLAS_WIDTH);
-        let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
-        let vao = VertexArrayObject::new(renderer, &[&vbo]);
+        let buffs = std::array::from_fn(|_| {
+            let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
+            let vao = VertexArrayObject::new(renderer, &[&vbo]);
+            return (vbo, vao);
+        });
         let uv_buf = StaticBuffer::new(renderer, &uvs);
 
         return Ok(Self {
@@ -284,15 +296,16 @@ impl<'a> Font<'a> {
             glyphs,
             ascender: font.ascender() as f32,
             descender: font.descender() as f32,
-            vbo,
-            vao,
+            buffs,
             uv_buf,
         });
     }
 
     pub fn reset(&mut self) {
-        self.vbo.wait();
-        self.vbo.reset_index();
+        for (vbo, _) in self.buffs.iter_mut() {
+            vbo.wait();
+            vbo.reset_index();
+        }
     }
 
     pub fn bind_to_unit(&self, unit: u32) {
@@ -303,7 +316,7 @@ impl<'a> Font<'a> {
         let glyphs = &self.glyphs;
         let ascender = self.ascender;
         let descender = self.descender;
-        let vbo = &mut self.vbo;
+        let vbo = &mut self.buffs[text.group].0;
         Self::generate_vertex(glyphs, ascender, descender, text,
             |vertex| vbo.write(&vertex));
     }
@@ -387,6 +400,8 @@ impl<'a> Font<'a> {
     }
 
     pub fn finish(&self) {
-        self.vbo.flush();
+        for (vbo, _) in self.buffs.iter() {
+            vbo.flush();
+        }
     }
 }
