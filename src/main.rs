@@ -78,6 +78,7 @@ fn main() {
     let mut camera = Camera::new();
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
+    let mut is_fullscreen = false;
 
     while !window.should_close() {
 
@@ -100,6 +101,31 @@ fn main() {
         for (_, event) in messages.iter() {
             match event {
                 WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
+                WindowEvent::Key(glfw::Key::F11, _, glfw::Action::Press, _) => {
+                    if is_fullscreen {
+                        window.set_monitor(
+                            glfw::WindowMode::Windowed,
+                            100, 100,
+                            800, 600,
+                            None,
+                        );
+                    } else {
+                        glfw.with_primary_monitor(|_, monitor| {
+                            if let Some(m) = monitor {
+                                let video_mode = m.get_video_mode().unwrap();
+                                window.set_monitor(
+                                    glfw::WindowMode::FullScreen(m),
+                                    0, 0,
+                                    video_mode.width, 
+                                    video_mode.height,
+                                    Some(video_mode.refresh_rate)
+                                );
+                            }
+                        });
+                    }
+
+                    is_fullscreen = !is_fullscreen;
+                },
                 _ => {}
             }
         }
