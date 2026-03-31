@@ -50,10 +50,10 @@ pub struct MainContext<'a, 'b> {
     pub proj_matrix: Mat4,
     pub i_proj_matrix: Mat4,
     pub vp_matrix: Mat4,
-    pub now: std::time::Instant,
     pub window_size: glm::Vec2,
     pub mouse_pos: glm::Vec2,
     pub delta: f32,
+    pub halt: bool,
 }
 
 fn main() {
@@ -80,6 +80,7 @@ fn main() {
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
     let mut is_fullscreen = false;
+    let mut halt = true;
 
     while !window.should_close() {
 
@@ -102,6 +103,7 @@ fn main() {
         for (_, event) in messages.iter() {
             match event {
                 WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
+                WindowEvent::Key(glfw::Key::Space, _, glfw::Action::Press, _) => halt = !halt,
                 WindowEvent::Key(glfw::Key::F11, _, glfw::Action::Press, _) => {
                     if is_fullscreen {
                         window.set_monitor(
@@ -137,7 +139,6 @@ fn main() {
         font.reset();
 
         renderer.clear(&[ClearField::Color, ClearField::Depth]);
-        renderer.enable(Capability::DepthTest);
         renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
         {
@@ -146,13 +147,13 @@ fn main() {
                 proj_matrix,
                 i_proj_matrix,
                 vp_matrix,
-                now,
                 window_size,
                 mouse_pos,
                 simple_shape_renderer: &mut simple_shape_renderer,
                 graph_renderer: &graph_renderer,
                 font: &mut font,
                 delta,
+                halt,
             };
 
             scene.handle_input(&mut main_context);
@@ -163,10 +164,10 @@ fn main() {
         simple_shape_renderer.finish();
         font.finish();
 
+        renderer.enable(Capability::DepthTest);
         simple_shape_renderer.draw(&proj_matrix, &vp_matrix);
 
         renderer.disable(Capability::DepthTest);
-        renderer.enable(Capability::Blend);
         renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
         fonts.draw(&mut font, &proj_matrix, &vp_matrix);
 

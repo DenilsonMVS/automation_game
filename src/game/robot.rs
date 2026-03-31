@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{game::instruction::{Instruction, UnpackedInstruction}, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{game::{colors::COLOR_DATA, graph::Graph, instruction::{Instruction, UnpackedInstruction}}, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
 
 const MEMORY_RANK: usize = 4;
 const MEMORY_SIZE: usize = 1 << MEMORY_RANK;
@@ -100,6 +100,9 @@ pub struct Robot {
     memory: Memory<u8, MEMORY_SIZE>,
     instructions: Memory<Instruction, MEMORY_SIZE>,
     color: glm::U8Vec3,
+    arrived: bool,
+    acc: glm::Vec2,
+    drag: glm::Vec2,
 }
 
 impl Robot {
@@ -111,6 +114,9 @@ impl Robot {
             target: glm::vec2(1.0, 0.0),
             instructions: Memory::new(),
             color: glm::vec3(200, 200, 190),
+            arrived: false,
+            acc: glm::vec2(0.0, 0.0),
+            drag: glm::vec2(0.0, 0.0),
         }
     }
 
@@ -183,10 +189,29 @@ impl Robot {
         let distance2 = glm::length2(&diff);
         let speed_val2 = glm::length2(&self.speed);
 
-        return distance2 > sq(POSITION_TOLERANCE) || speed_val2 > sq(SPEED_TOLERANCE);
+        return distance2 > sq(POSITION_TOLERANCE);// || speed_val2 > sq(SPEED_TOLERANCE);
+    }
+
+    pub fn draw_vec(&self, simple_shape_renderer: &mut SimpleShapeRenderer, vec: glm::Vec2, color: glm::U8Vec4) {
+        let size = glm::length(&vec);
+        simple_shape_renderer.send_rotated_rectangle(
+            self.position,
+            glm::vec2(0.5, 0.04) * size,
+            PositionMode::CenterLeft,
+            glm::vec2(-vec.y, vec.x),
+            color, 2000, 0);
+        
+        simple_shape_renderer.send_symmetrical_triangle(
+            self.position + vec * 0.6,
+            self.position + vec * 0.5,
+            size * 0.1,
+            color, 2000, 0);
     }
 
     pub fn draw(&self, simple_shape_renderer: &mut SimpleShapeRenderer) {
+        self.draw_vec(simple_shape_renderer, self.acc, glm::make_vec4(&COLOR_DATA[0]));
+        self.draw_vec(simple_shape_renderer, self.drag, glm::make_vec4(&COLOR_DATA[1]));
+
         let weel_offsets = [
             glm::vec2(-1.0, -1.0),
             glm::vec2( 1.0, -1.0),
@@ -213,14 +238,19 @@ impl Robot {
         );
     }
 
-    pub fn movement_logic(&mut self, delta: f32) {
+    pub fn movement_logic(&mut self, delta: f32, graph: &mut Graph) {
+        graph.wait();
+        graph.push(0, glm::length(&self.acc));
+        graph.push(1, glm::length(&self.drag));
+        graph.finish();
+
         let sq = |x| x * x;
 
-        if self.on_movement_instruction() {
+        if self.on_movement_instruction() && !self.arrived {
             let diff = self.target - self.position;
             let p_term = diff * PROPORTIONAL;
             let d_term = self.speed * DERIVATIVE;
-            let target_accel_vec = p_term + d_term;
+            let target_accel_vec = glm::vec2::<f32>(100.0, 0.0);
 
             let accel_mag = glm::length(&target_accel_vec);
 
@@ -235,19 +265,34 @@ impl Robot {
             self.position += self.speed * delta + all_acceleration * sq(delta) * 0.5;
             self.speed += all_acceleration * delta;
 
+            self.drag = drag_vector;
+            self.acc = target_accel_vec_applied;
+
         } else if self.speed == glm::vec2(0.0, 0.0) {
             return;
         
         } else {
             let speed_val = glm::length(&self.speed);
             let norm_speed = self.speed / (speed_val + EPS);
-            let acc_vec = -norm_speed * MAX_ACCELLERATION;
+            let drag_vector = -norm_speed * sq(speed_val) * DRAG;
+            let all_acceleration = drag_vector;
 
-            let time_to_stop = speed_val / MAX_ACCELLERATION;
-            let virtual_delta = delta.min(time_to_stop);
+            self.drag = all_acceleration;
+            self.acc = glm::vec2(0.0, 0.0);
 
-            self.position += self.speed * virtual_delta - acc_vec * sq(virtual_delta) * 0.5;
-            self.speed = glm::vec2(0.0, 0.0);
+            self.arrived = true;
+            self.position += self.speed * delta + all_acceleration * sq(delta) * 0.5;
+            self.speed += all_acceleration * delta;
+
+            // let speed_val = glm::length(&self.speed);
+            // let norm_speed = self.speed / (speed_val + EPS);
+            // let acc_vec = -norm_speed * MAX_ACCELLERATION;
+
+            // let time_to_stop = speed_val / MAX_ACCELLERATION;
+            // let virtual_delta = delta.min(time_to_stop);
+
+            // self.position += self.speed * virtual_delta - acc_vec * sq(virtual_delta) * 0.5;
+            // self.speed = glm::vec2(0.0, 0.0);
         }
     }
 }

@@ -1,7 +1,6 @@
 #version 460 core
 
 uniform mat4 u_projection;
-uniform float u_display_proportion;
 
 layout(std430, binding = 0) buffer GraphData {
     vec2 center;
@@ -11,17 +10,19 @@ layout(std430, binding = 0) buffer GraphData {
     uint primary_color;
     float thickness;
     float bellow_alpha;
+    uint buf_writen;
     float y_values[];
 };
 
 out vec2 v_coord;
 
 void main() {
+    float display_proportion = float(buf_writen) / float(y_values.length());
     const vec2 mults[] = vec2[](
-        vec2(                   0, 0),
-        vec2(u_display_proportion, 0),
-        vec2(u_display_proportion, 1),
-        vec2(                   0, 1)
+        vec2(                 0, 0),
+        vec2(display_proportion, 0),
+        vec2(display_proportion, 1),
+        vec2(                 0, 1)
     );
 
     vec2 bottom_left = center - dimensions * 0.5;

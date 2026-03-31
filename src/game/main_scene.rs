@@ -1,14 +1,13 @@
-use std::time;
+use std::{io::{self, BufRead}, time};
 use nalgebra_glm as glm;
-use crate::{game::{graph::{Graph, GraphBuilder}, instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene}, graphics::renderer::{Renderer, fonts::TextRenderConfig, positioning::PositionMode}};
+use crate::{game::{colors::COLOR_DATA, graph::{Graph, GraphBuilder}, instruction::{Instruction, RegisterAddress}, robot::Robot, scene::Scene}, graphics::renderer::{Renderer, fonts::TextRenderConfig, positioning::PositionMode}};
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
 pub struct MainScene<'a> {
     robot: Robot,
     graph: Graph<'a>,
-    last_instruction_execution: time::Instant,
-    time_start: time::Instant,
+    last_instruction_time_passed: f32,
 }
 
 impl<'a> MainScene<'a> {
@@ -31,30 +30,32 @@ impl<'a> MainScene<'a> {
 
                 .set_instruction(9, Instruction::new_sys(2)),
             graph: GraphBuilder::new(
-                    glm::vec2(0.0, 0.6),
-                    glm::vec2(0.6, 0.6),
-                    glm::vec2(0.0, 0.0),
-                    glm::vec2(1.0, 1.0)
+                    glm::vec2(0.0, 0.7),
+                    glm::vec2(0.6, 0.35),
+                    glm::vec2(0.0, -0.2),
+                    glm::vec2(1.0, 1.05)
                 )
-                .set_func(|x| 3.0 * x * x - 2.0 * x * x * x)
-                .add_horizontal_line(1.0)
-                .add_vertical_line(1.0)
+                .add_y_curve(glm::make_vec4(&COLOR_DATA[0]), "Acceleration")
+                .add_y_curve(glm::make_vec4(&COLOR_DATA[1]), "Drag")
+                .add_horizontal_line(0.0)
                 .into_graph(renderer),
-            last_instruction_execution: time::Instant::now(),
-            time_start: time::Instant::now(),
+            last_instruction_time_passed: 0.0,
         };
     }
 }
 
 impl<'a> Scene for MainScene<'a> {
     fn game_logic(&mut self, context: &mut crate::MainContext) {
-        // let time = context.now.duration_since(self.time_start).as_secs_f32();
-        // let x = (((time % 12.0) - 0.5) / 11.0).clamp(0.0, 1.0);
-        self.robot.movement_logic(context.delta);
+        if context.halt {
+            return;
+        }
 
-        if context.now.duration_since(self.last_instruction_execution).as_secs_f32() >= INSTRUCTION_PERIOD {
+        self.robot.movement_logic(context.delta, &mut self.graph);
+
+        self.last_instruction_time_passed += context.delta;
+        if self.last_instruction_time_passed >= INSTRUCTION_PERIOD {
             self.robot.run_instruction();
-            self.last_instruction_execution = context.now;
+            self.last_instruction_time_passed -= INSTRUCTION_PERIOD;
         }
     }
 
@@ -62,30 +63,20 @@ impl<'a> Scene for MainScene<'a> {
         let simple_shape_renderer = &mut context.simple_shape_renderer;
         self.robot.draw(simple_shape_renderer);
 
-        // simple_shape_renderer.send_rectangle(
-        //     glm::vec2(0.75, 0.0),
-        //     glm::vec2(0.1, 1.2),
-        //     PositionMode::Center,
-        //     glm::vec4(200, 0, 0, 255),
-        //     100, 0);
-        // self.robot.draw(simple_shape_renderer);
-
-        // let time = context.now.duration_since(self.time_start).as_secs_f32();
-        // let x = (((time % 12.0) - 0.5) / 11.0).clamp(0.0, 1.0);
-
-        // context.graph_renderer.draw(
-        //     &self.graph,
-        //     &context.proj_matrix,
-        //     simple_shape_renderer,
-        //     context.font,
-        //     x,
-        // );
+        context.graph_renderer.draw(
+            &self.graph,
+            &context.proj_matrix,
+            simple_shape_renderer,
+            context.renderer,
+            context.font,
+            1.0,
+        );
 
         simple_shape_renderer.send_ellipse(
             glm::vec2(-1.0, 0.0),
             glm::vec2(0.2, 0.2),
             PositionMode::Center,
-            glm::vec4(255, 165, 90, 255),
+            glm::make_vec4(&COLOR_DATA[1]),
             2, 0,
         );
 
@@ -99,7 +90,7 @@ impl<'a> Scene for MainScene<'a> {
             glm::vec2(1.0, 0.0),
             glm::vec2(0.2, 0.2),
             PositionMode::Center,
-            glm::vec4(220, 230, 240, 255),
+            glm::make_vec4(&COLOR_DATA[3]),
             2, 0,
         );
 

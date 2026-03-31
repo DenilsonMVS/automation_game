@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, os::raw::c_void};
+use std::{marker::PhantomData, os::raw::c_void, ptr};
 use crate::graphics::renderer::{Renderer, vertex_array_object::{FieldType, StaticVertexLayout, VertexLayout}};
 
 pub trait GenericBuffer {
@@ -171,6 +171,94 @@ impl<'a, T> DynamicBuffer<'a, T> {
         unsafe {
             let length = (self.index * std::mem::size_of::<T>()) as isize;
             gl::FlushMappedNamedBufferRange(self.id, 0, length);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DynamicUnitBuffer<'a, T> {
+    id: u32,
+    ptr: *mut T,
+    sync_obj: gl::types::GLsync,
+    _marker: PhantomData<&'a Renderer>,
+}
+
+impl<'a, T> GenericBuffer for DynamicUnitBuffer<'a, T> {
+    fn get_id(&self) -> u32 {
+        self.id
+    }
+
+    fn bind_as_storage(&self, binding_point: u32) {
+        unsafe {
+            gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, binding_point, self.id);
+        }
+    }
+}
+
+impl<'a, T> Drop for DynamicUnitBuffer<'a, T> {
+    fn drop(&mut self) {
+        unsafe {
+            if !self.sync_obj.is_null() {
+                gl::DeleteSync(self.sync_obj);
+            }
+            gl::UnmapNamedBuffer(self.id);
+            gl::DeleteBuffers(1, &self.id);
+        }
+    }
+}
+
+impl<'a, T> DynamicUnitBuffer<'a, T> {
+    pub fn new(_renderer: &'a Renderer, val: &T) -> Self {
+        let mut id = 0u32;
+        let byte_size = std::mem::size_of::<T>() as isize;
+
+        let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT | gl::DYNAMIC_STORAGE_BIT;
+        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT;
+
+        let mapped_ptr;
+        unsafe {
+            gl::CreateBuffers(1, &mut id);
+            gl::NamedBufferStorage(id, byte_size, val as * const T as * const _, storage_flags);
+            mapped_ptr = gl::MapNamedBufferRange(id, 0, byte_size, map_flags) as *mut T;
+        }
+
+        Self {
+            id,
+            ptr: mapped_ptr,
+            sync_obj: std::ptr::null(),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn lock(&mut self) {
+        unsafe {
+            if !self.sync_obj.is_null() {
+                gl::DeleteSync(self.sync_obj);
+            }
+
+            self.sync_obj = gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
+        }
+    }
+
+    pub fn wait(&mut self) {
+        unsafe {
+            if !self.sync_obj.is_null() {
+                gl::ClientWaitSync(self.sync_obj, gl::SYNC_FLUSH_COMMANDS_BIT, 1 << 30);
+            }
+        }
+    }
+
+    pub fn mut_ref(&mut self) -> &mut T {
+        unsafe { &mut *self.ptr }
+    }
+
+    pub fn flush(&self) {
+        unsafe {
+            gl::FlushMappedNamedBufferRange(
+                self.id,
+                0,
+                std::mem::size_of::<T>() as isize,
+            );
         }
     }
 }
