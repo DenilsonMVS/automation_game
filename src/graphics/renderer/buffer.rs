@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, os::raw::c_void, ptr};
+use std::{marker::PhantomData, os::raw::c_void};
 use crate::graphics::renderer::{Renderer, vertex_array_object::{FieldType, StaticVertexLayout, VertexLayout}};
 
 pub trait GenericBuffer {
@@ -114,7 +114,7 @@ impl<'a, T> DynamicBuffer<'a, T> {
         let mut id = 0u32;
         let byte_size = (std::mem::size_of::<T>() * size) as isize;
 
-        let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT | gl::DYNAMIC_STORAGE_BIT;
+        let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::DYNAMIC_STORAGE_BIT;
         let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT;
 
         let mapped_ptr;
@@ -213,7 +213,7 @@ impl<'a, T> DynamicUnitBuffer<'a, T> {
         let byte_size = std::mem::size_of::<T>() as isize;
 
         let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT | gl::DYNAMIC_STORAGE_BIT;
-        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT;
+        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT;
 
         let mapped_ptr;
         unsafe {
@@ -250,15 +250,5 @@ impl<'a, T> DynamicUnitBuffer<'a, T> {
 
     pub fn mut_ref(&mut self) -> &mut T {
         unsafe { &mut *self.ptr }
-    }
-
-    pub fn flush(&self) {
-        unsafe {
-            gl::FlushMappedNamedBufferRange(
-                self.id,
-                0,
-                std::mem::size_of::<T>() as isize,
-            );
-        }
     }
 }

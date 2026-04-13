@@ -201,7 +201,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         color: glm::U8Vec4,
         depth: u16,
         group: usize,
-    ) {
+    ) -> RenderBox {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
         self.rec_buffs[group].0.write(&RectangleVertex {
             top_left: simple_box.get_top_left(),
@@ -209,6 +209,7 @@ impl<'a> SimpleShapeRenderer<'a> {
             bottom_right: simple_box.get_bottom_right(),
             color, depth,
         });
+        return simple_box;
     }
 
     pub fn send_symmetrical_triangle(

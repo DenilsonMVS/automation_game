@@ -96,8 +96,9 @@ impl<'a> GraphRenderer<'a> {
                     position_mode: PositionMode::TopCenter,
                     line_height: LINE_HEIGHT,
                     rotation: 0.0,
-                    color: glm::vec3(graph.secondary_color.x, graph.secondary_color.y, graph.secondary_color.z),
+                    color: graph.secondary_color,
                     group: 1,
+                    depth: 2000,
                 });
             } 
         }
@@ -120,8 +121,9 @@ impl<'a> GraphRenderer<'a> {
                     position_mode: PositionMode::CenterRight,
                     line_height: LINE_HEIGHT,
                     rotation: 0.0,
-                    color: glm::vec3(graph.secondary_color.x, graph.secondary_color.y, graph.secondary_color.z),
+                    color: graph.secondary_color,
                     group: 1,
+                    depth: 2000,
                 });
             }
         }
@@ -149,7 +151,7 @@ impl<'a> GraphRenderer<'a> {
                     y_val.label,
                     position,
                     LINE_HEIGHT,
-                    glm::vec3(y_val.color.x, y_val.color.y, y_val.color.z),
+                    y_val.color,
                 )
                 .set_mode(PositionMode::CenterRight)
                 .set_group(1),
@@ -195,7 +197,7 @@ impl GraphBuilder {
             vertical_lines: Vec::new(),
             horizontal_lines: Vec::new(),
             secondary_color: glm::vec4(150, 150, 150, 255),
-            thickness: 0.01, bellow_alpha: 0.01,
+            thickness: 0.02, bellow_alpha: 0.01,
             y_values: Vec::new(),
         }
     }
@@ -275,12 +277,6 @@ impl<'a> Graph<'a> {
             buf.y[*count] = val;
             *count += 1;
             buf.buf_writen = *count as u32;
-        }
-    }
-
-    pub fn finish(&self) {
-        for (_, buf, _) in self.buffers.iter() {
-            buf.flush();
         }
     }
 

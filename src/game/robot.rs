@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{game::{colors::COLOR_DATA, graph::Graph, instruction::{Instruction, UnpackedInstruction}}, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{game::{graph::Graph, instruction::{Instruction, UnpackedInstruction}}, graphics::renderer::{fonts::{Font, TextRenderConfig}, positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
 
 const MEMORY_RANK: usize = 4;
 const MEMORY_SIZE: usize = 1 << MEMORY_RANK;
@@ -19,9 +19,6 @@ const SPEED_TOLERANCE: f32 = 0.01;
 
 const MAX_ACCELLERATION: f32 = 1.0;
 const DRAG: f32 = 1.0;
-
-const PROPORTIONAL: f32 = 10.0;
-const DERIVATIVE: f32 = -6.0;
 
 #[derive(Debug)]
 pub struct Memory<T: Copy + Default, const SIZE: usize> {
@@ -84,6 +81,168 @@ impl<T: Copy + Default, const SIZE: usize> Memory<T, SIZE> {
     }
 }
 
+impl<const SIZE: usize> Memory<Instruction, SIZE> {
+    fn draw_line(
+        font: &mut Font,
+        position: glm::Vec2,
+        instruction: Instruction,
+        line_height: f32,
+        glyph_space: f32,
+    ) {
+        let code_colors = [
+            glm::vec4(0xff, 0xff, 0xff, 0xff),
+            glm::vec4( 120,  255,  120, 0xff),
+            glm::vec4( 120,  255,  255,  255),
+            glm::vec4( 255,  120,  120, 0xff),
+        ];
+
+        let visualization = instruction.unpack().get_visualization();
+        font.add_text(&TextRenderConfig::new(
+            &visualization[0],
+            position + glm::vec2(0.0, 0.0),
+            line_height, code_colors[0],
+        ).set_mode(PositionMode::TopLeft).set_group(1));
+        font.add_text(&TextRenderConfig::new(
+            &visualization[1],
+            position + glm::vec2(glyph_space * 5.0, 0.0),
+            line_height, code_colors[1],
+        ).set_mode(PositionMode::TopLeft).set_group(1));
+        font.add_text(&TextRenderConfig::new(
+            &visualization[2],
+            position + glm::vec2(glyph_space * 10.0, 0.0),
+            line_height, code_colors[2],
+        ).set_mode(PositionMode::TopLeft).set_group(1));
+        font.add_text(&TextRenderConfig::new(
+            &visualization[3],
+            position + glm::vec2(glyph_space * 15.0, 0.0),
+            line_height, code_colors[3],
+        ).set_mode(PositionMode::TopLeft).set_group(1));   
+    }
+
+    fn draw_line_simplified(
+        font: &mut Font,
+        position: glm::Vec2,
+        instruction: Instruction,
+        line_height: f32,
+    ) {
+        let code_colors = glm::vec4(0xff, 0xff, 0xff, 0xff);
+        let simplified_visualization = instruction.unpack().get_simplified_visualization();
+        font.add_text(&TextRenderConfig::new(
+            &simplified_visualization,
+            position + glm::vec2(0.0, 0.0),
+            line_height, code_colors,
+        ).set_mode(PositionMode::TopLeft).set_group(1));
+    }
+
+    pub fn send_draw(&self,
+        position: glm::Vec2,
+        size: glm::Vec2,
+        position_mode: PositionMode,
+        font: &mut Font,
+        simple_shape_renderer: &mut SimpleShapeRenderer,
+        current_instruction: Option<usize>,
+        simplified: bool,
+    ) {
+        const INTERNAL_PADDING: f32 = 0.005;
+        let code_background = glm::vec4(20, 20, 40, 255);
+        let highlighted_instruction = code_background + glm::vec4(50, 50, 50, 0);
+
+        let bound_box = simple_shape_renderer.send_rectangle(
+            position,
+            size,
+            position_mode,
+            code_background,
+            50000, 1,
+        );
+
+        let line_height = (size.y - INTERNAL_PADDING * 2.0) / SIZE as f32;
+        let glyph_space = line_height * 0.5;
+        let top_left_corner = bound_box.get_top_left();
+        let first_position = top_left_corner + glm::vec2(INTERNAL_PADDING, -INTERNAL_PADDING);
+        for (i, instruction) in self.memory.iter().enumerate() {
+            let position = first_position - glm::vec2(0.0, line_height * i as f32);
+            if simplified {
+                Self::draw_line_simplified(font, position, *instruction, line_height);
+            } else {
+                Self::draw_line(font, position, *instruction, line_height, glyph_space);
+            }
+        }
+
+        if let Some(i) = current_instruction {
+            let position = first_position - glm::vec2(0.0, line_height * (i & (SIZE - 1)) as f32);
+            simple_shape_renderer.send_rectangle(
+                position,
+                glm::vec2(size.x - INTERNAL_PADDING * 2.0, line_height),
+                PositionMode::TopLeft,
+                highlighted_instruction,
+                49999, 1,
+            );
+        }
+    }
+}
+
+impl<const SIZE: usize> Memory<u8, SIZE> {
+    pub fn send_draw(&self,
+        position: glm::Vec2,
+        size: glm::Vec2,
+        position_mode: PositionMode,
+        font: &mut Font,
+        simple_shape_renderer: &mut SimpleShapeRenderer,
+        units_per_line: usize,
+    ) {
+        const INTERNAL_PADDING: f32 = 0.005;
+        let code_background = glm::vec4(20, 20, 40, 255);
+        let quad_background = code_background + glm::vec4(30, 30, 50, 0);
+        let value_color = glm::vec4( 250,  250,  120, 0xff);
+
+        let bound_box = simple_shape_renderer.send_rectangle(
+            position,
+            size,
+            position_mode,
+            code_background,
+            50000, 1,
+        );
+
+        let lines = SIZE / units_per_line;
+        let columns = SIZE / lines;
+        let unit_size = glm::vec2(
+            (size.x - INTERNAL_PADDING * (lines + 1) as f32) / (lines as f32),
+            (size.y - INTERNAL_PADDING * (columns + 1) as f32) / (columns as f32),
+        );
+
+        let top_left_corner = bound_box.get_top_left();
+        let first_position = top_left_corner + glm::vec2(INTERNAL_PADDING, -INTERNAL_PADDING);
+
+        for (i, value) in self.memory.iter().enumerate() {
+            let line = i / columns;
+            let column = i % columns;
+            let position = first_position +
+                glm::vec2(
+                    column as f32 * (INTERNAL_PADDING + unit_size.x),
+                    -(line as f32 * (INTERNAL_PADDING + unit_size.y)),
+                );
+
+            simple_shape_renderer.send_rectangle(
+                position,
+                unit_size,
+                PositionMode::TopLeft,
+                quad_background,
+                40000, 1,
+            );
+
+            let text_center = position + glm::vec2(unit_size.x, -unit_size.y) * 0.5;
+            let formatted = format!("{:02x}", value);
+            font.add_text(&TextRenderConfig::new(
+                &formatted,
+                text_center,
+                unit_size.y,
+                value_color,
+            ).set_group(1));
+        }
+    }
+}
+
+
 fn replace_zero(value: u8, replacement: u8) -> u8 {
     if value == 0 {
         replacement
@@ -100,7 +259,6 @@ pub struct Robot {
     memory: Memory<u8, MEMORY_SIZE>,
     instructions: Memory<Instruction, MEMORY_SIZE>,
     color: glm::U8Vec3,
-    arrived: bool,
     acc: glm::Vec2,
     drag: glm::Vec2,
 }
@@ -109,12 +267,11 @@ impl Robot {
     pub fn new() -> Self {
         Self {
             memory: Memory::new(),
-            position: glm::vec2(-1.0, 0.0),
+            position: glm::vec2(0.0, 0.0),
             speed: glm::vec2(0.0, 0.0),
-            target: glm::vec2(1.0, 0.0),
+            target: glm::vec2(0.0, 0.0),
             instructions: Memory::new(),
             color: glm::vec3(200, 200, 190),
-            arrived: false,
             acc: glm::vec2(0.0, 0.0),
             drag: glm::vec2(0.0, 0.0),
         }
@@ -125,16 +282,12 @@ impl Robot {
         return self;
     }
 
-    pub fn read_instruction(&self, idx: u8) -> Instruction {
-        self.instructions.read_memory(idx)
-    }
-
     pub fn run_instruction(&mut self) {
         if self.on_movement_instruction() {
             return;
         }
 
-        let unpacked_instruction = self.read_instruction(self.memory.read_memory(PROGRAM_COUNTER_IDX)).unpack();
+        let unpacked_instruction = self.instructions.read_memory(self.memory.read_memory(PROGRAM_COUNTER_IDX)).unpack();
         match unpacked_instruction {
             UnpackedInstruction::Lui(rd, imm) =>
                 self.memory.write_memory(rd.get_raw(), imm),
@@ -152,20 +305,20 @@ impl Robot {
                 self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a / replace_zero(b, 1)),
             UnpackedInstruction::Rem(r1, r2, rd) =>
                 self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| a % replace_zero(b, 1)),
+            UnpackedInstruction::Seq(r1, r2, rd) =>
+                self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| (a == b) as u8),
             UnpackedInstruction::Slt(r1, r2, rd) =>
                 self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| (a < b) as u8),
             UnpackedInstruction::Sle(r1, r2, rd) =>
                 self.memory.inst2(r1.get_raw(), r2.get_raw(), rd.get_raw(), |a, b| (a <= b) as u8),
             UnpackedInstruction::Beq(r1, r2, imm) =>
-                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a == b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a == b { c.wrapping_add(imm) } else { c }),
             UnpackedInstruction::Bne(r1, r2, imm) =>
-                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a != b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a != b { c.wrapping_add(imm) } else { c }),
             UnpackedInstruction::Blt(r1, r2, imm) =>
-                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a < b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a < b { c.wrapping_add(imm) } else { c }),
             UnpackedInstruction::Ble(r1, r2, imm) =>
-                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a <= b { c.wrapping_add(imm).wrapping_sub(1) } else { c }),
-            UnpackedInstruction::Jr(rs) =>
-                self.memory.inst1(rs.get_raw(), PROGRAM_COUNTER_IDX as u16, |x| x.wrapping_sub(1)),
+                self.memory.inst3(r1.get_raw(), r2.get_raw(), PROGRAM_COUNTER_IDX as u16, PROGRAM_COUNTER_IDX as u16, |a, b, c| if a <= b { c.wrapping_add(imm) } else { c }),
 
             UnpackedInstruction::Sys(code) => {
                 let center = self.position.map(|x| x.round());
@@ -189,7 +342,7 @@ impl Robot {
         let distance2 = glm::length2(&diff);
         let speed_val2 = glm::length2(&self.speed);
 
-        return distance2 > sq(POSITION_TOLERANCE);// || speed_val2 > sq(SPEED_TOLERANCE);
+        return distance2 > sq(POSITION_TOLERANCE) || speed_val2 > sq(SPEED_TOLERANCE);
     }
 
     pub fn draw_vec(&self, simple_shape_renderer: &mut SimpleShapeRenderer, vec: glm::Vec2, color: glm::U8Vec4) {
@@ -208,9 +361,38 @@ impl Robot {
             color, 2000, 0);
     }
 
+    pub fn draw_compute_info(&self, font: &mut Font, simple_shape_renderer: &mut SimpleShapeRenderer) {
+        self.instructions.send_draw(
+            glm::vec2(1.0, 0.01),
+            glm::vec2(0.98, 0.78), 
+            PositionMode::BottomCenter,
+            font, simple_shape_renderer,
+            Some(self.memory.read_memory(PROGRAM_COUNTER_IDX) as usize),
+            false,
+        );
+
+        self.memory.send_draw(
+            glm::vec2(1.0, -0.05),
+            glm::vec2(0.9, 0.7),
+            PositionMode::TopCenter,
+            font, simple_shape_renderer,
+            4,
+        );
+
+        let code_background = glm::vec4(10, 10, 20, 255);
+        simple_shape_renderer.send_rectangle(
+            glm::vec2(1.0, 0.0),
+            glm::vec2(1.0, 1.6),
+            PositionMode::Center,
+            code_background,
+            50001, 1,
+        );
+    }
+
+
     pub fn draw(&self, simple_shape_renderer: &mut SimpleShapeRenderer) {
-        self.draw_vec(simple_shape_renderer, self.acc, glm::make_vec4(&COLOR_DATA[0]));
-        self.draw_vec(simple_shape_renderer, self.drag, glm::make_vec4(&COLOR_DATA[1]));
+        // self.draw_vec(simple_shape_renderer, self.acc, glm::make_vec4(&COLOR_DATA[0]));
+        // self.draw_vec(simple_shape_renderer, self.drag, glm::make_vec4(&COLOR_DATA[1]));
 
         let weel_offsets = [
             glm::vec2(-1.0, -1.0),
@@ -238,19 +420,70 @@ impl Robot {
         );
     }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    pub fn calculate_acceleration(&mut self) -> glm::Vec2 {
+        const PROPORTIONAL: f32 = 10.0;
+        const DERIVATIVE: f32 = -6.0;
+
+        let distance = self.target - self.position;
+        let d = self.speed * DERIVATIVE;
+        let p = distance * PROPORTIONAL;
+        return p + d;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     pub fn movement_logic(&mut self, delta: f32, graph: &mut Graph) {
+        let diff = glm::normalize(&(self.target - self.position));
+
         graph.wait();
-        graph.push(0, glm::length(&self.acc));
-        graph.push(1, glm::length(&self.drag));
-        graph.finish();
+        graph.push(0, glm::dot(&self.acc, &diff));
+        graph.push(1, glm::dot(&self.drag, &diff));
+        graph.push(2, glm::dot(&(self.target - self.position), &diff));
+        graph.push(3, glm::dot(&self.speed, &diff));
 
         let sq = |x| x * x;
 
-        if self.on_movement_instruction() && !self.arrived {
-            let diff = self.target - self.position;
-            let p_term = diff * PROPORTIONAL;
-            let d_term = self.speed * DERIVATIVE;
-            let target_accel_vec = glm::vec2::<f32>(100.0, 0.0);
+        if self.on_movement_instruction() {
+            let target_accel_vec = self.calculate_acceleration();
 
             let accel_mag = glm::length(&target_accel_vec);
 
@@ -274,25 +507,16 @@ impl Robot {
         } else {
             let speed_val = glm::length(&self.speed);
             let norm_speed = self.speed / (speed_val + EPS);
-            let drag_vector = -norm_speed * sq(speed_val) * DRAG;
-            let all_acceleration = drag_vector;
+            let acc_vec = -norm_speed * MAX_ACCELLERATION;
 
-            self.drag = all_acceleration;
             self.acc = glm::vec2(0.0, 0.0);
+            self.drag = glm::vec2(0.0, 0.0);
 
-            self.arrived = true;
-            self.position += self.speed * delta + all_acceleration * sq(delta) * 0.5;
-            self.speed += all_acceleration * delta;
+            let time_to_stop = speed_val / MAX_ACCELLERATION;
+            let virtual_delta = delta.min(time_to_stop);
 
-            // let speed_val = glm::length(&self.speed);
-            // let norm_speed = self.speed / (speed_val + EPS);
-            // let acc_vec = -norm_speed * MAX_ACCELLERATION;
-
-            // let time_to_stop = speed_val / MAX_ACCELLERATION;
-            // let virtual_delta = delta.min(time_to_stop);
-
-            // self.position += self.speed * virtual_delta - acc_vec * sq(virtual_delta) * 0.5;
-            // self.speed = glm::vec2(0.0, 0.0);
+            self.position += self.speed * virtual_delta - acc_vec * sq(virtual_delta) * 0.5;
+            self.speed = glm::vec2(0.0, 0.0);
         }
     }
 }

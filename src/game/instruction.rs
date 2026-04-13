@@ -14,6 +14,12 @@ impl RegisterAddress {
     }
 }
 
+impl Into<String> for RegisterAddress {
+    fn into(self) -> String {
+        format!("x{}", self.get_raw())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Instruction {
     data: u16,
@@ -110,11 +116,11 @@ impl Instruction {
         };
     }
 
-    pub fn new_jr(read: RegisterAddress) -> Instruction {
+    pub fn new_seq(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
         const ID: u16 = 12;
         return Self {
-            data: (ID << 12) | (read.get_raw() << 8),
-        };
+            data: (ID << 12) | (read1.get_raw() << 8) | (read2.get_raw() << 4) | (write.get_raw()),
+        }
     }
 
     pub fn new_slt(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
@@ -162,7 +168,7 @@ impl Instruction {
             9  => UnpackedInstruction::Bne(r1, r2, imm4),
             10 => UnpackedInstruction::Blt(r1, r2, imm4),
             11 => UnpackedInstruction::Ble(r1, r2, imm4),
-            12 => UnpackedInstruction::Jr(r1),
+            12 => UnpackedInstruction::Seq(r1, r2, r3),
             13 => UnpackedInstruction::Slt(r1, r2, r3),
             14 => UnpackedInstruction::Sle(r1, r2, r3),
             15 => UnpackedInstruction::Sys(imm12),
@@ -185,8 +191,93 @@ pub enum UnpackedInstruction {
     Bne(RegisterAddress, RegisterAddress, u8),
     Blt(RegisterAddress, RegisterAddress, u8),
     Ble(RegisterAddress, RegisterAddress, u8),
-    Jr(RegisterAddress),
+    Seq(RegisterAddress, RegisterAddress, RegisterAddress), // (r1, r2, dest)
     Slt(RegisterAddress, RegisterAddress, RegisterAddress),
     Sle(RegisterAddress, RegisterAddress, RegisterAddress),
     Sys(u16), // (imm12)
 }
+
+impl UnpackedInstruction {
+    pub fn get_visualization(&self) -> [String; 4] {
+        match *self {
+            Self::Lui(rd, imm) =>
+                ["LUI".into(), rd.into(), format!("{}", imm), "".into()],
+            Self::AddI(rs, rd, imm) =>
+                ["ADDI".into(), rs.into(), rd.into(), format!("{}", imm)],
+            Self::SubI(rs, rd, imm) =>
+                ["SUBI".into(), rs.into(), rd.into(), format!("{}", imm)],
+            Self::Add(r1, r2, rd) =>
+                ["ADD".into(), r1.into(), r2.into(), rd.into()],
+            Self::Sub(r1, r2, rd) =>
+                ["SUB".into(), r1.into(), r2.into(), rd.into()],
+            Self::Mul(r1, r2, rd) =>
+                ["MUL".into(), r1.into(), r2.into(), rd.into()],
+            Self::Div(r1, r2, rd) =>
+                ["DIV".into(), r1.into(), r2.into(), rd.into()],
+            Self::Rem(r1, r2, rd) =>
+                ["REM".into(), r1.into(), r2.into(), rd.into()],
+            Self::Seq(r1, r2, rd) =>
+                ["SEQ".into(), r1.into(), r2.into(), rd.into()],
+            Self::Slt(r1, r2, rd) =>
+                ["SLT".into(), r1.into(), r2.into(), rd.into()],
+            Self::Sle(r1, r2, rd) =>
+                ["SLE".into(), r1.into(), r2.into(), rd.into()],
+            Self::Beq(r1, r2, imm) =>
+                ["BEQ".into(), r1.into(), r2.into(), format!("{}", imm)],
+            Self::Bne(r1, r2, imm) =>
+                ["BNE".into(), r1.into(), r2.into(), format!("{}", imm)],
+            Self::Blt(r1, r2, imm) =>
+                ["BLT".into(), r1.into(), r2.into(), format!("{}", imm)],
+            Self::Ble(r1, r2, imm) =>
+                ["BLE".into(), r1.into(), r2.into(), format!("{}", imm)],
+            Self::Sys(imm) =>
+                if imm == 0 {
+                    ["NOP".into(), "".into(), "".into(), "".into()]
+                } else {
+                    ["SYS".into(), format!("{}", imm), "".into(), "".into()]
+                },
+        }
+    }
+
+    pub fn get_simplified_visualization(&self) -> String {
+        match *self {
+            Self::Lui(rd, imm) =>
+                format!("x{} = {}", rd.get_raw(), imm),
+            Self::AddI(rs, rd, imm) =>
+                format!("x{} = x{} + {}", rd.get_raw(), rs.get_raw(), imm),
+            Self::SubI(rs, rd, imm) =>
+                format!("x{} = x{} - {}", rd.get_raw(), rs.get_raw(), imm),
+            Self::Add(r1, r2, rd) =>
+                format!("x{} = x{} + x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Sub(r1, r2, rd) =>
+                format!("x{} = x{} - x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Mul(r1, r2, rd) =>
+                format!("x{} = x{} * x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Div(r1, r2, rd) =>
+                format!("x{} = x{} / x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Rem(r1, r2, rd) =>
+                format!("x{} = x{} % x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Seq(r1, r2, rd) =>
+                format!("x{} = x{} == x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Slt(r1, r2, rd) =>
+                format!("x{} = x{} < x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Sle(r1, r2, rd) =>
+                format!("x{} = x{} <= x{}", rd.get_raw(), r1.get_raw(), r2.get_raw()),
+            Self::Beq(r1, r2, imm) =>
+                format!("if x{} == x{}, skip {}", r1.get_raw(), r2.get_raw(), imm),
+            Self::Bne(r1, r2, imm) =>
+                format!("if x{} != x{}, skip {}", r1.get_raw(), r2.get_raw(), imm),
+            Self::Blt(r1, r2, imm) =>
+                format!("if x{} < x{}, skip {}", r1.get_raw(), r2.get_raw(), imm),
+            Self::Ble(r1, r2, imm) =>
+                format!("if x{} <= x{}, skip {}", r1.get_raw(), r2.get_raw(), imm),
+            Self::Sys(imm) =>
+                if imm == 0 {
+                    "NOP".into()
+                } else {
+                    format!("sys({})", imm)
+                },
+        }
+    }
+}
+

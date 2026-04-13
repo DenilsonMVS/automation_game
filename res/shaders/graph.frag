@@ -36,6 +36,10 @@ void main() {
     int count = int(y_values.length());
     int sample_limit = int(buf_writen);
 
+    vec2 view_dimensions = view_max - view_min;
+    vec2 ratio = dimensions / view_dimensions;
+    vec2 prop_adjustment = vec2(ratio.x / ratio.y, 1);
+
     float horizontal_t = clamp((p.x - view_min.x) / (view_max.x - view_min.x), 0.0, 1.0);
     float float_idx = horizontal_t * float(count - 1);
     int i0 = int(floor(float_idx));
@@ -52,7 +56,7 @@ void main() {
     for (int i = sampling_window.x; i <= sampling_window.y; i++) {
         vec2 a = vec2(mix(view_min.x, view_max.x, float(i) / float(count - 1)), y_values[i]);
         vec2 b = vec2(mix(view_min.x, view_max.x, float(i + 1) / float(count - 1)), y_values[i + 1]);
-        min_dist = min(min_dist, dist_to_segment(p, a, b));
+        min_dist = min(min_dist, dist_to_segment(p * prop_adjustment, a * prop_adjustment, b * prop_adjustment));
     }
 
     float view_height = abs(view_max.y - view_min.y);

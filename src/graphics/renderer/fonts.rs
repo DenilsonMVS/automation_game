@@ -24,9 +24,10 @@ const GLYPHS_PER_RENDER: usize = 1 << 10;
 pub struct GlyphAttrs {
     pub top_left: glm::I16Vec2,
     pub top_right: glm::I16Vec2,
-    pub bottom_right: glm::I16Vec2,
     #[normalized]
-    pub color: glm::U8Vec3,
+    pub color: glm::U8Vec4,
+    #[normalized]
+    pub depth: u16,
     pub character_idx: u8,
 }
 
@@ -177,12 +178,13 @@ pub struct TextRenderConfig<'a> {
     pub line_height: f32,
     pub rotation: f32,
     pub position_mode: PositionMode,
-    pub color: glm::U8Vec3,
+    pub color: glm::U8Vec4,
     pub group: usize,
+    pub depth: u16,
 }
 
 impl<'a> TextRenderConfig<'a> {
-    pub fn new(text: &'a str, position: glm::Vec2, line_height: f32, color: glm::U8Vec3) -> Self {
+    pub fn new(text: &'a str, position: glm::Vec2, line_height: f32, color: glm::U8Vec4) -> Self {
         Self {
             text,
             position,
@@ -191,11 +193,17 @@ impl<'a> TextRenderConfig<'a> {
             color,
             rotation: 0.0,
             group: 0,
+            depth: 1000,
         }
     }
 
     pub fn set_mode(mut self, mode: PositionMode) -> Self {
         self.position_mode = mode;
+        return self;
+    }
+
+    pub fn set_depth(mut self, depth: u16) -> Self {
+        self.depth = depth;
         return self;
     }
 
@@ -226,7 +234,6 @@ impl<'a> Font<'a> {
             let start_x = (idx % ATLAS_COLUMNS) * SPACE_PER_GLYPH;
             let vstart = glm::vec2(start_x, start_y).map(|x| x as f32);
 
-
             if let Some(glyph_id) = font.glyph_index(c) {
                 info.advance = font.glyph_hor_advance(glyph_id).unwrap_or(0) as f32;
 
@@ -247,7 +254,7 @@ impl<'a> Font<'a> {
 
                         for y in 0..GLYPH_SIZE {
                             for x in 0..GLYPH_SIZE {
-                                let pixel = bitmap.pixel(x as u32, (GLYPH_SIZE - y - 1) as u32);
+                                let pixel = bitmap.pixel(x as u32, y as u32);
                                 let r = (pixel.r * 255.0).clamp(0.0, 255.0) as u8;
                                 let g = (pixel.g * 255.0).clamp(0.0, 255.0) as u8;
                                 let b = (pixel.b * 255.0).clamp(0.0, 255.0) as u8;
@@ -267,15 +274,17 @@ impl<'a> Font<'a> {
 
                         let bb = font.glyph_bounding_box(glyph_id).unwrap();
 
-                        info.bound_min = glm::vec2(bb.x_min, bb.y_max)
+                        info.bound_min = glm::vec2(bb.x_min, bb.y_min)
                             .map(|x| x as f32);
-                        info.bound_max = glm::vec2(bb.x_max, bb.y_min)
+                        info.bound_max = glm::vec2(bb.x_max, bb.y_max)
                             .map(|x| x as f32);
 
                         uvs[idx] = UvData {
-                            min: (vstart + (translate + info.bound_min).component_mul(&scale))
+                            min: (vstart + (translate + info.bound_min)
+                                .component_mul(&scale))
                                 .component_div(&atlas_size),
-                            max: (vstart + (translate + info.bound_max).component_mul(&scale))
+                            max: (vstart + (translate + info.bound_max)
+                                .component_mul(&scale))
                                 .component_div(&atlas_size),
                         };
                     }
@@ -379,19 +388,17 @@ impl<'a> Font<'a> {
                 
                 let lx0 = info.bound_min.x * scale;
                 let lx1 = info.bound_max.x * scale;
-                let ly0 = info.bound_min.y * scale;
                 let ly1 = info.bound_max.y * scale;
 
                 let tl = cursor_pos + (dir_x * lx0) + (dir_y * ly1);
                 let tr = cursor_pos + (dir_x * lx1) + (dir_y * ly1);
-                let br = cursor_pos + (dir_x * lx1) + (dir_y * ly0);
 
                 on_generation(GlyphAttrs {
                     top_left: vec_to_short(&tl),
                     top_right: vec_to_short(&tr),
-                    bottom_right: vec_to_short(&br),
                     character_idx: idx as u8,
                     color: config.color,
+                    depth: config.depth,
                 });
 
                 cursor_pos += dir_x * (info.advance * scale);
