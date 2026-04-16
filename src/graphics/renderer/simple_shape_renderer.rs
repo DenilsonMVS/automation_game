@@ -3,7 +3,7 @@ use nalgebra_glm as glm;
 
 use crate::graphics::renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}};
 
-const FORMS_PER_RENDER: usize = 1 << 10;
+const FORMS_PER_RENDER: usize = 1 << 20;
 
 #[program_interface(
 	vert = "../../../res/shaders/rectangle.vert",

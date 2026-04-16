@@ -27,7 +27,7 @@ pub struct Instruction {
 
 impl Default for Instruction {
     fn default() -> Self {
-        Self::new_sys(0)
+        Self::new_sys(Syscall::Nop)
     }
 }
 
@@ -137,10 +137,10 @@ impl Instruction {
         }
     }
 
-    pub fn new_sys(value: u16) -> Instruction {
+    pub fn new_sys(value: Syscall) -> Instruction {
         const ID: u16 = 15;
         return Self {
-            data: (ID << 12) | (value & 0xfff),
+            data: (ID << 12) | value.to_raw(),
         }
     }
 
@@ -171,7 +171,7 @@ impl Instruction {
             12 => UnpackedInstruction::Seq(r1, r2, r3),
             13 => UnpackedInstruction::Slt(r1, r2, r3),
             14 => UnpackedInstruction::Sle(r1, r2, r3),
-            15 => UnpackedInstruction::Sys(imm12),
+            15 => UnpackedInstruction::Sys(Syscall::from_raw(imm12)),
             _  => unreachable!(),
         }
     }
@@ -194,7 +194,7 @@ pub enum UnpackedInstruction {
     Seq(RegisterAddress, RegisterAddress, RegisterAddress), // (r1, r2, dest)
     Slt(RegisterAddress, RegisterAddress, RegisterAddress),
     Sle(RegisterAddress, RegisterAddress, RegisterAddress),
-    Sys(u16), // (imm12)
+    Sys(Syscall),
 }
 
 impl UnpackedInstruction {
@@ -230,11 +230,11 @@ impl UnpackedInstruction {
                 ["BLT".into(), r1.into(), r2.into(), format!("{}", imm)],
             Self::Ble(r1, r2, imm) =>
                 ["BLE".into(), r1.into(), r2.into(), format!("{}", imm)],
-            Self::Sys(imm) =>
-                if imm == 0 {
+            Self::Sys(sys) =>
+                if sys == Syscall::Nop {
                     ["NOP".into(), "".into(), "".into(), "".into()]
                 } else {
-                    ["SYS".into(), format!("{}", imm), "".into(), "".into()]
+                    ["SYS".into(), format!("{}", sys.to_raw()), "".into(), "".into()]
                 },
         }
     }
@@ -272,11 +272,44 @@ impl UnpackedInstruction {
             Self::Ble(r1, r2, imm) =>
                 format!("if x{} <= x{}, skip {}", r1.get_raw(), r2.get_raw(), imm),
             Self::Sys(imm) =>
-                if imm == 0 {
-                    "NOP".into()
-                } else {
-                    format!("sys({})", imm)
-                },
+                match imm {
+                    Syscall::MoveBottom => "BOT".into(),
+                    Syscall::MoveLeft => "LEFT".into(),
+                    Syscall::MoveRight => "RIGHT".into(),
+                    Syscall::MoveTop => "TOP".into(),
+                    _ => "NOP".into(),
+                }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Syscall {
+    Nop,
+    MoveLeft,
+    MoveRight,
+    MoveTop,
+    MoveBottom
+}
+
+impl Syscall {
+    pub fn from_raw(value: u16) -> Self {
+        match value {
+            1 => Self::MoveLeft,
+            2 => Self::MoveRight,
+            3 => Self::MoveTop,
+            4 => Self::MoveBottom,
+            _ => Self::Nop,
+        }
+    }
+
+    pub fn to_raw(&self) -> u16 {
+        match self {
+            Self::MoveLeft => 1,
+            Self::MoveRight => 2,
+            Self::MoveTop => 3,
+            Self::MoveBottom => 4,
+            _ => 0,
         }
     }
 }

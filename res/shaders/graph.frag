@@ -23,12 +23,12 @@ float dist_to_segment(vec2 p, vec2 a, vec2 b) {
 }
 
 vec4 unpack_color(uint color) {
-    return vec4(uvec4(
+    return vec4(ivec4(uvec4(
         (primary_color >>  0),
         (primary_color >>  8),
         (primary_color >> 16),
         (primary_color >> 24)
-    ) & 0xff) / 0xff;
+    )) & 0xff) / 0xff;
 }
 
 void main() {

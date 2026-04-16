@@ -2,6 +2,7 @@
 pub mod graphics;
 pub mod sounds;
 pub mod game;
+pub mod open_simplex;
 
 use std::time;
 
@@ -62,14 +63,11 @@ fn main() {
     let (glfw, window, events, renderer) = setup.get();
 
     renderer.enable(Capability::Multisample);
-
     renderer.enable(Capability::Blend);
-    
-
     renderer.enable(Capability::DepthTest);
     renderer.depth_func(DepthFunc::Less);
 
-    renderer.clear_color(&glm::vec4(0.1, 0.12, 0.2, 0.0));
+    renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 0.0));
 
     let fonts = Fonts::new(renderer);
     let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
