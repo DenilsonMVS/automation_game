@@ -1,12 +1,12 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{game::{compute_context::ComputeContext, computer::Computer, instruction::{Instruction, Syscall}, movement_computer::MovementComputer}, graphics::renderer::{positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{game::{compute_context::ComputeContext, computer::{Computer, X}, display_computer::DisplayComputer, instruction::{Instruction, Syscall}, mining_computer::MiningComputer, movement_computer::MovementComputer, world::World}, graphics::renderer::{fonts::Font, positioning::PositionMode, simple_shape_renderer::SimpleShapeRenderer}};
 
 
-const ROBOT_SIZE: f32 = 0.9;
-const WEEL_DIAMETER: f32 = 0.3;
-const WEEL_DISTANCE: f32 = 0.43;
+const ROBOT_SIZE: f32 = 0.8;
+const WEEL_DIAMETER: f32 = 0.26;
+const WEEL_DISTANCE: f32 = 0.37;
 const ROBOT_DEPTH: u16 = 5000;
 const WEELS_DEPTH: u16 = ROBOT_DEPTH + 1;
 const WEEL_COLOR: [u8; 3] = [45, 40, 40];
@@ -18,6 +18,8 @@ const DRAG: f32 = 1.0;
 #[derive(Debug)]
 pub struct Robot {
     movement_computer: MovementComputer,
+    mining_computer: MiningComputer,
+    display_computer: DisplayComputer,
     computer: Computer,
     color: glm::U8Vec3,
     context: ComputeContext,
@@ -28,8 +30,10 @@ impl Robot {
         Self {
             computer: Computer::default(),
             movement_computer: MovementComputer::new(position),
+            mining_computer: MiningComputer::new(16),
             color: glm::vec3(120, 200, 190),
             context: ComputeContext::Computer,
+            display_computer: DisplayComputer::new(),
         }
     }
 
@@ -83,7 +87,7 @@ impl Robot {
     // }
 
 
-    pub fn draw(&self, simple_shape_renderer: &mut SimpleShapeRenderer) {
+    pub fn draw(&self, simple_shape_renderer: &mut SimpleShapeRenderer, font: &mut Font) {
         // self.draw_vec(simple_shape_renderer, self.acc, glm::make_vec4(&COLOR_DATA[0]));
         // self.draw_vec(simple_shape_renderer, self.drag, glm::make_vec4(&COLOR_DATA[1]));
 
@@ -111,24 +115,65 @@ impl Robot {
             glm::vec4(self.color.x, self.color.y, self.color.z, 255),
             ROBOT_DEPTH, 0
         );
+
+        self.display_computer.send(font, self.movement_computer.get_position());
     }
 
-    pub fn update(&mut self, delta: f32, is_instruction_tick: bool) {
-        let acc = match self.context {
+    pub fn update(&mut self, delta: f32, is_instruction_tick: bool, world : &mut World) {
+        // println!("{}", self.computer.read_reg(X[1]));
+        match self.context {
             ComputeContext::Computer => {
                 if is_instruction_tick {
                     let comp = self.computer.run_computer();
-                    if let Some(sys) = comp && sys != Syscall::Nop {
-                        self.context = ComputeContext::MovementComputer;
-                        self.movement_computer.receive_syscall(sys);
+                    if let Some(sys) = comp {
+                        match sys {
+                            Syscall::MoveBottom | Syscall::MoveLeft | Syscall::MoveRight | Syscall::MoveTop => {
+                                self.context = ComputeContext::MovementComputer;
+                                self.movement_computer.receive_syscall(sys);
+                            },
+                            Syscall::Mine | Syscall::Stored | Syscall::MaxStorage => {
+                                self.context = ComputeContext::MiningComputer;
+                                self.mining_computer.receive_syscall(sys);
+                            },
+                            Syscall::Display => {
+                                self.context = ComputeContext::DisplayComputer;
+                                self.display_computer.receive_syscall(
+                                    if self.computer.read_reg(X[14]) != 0 {
+                                        Some(self.computer.read_reg(X[15]))
+                                    } else {
+                                        None
+                                    }
+                                );
+                            },
+                            _ => {}
+                        }
                     }
                 }
-                self.movement_computer.calculate_stop_accelleration(delta)
             },
-            ComputeContext::MovementComputer => self.movement_computer.calculate_accelleration(),
+            ComputeContext::MovementComputer => {
+                if let Some(ret) = self.movement_computer.update() {
+                    self.context = ComputeContext::Computer;
+                    self.computer.write_reg(X[15], ret);
+                }
+            },
+            ComputeContext::MiningComputer => {
+                if let Some(ret) = self.mining_computer.update(
+                    self.movement_computer.get_position(),
+                    world, delta, is_instruction_tick,
+                ) {
+                    self.context = ComputeContext::Computer;
+                    self.computer.write_reg(X[15], ret);
+                }
+            },
+            ComputeContext::DisplayComputer => {
+                if let Some(ret) = self.display_computer.update(is_instruction_tick) {
+                    self.context = ComputeContext::Computer;
+                    self.computer.write_reg(X[15], ret);
+                }
+            }
         };
 
-        self.movement_logic(delta, acc);
+        self.movement_logic(delta, self.movement_computer.calculate_accelleration());
     }
 
     fn movement_logic(&mut self, delta: f32, acc: glm::Vec2) {
@@ -150,8 +195,6 @@ impl Robot {
         let next_position = position + speed * delta + all_acc * sq(delta) * 0.5;
         let next_speed = speed + all_acc * delta;
 
-        if self.movement_computer.update(next_position, next_speed) && self.context == ComputeContext::MovementComputer {
-            self.context = ComputeContext::Computer;
-        }
+        self.movement_computer.update_sensor(next_position, next_speed);
     }
 }

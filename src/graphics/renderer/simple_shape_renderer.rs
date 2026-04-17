@@ -109,7 +109,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         };
     }
 
-    pub fn draw(&mut self, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
+    pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
         self.rec_program.bind();
         for (i, (vbo, vao)) in self.rec_buffs.iter_mut().enumerate() {
             if i == 0 {
@@ -119,7 +119,6 @@ impl<'a> SimpleShapeRenderer<'a> {
             }
 
             vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-            vbo.lock();
         }
 
         self.tri_program.bind();
@@ -131,9 +130,9 @@ impl<'a> SimpleShapeRenderer<'a> {
             }
 
             vao.draw_instanced(3, vbo.get_len() as i32, DrawMode::Triangles);
-            vbo.lock();
         }
 
+        renderer.depth_mask(false);
         self.ell_program.bind();
         for (i, (vbo, vao)) in self.ell_buffs.iter_mut().enumerate() {
             if i == 0 {
@@ -143,21 +142,18 @@ impl<'a> SimpleShapeRenderer<'a> {
             }
 
             vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-            vbo.lock();
         }
+        renderer.depth_mask(true);
     }
 
     pub fn reset(&mut self) {
         for (vbo, _) in self.rec_buffs.iter_mut() {
-            vbo.wait();
             vbo.reset_index();
         }
         for (vbo, _) in self.tri_buffs.iter_mut() {
-            vbo.wait();
             vbo.reset_index();
         }
         for (vbo, _) in self.ell_buffs.iter_mut() {
-            vbo.wait();
             vbo.reset_index();
         }
     }

@@ -22,11 +22,13 @@ impl MovementComputer {
         }
     }
 
-    pub fn update(&mut self, position: glm::Vec2, speed: glm::Vec2) -> bool {
+    pub fn update_sensor(&mut self, position: glm::Vec2, speed: glm::Vec2) {
         self.position = position;
         self.speed = speed;
+    }
 
-        return self.target_achieved();
+    pub fn update(&mut self) -> Option<u8> {
+        self.target_achieved().then_some(1)
     }
 
     fn target_achieved(&self) -> bool {

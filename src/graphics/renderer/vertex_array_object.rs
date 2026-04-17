@@ -35,6 +35,7 @@ pub trait VertexLayout: GenericBuffer {
     fn get_divisor(&self) -> u32 { 0 }
 }
 
+#[derive(Debug)]
 pub struct VertexArrayObject<'a> {
     id: u32,
     _marker: PhantomData<&'a Renderer>,

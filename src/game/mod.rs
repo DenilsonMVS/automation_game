@@ -9,3 +9,6 @@ pub mod memory;
 pub mod computer;
 pub mod movement_computer;
 pub mod compute_context;
+pub mod mining_computer;
+pub mod display_computer;
+pub mod world;

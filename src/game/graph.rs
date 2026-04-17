@@ -233,7 +233,7 @@ impl GraphBuilder {
     }
 
     pub fn into_graph<'a>(self, renderer: &'a Renderer) -> Graph<'a> {
-        let buffers = self.y_values.iter().map(|y_val| (0, DynamicUnitBuffer::new(renderer, &GraphSSBO {
+        let buffers = self.y_values.iter().map(|y_val| (0, DynamicUnitBuffer::new(renderer, &[GraphSSBO {
             center: self.center,
             dimensions: self.dimensions,
             view_min: self.view_min,
@@ -243,7 +243,7 @@ impl GraphBuilder {
             bellow_alpha: self.bellow_alpha,
             buf_writen: 0,
             y: [0.0; Y_BUFFER_SIZE],
-        }), *y_val)).collect();
+        }]), *y_val)).collect();
 
         return Graph {
             center: self.center,
@@ -277,12 +277,6 @@ impl<'a> Graph<'a> {
             buf.y[*count] = val;
             *count += 1;
             buf.buf_writen = *count as u32;
-        }
-    }
-
-    pub fn wait(&mut self) {
-        for (_, buf, _) in self.buffers.iter_mut() {
-            buf.wait();
         }
     }
 }

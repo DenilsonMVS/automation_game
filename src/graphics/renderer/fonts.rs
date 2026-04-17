@@ -108,7 +108,6 @@ impl<'a> Fonts<'a> {
                 self.font_program.set_u_projection(proj_matrix);
             }
             vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-            vbo.lock();
         }
     }
 }
@@ -312,7 +311,6 @@ impl<'a> Font<'a> {
 
     pub fn reset(&mut self) {
         for (vbo, _) in self.buffs.iter_mut() {
-            vbo.wait();
             vbo.reset_index();
         }
     }

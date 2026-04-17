@@ -1,15 +1,15 @@
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegisterAddress {
     value: u8,
 }
 
 impl RegisterAddress {
-    pub fn new(address: u8) -> Self {
+    pub const fn new(address: u8) -> Self {
         Self { value: address & 0xf }
     }
 
-    pub fn get_raw(&self) -> u16 {
+    pub const fn get_raw(&self) -> u16 {
         self.value as u16
     }
 }
@@ -277,6 +277,8 @@ impl UnpackedInstruction {
                     Syscall::MoveLeft => "LEFT".into(),
                     Syscall::MoveRight => "RIGHT".into(),
                     Syscall::MoveTop => "TOP".into(),
+                    Syscall::Mine => "MINE".into(),
+                    Syscall::Display => "DISPLAY".into(),
                     _ => "NOP".into(),
                 }
         }
@@ -289,7 +291,12 @@ pub enum Syscall {
     MoveLeft,
     MoveRight,
     MoveTop,
-    MoveBottom
+    MoveBottom,
+    Mine,
+    Display,
+    Scan,
+    Stored,
+    MaxStorage,
 }
 
 impl Syscall {
@@ -299,6 +306,11 @@ impl Syscall {
             2 => Self::MoveRight,
             3 => Self::MoveTop,
             4 => Self::MoveBottom,
+            5 => Self::Mine,
+            6 => Self::Display,
+            7 => Self::Scan,
+            8 => Self::Stored,
+            9 => Self::MaxStorage,
             _ => Self::Nop,
         }
     }
@@ -309,7 +321,12 @@ impl Syscall {
             Self::MoveRight => 2,
             Self::MoveTop => 3,
             Self::MoveBottom => 4,
-            _ => 0,
+            Self::Mine => 5,
+            Self::Display => 6,
+            Self::Scan => 7,
+            Self::Stored => 8,
+            Self::MaxStorage => 9,
+            Self::Nop => 0,
         }
     }
 }

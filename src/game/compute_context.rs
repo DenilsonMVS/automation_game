@@ -3,4 +3,6 @@
 pub enum ComputeContext {
     Computer,
     MovementComputer,
+    MiningComputer,
+    DisplayComputer,
 }

@@ -172,12 +172,41 @@ impl GlEnum for BlendFactor {
 	}
 }
 
+pub struct Fence {
+	fence: gl::types::GLsync,
+}
+
+impl Fence {
+	fn new() -> Self {
+		Self { fence: unsafe { gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) } }
+	}
+
+	pub fn wait(&self) {
+		unsafe {
+			gl::ClientWaitSync(self.fence, gl::SYNC_FLUSH_COMMANDS_BIT, gl::TIMEOUT_IGNORED);
+		}
+	}
+}
+
+impl Drop for Fence {
+	fn drop(&mut self) {
+		unsafe {
+			gl::DeleteSync(self.fence);
+		}
+	}
+}
+
+
 pub struct Renderer;
 
 impl Renderer {
     pub(super) fn new() -> Self {
         Self
     }
+
+	pub fn new_fence(&self) -> Fence {
+		Fence::new()
+	}
 
     pub fn clear_color(&self, color: &glm::Vec4) {
         unsafe {
@@ -203,6 +232,12 @@ impl Renderer {
             gl::Enable(capability.to_gl_enum());
         }
     }
+
+	pub fn depth_mask(&self, mask: bool) {
+		unsafe {
+			gl::DepthMask(mask as u8);
+		}
+	}
 
     pub fn disable(&self, capability: Capability) {
         unsafe {

@@ -73,8 +73,10 @@ fn main() {
     let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
     let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
     let graph_renderer = GraphRenderer::new(renderer).unwrap();
+    
     let mut camera = Camera::new();
     camera.handle_scroll(-10.0);
+
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
     let mut is_fullscreen = false;
@@ -136,8 +138,7 @@ fn main() {
         simple_shape_renderer.reset();
         font.reset();
 
-        renderer.clear(&[ClearField::Color, ClearField::Depth]);
-        renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
+        let fence;
 
         {
             let mut main_context = MainContext {
@@ -156,18 +157,29 @@ fn main() {
 
             scene.handle_input(&mut main_context);
             scene.game_logic(&mut main_context);
+
+            fence = renderer.new_fence();
+
+            scene.send(&mut main_context);
+
+            renderer.clear(&[ClearField::Color, ClearField::Depth]);
+
             scene.generate_output(&mut main_context);
         }
 
         simple_shape_renderer.finish();
         font.finish();
 
-        renderer.enable(Capability::DepthTest);
-        simple_shape_renderer.draw(&proj_matrix, &vp_matrix);
+        simple_shape_renderer.draw(renderer, &proj_matrix, &vp_matrix);
 
-        renderer.disable(Capability::DepthTest);
         renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
+        renderer.depth_mask(false);
         fonts.draw(&mut font, &proj_matrix, &vp_matrix);
+
+        fence.wait();
+
+        renderer.depth_mask(true);
+        renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
         window.swap_buffers();
     }

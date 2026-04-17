@@ -69,7 +69,6 @@ pub struct DynamicBuffer<'a, T> {
     id: u32,
     ptr: *mut T,
     index: usize,
-    sync_obj: gl::types::GLsync,
     _marker: PhantomData<&'a Renderer>,
 }
 
@@ -100,9 +99,6 @@ impl<'a, T> GenericBuffer for DynamicBuffer<'a, T> {
 impl<'a, T> Drop for DynamicBuffer<'a, T> {
     fn drop(&mut self) {
         unsafe {
-            if !self.sync_obj.is_null() {
-                gl::DeleteSync(self.sync_obj);
-            }
             gl::UnmapNamedBuffer(self.id);
             gl::DeleteBuffers(1, &self.id);
         }
@@ -128,7 +124,6 @@ impl<'a, T> DynamicBuffer<'a, T> {
             id,
             ptr: mapped_ptr,
             index: 0,
-            sync_obj: std::ptr::null(),
             _marker: PhantomData,            
         }
     }
@@ -145,26 +140,8 @@ impl<'a, T> DynamicBuffer<'a, T> {
         self.index = 0;
     }
 
-    pub fn lock(&mut self) {
-        unsafe {
-            if !self.sync_obj.is_null() {
-                gl::DeleteSync(self.sync_obj);
-            }
-
-            self.sync_obj = gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
-        }
-    }
-
     pub fn get_len(&self) -> usize {
         self.index
-    }
-
-    pub fn wait(&mut self) {
-        unsafe {
-            if !self.sync_obj.is_null() {
-                gl::ClientWaitSync(self.sync_obj, gl::SYNC_FLUSH_COMMANDS_BIT, 1 << 30);
-            }
-        }
     }
 
     pub fn flush(&self) {
@@ -179,8 +156,19 @@ impl<'a, T> DynamicBuffer<'a, T> {
 pub struct DynamicUnitBuffer<'a, T> {
     id: u32,
     ptr: *mut T,
-    sync_obj: gl::types::GLsync,
     _marker: PhantomData<&'a Renderer>,
+}
+
+impl<'a, T: StaticVertexLayout> VertexLayout for DynamicUnitBuffer<'a, T> {
+    fn get_fields(&self) -> &'static [FieldType] {
+        T::get_fields()
+    }
+    fn get_stride(&self) -> i32 {
+        T::get_stride()
+    }
+    fn get_divisor(&self) -> u32 {
+		T::get_divisor()
+	}
 }
 
 impl<'a, T> GenericBuffer for DynamicUnitBuffer<'a, T> {
@@ -198,9 +186,6 @@ impl<'a, T> GenericBuffer for DynamicUnitBuffer<'a, T> {
 impl<'a, T> Drop for DynamicUnitBuffer<'a, T> {
     fn drop(&mut self) {
         unsafe {
-            if !self.sync_obj.is_null() {
-                gl::DeleteSync(self.sync_obj);
-            }
             gl::UnmapNamedBuffer(self.id);
             gl::DeleteBuffers(1, &self.id);
         }
@@ -208,47 +193,42 @@ impl<'a, T> Drop for DynamicUnitBuffer<'a, T> {
 }
 
 impl<'a, T> DynamicUnitBuffer<'a, T> {
-    pub fn new(_renderer: &'a Renderer, val: &T) -> Self {
+    pub fn new(_renderer: &'a Renderer, vals: &[T]) -> Self {
         let mut id = 0u32;
-        let byte_size = std::mem::size_of::<T>() as isize;
+        let byte_size = (std::mem::size_of::<T>() * vals.len()) as isize;
 
         let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT | gl::DYNAMIC_STORAGE_BIT;
-        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT;
+        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT;
 
         let mapped_ptr;
         unsafe {
             gl::CreateBuffers(1, &mut id);
-            gl::NamedBufferStorage(id, byte_size, val as * const T as * const _, storage_flags);
+            
+            gl::NamedBufferStorage(
+                id, 
+                byte_size, 
+                vals.as_ptr() as *const _, 
+                storage_flags
+            );
+
             mapped_ptr = gl::MapNamedBufferRange(id, 0, byte_size, map_flags) as *mut T;
         }
 
         Self {
             id,
             ptr: mapped_ptr,
-            sync_obj: std::ptr::null(),
             _marker: PhantomData,
-        }
-    }
-
-    pub fn lock(&mut self) {
-        unsafe {
-            if !self.sync_obj.is_null() {
-                gl::DeleteSync(self.sync_obj);
-            }
-
-            self.sync_obj = gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
-        }
-    }
-
-    pub fn wait(&mut self) {
-        unsafe {
-            if !self.sync_obj.is_null() {
-                gl::ClientWaitSync(self.sync_obj, gl::SYNC_FLUSH_COMMANDS_BIT, 1 << 30);
-            }
         }
     }
 
     pub fn mut_ref(&mut self) -> &mut T {
         unsafe { &mut *self.ptr }
+    }
+
+    pub fn write(&mut self, index: usize, value: T) {
+        unsafe {
+            let element = self.ptr.add(index);
+            *element = value;
+        }
     }
 }

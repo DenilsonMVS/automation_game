@@ -43,7 +43,6 @@ impl<'a> SimpleTextureRenderer<'a> {
         
         simple_texture.texture.bind_to_unit(0);
         simple_texture.vao.draw_instanced(4, simple_texture.vbo.get_len() as i32, DrawMode::TriangleStrip);
-        simple_texture.vbo.lock();
     }
 }
 
@@ -71,7 +70,6 @@ impl<'a, Atlas: TypedAtlas> SimpleTexture<'a, Atlas> {
     }
 
     pub fn reset(&mut self) {
-        self.vbo.wait();
         self.vbo.reset_index();
     }
 

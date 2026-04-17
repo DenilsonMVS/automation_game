@@ -1,7 +1,26 @@
-use crate::game::{instruction::{Instruction, Syscall, UnpackedInstruction}, memory::{Memory, PROGRAM_COUNTER_IDX}};
+use crate::game::{instruction::{Instruction, RegisterAddress, Syscall, UnpackedInstruction}, memory::{Memory, PROGRAM_COUNTER_IDX}};
 
 const MEMORY_RANK: usize = 4;
 const MEMORY_SIZE: usize = 1 << MEMORY_RANK;
+
+pub const X: [RegisterAddress; 16] = [
+    RegisterAddress::new(0),
+    RegisterAddress::new(1),
+    RegisterAddress::new(2),
+    RegisterAddress::new(3),
+    RegisterAddress::new(4),
+    RegisterAddress::new(5),
+    RegisterAddress::new(6),
+    RegisterAddress::new(7),
+    RegisterAddress::new(8),
+    RegisterAddress::new(9),
+    RegisterAddress::new(10),
+    RegisterAddress::new(11),
+    RegisterAddress::new(12),
+    RegisterAddress::new(13),
+    RegisterAddress::new(14),
+    RegisterAddress::new(15),
+];
 
 #[derive(Debug)]
 pub struct Computer {
@@ -71,5 +90,13 @@ impl Computer {
 
         self.registers.inst1(PROGRAM_COUNTER_IDX, PROGRAM_COUNTER_IDX, |x| x.wrapping_add(1));
         return return_sys;
+    }
+
+    pub fn write_reg(&mut self, address: RegisterAddress, value: u8) {
+        self.registers.write_memory(address.get_raw(), value);
+    }
+
+    pub fn read_reg(&mut self, address: RegisterAddress) -> u8 {
+        self.registers.read_memory(address.get_raw())
     }
 }
