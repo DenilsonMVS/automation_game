@@ -1,6 +1,8 @@
 
 use nalgebra_glm as glm;
 
+use crate::graphics::camera::Camera;
+
 pub const MAXIMUM_ABS_SPACE: f32 = 8.0;
 pub const SCALE_FACTOR: f32 = i16::MAX as f32 / MAXIMUM_ABS_SPACE;
 
@@ -9,11 +11,11 @@ pub const fn f32_to_short(v: f32) -> i16 {
 }
 
 pub fn vec_to_short<const S: usize>(v: &glm::TVec<f32, S>) -> glm::TVec<i16, S> {
-    let mut res = glm::TVec::<i16, S>::zeros();
-    for i in 0..S {
-        res[i] = f32_to_short(v[i]);
-    }
-    return res;
+    v.map(|x| f32_to_short(x))
+}
+
+pub fn vec_to_short_recenter(v: glm::Vec2, camera: &Camera) -> glm::I16Vec2 {
+    vec_to_short(&((v - camera.get_position()) * camera.get_zoom()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

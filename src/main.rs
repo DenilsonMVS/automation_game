@@ -9,7 +9,7 @@ use std::time;
 use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -47,6 +47,7 @@ pub struct MainContext<'a, 'b> {
     pub simple_shape_renderer: &'b mut SimpleShapeRenderer<'a>,
     pub graph_renderer: &'b GraphRenderer<'a>,
     pub font: &'b mut Font<'a>,
+    pub camera: &'b Camera,
     
     pub proj_matrix: Mat4,
     pub i_proj_matrix: Mat4,
@@ -75,17 +76,18 @@ fn main() {
     let graph_renderer = GraphRenderer::new(renderer).unwrap();
     
     let mut camera = Camera::new();
-    camera.handle_scroll(-10.0);
 
     let mut scene = MainScene::new(renderer);
     let mut previous_frame = time::Instant::now();
     let mut is_fullscreen = false;
     let mut halt = true;
 
+    let mut fence: Option<Fence> = None;
+
     while !window.should_close() {
 
         let now = time::Instant::now();
-        let delta = now.duration_since(previous_frame).as_secs_f32();
+        let delta = now.duration_since(previous_frame).as_secs_f32() * 10.0;
         previous_frame = now;
 
         let window_size = get_window_size(window);
@@ -93,11 +95,10 @@ fn main() {
 
         let proj_matrix = get_projection_matrix(window_size);
         let view_matrix = camera.get_view_matrix();
-        let vp_matrix = view_matrix * proj_matrix;
+        let vp_matrix = proj_matrix * view_matrix;
         let i_proj_matrix = glm::inverse(&proj_matrix);
         let mouse_pos = get_mouse_pos(window, window_size, &i_proj_matrix);
 
-        
         glfw.poll_events();
         let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
         for (_, event) in messages.iter() {
@@ -138,8 +139,6 @@ fn main() {
         simple_shape_renderer.reset();
         font.reset();
 
-        let fence;
-
         {
             let mut main_context = MainContext {
                 glfw, window, events, renderer,
@@ -153,12 +152,15 @@ fn main() {
                 font: &mut font,
                 delta,
                 halt,
+                camera: &camera
             };
 
             scene.handle_input(&mut main_context);
             scene.game_logic(&mut main_context);
 
-            fence = renderer.new_fence();
+            if let Some(fence) = fence {
+                fence.wait();
+            }
 
             scene.send(&mut main_context);
 
@@ -174,9 +176,9 @@ fn main() {
 
         renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
         renderer.depth_mask(false);
-        fonts.draw(&mut font, &proj_matrix, &vp_matrix);
+        fonts.draw(&mut font, &proj_matrix);
 
-        fence.wait();
+        fence = Some(renderer.new_fence());
 
         renderer.depth_mask(true);
         renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);

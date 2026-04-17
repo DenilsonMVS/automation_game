@@ -90,16 +90,12 @@ impl<'a> GraphRenderer<'a> {
                     3000, 1
                 );
 
-                font.add_text(&TextRenderConfig {
-                    text: &format!("{:.1}", *vertical_line),
-                    position: min_pos + glm::vec2(pos, -0.01),
-                    position_mode: PositionMode::TopCenter,
-                    line_height: LINE_HEIGHT,
-                    rotation: 0.0,
-                    color: graph.secondary_color,
-                    group: 1,
-                    depth: 2000,
-                });
+                font.add_text(&TextRenderConfig::new(
+                    &format!("{:.1}", *vertical_line),
+                    min_pos + glm::vec2(pos, -0.01),
+                    LINE_HEIGHT,
+                    graph.secondary_color,
+                ).set_mode(PositionMode::TopCenter).set_depth(2000));
             } 
         }
 
@@ -115,16 +111,12 @@ impl<'a> GraphRenderer<'a> {
                     3000, 1
                 );
 
-                font.add_text(&TextRenderConfig {
-                    text: &format!("{:.1}", *horizontal_line),
-                    position: min_pos + glm::vec2(-0.01, pos),
-                    position_mode: PositionMode::CenterRight,
-                    line_height: LINE_HEIGHT,
-                    rotation: 0.0,
-                    color: graph.secondary_color,
-                    group: 1,
-                    depth: 2000,
-                });
+                font.add_text(&TextRenderConfig::new(
+                    &format!("{:.1}", *horizontal_line),
+                    min_pos + glm::vec2(-0.01, pos),
+                    LINE_HEIGHT,
+                    graph.secondary_color,
+                ).set_mode(PositionMode::CenterRight).set_depth(2000));
             }
         }
 
@@ -153,8 +145,7 @@ impl<'a> GraphRenderer<'a> {
                     LINE_HEIGHT,
                     y_val.color,
                 )
-                .set_mode(PositionMode::CenterRight)
-                .set_group(1),
+                .set_mode(PositionMode::CenterRight),
             );
 
             simple_shape_renderer.send_ellipse(

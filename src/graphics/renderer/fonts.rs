@@ -3,16 +3,16 @@ use std::marker::PhantomData;
 use msdfgen::{Bitmap, FillRule, FontExt, MsdfGeneratorConfig, Range};
 use ttf_parser::Face;
 use macros::{GlVertex, program_interface};
-use crate::graphics::renderer::{
+use crate::graphics::{camera::Camera, renderer::{
     Renderer, 
     buffer::{DynamicBuffer, GenericBuffer, StaticBuffer}, 
     drawable::DrawMode, 
-    positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short}, 
+    positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short, vec_to_short_recenter}, 
     program::{Program, ShaderType}, 
     texture::Texture, 
     uniform::UniformValue, 
     vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}
-};
+}};
 use nalgebra_glm as glm;
 use anyhow::Result;
 
@@ -97,18 +97,14 @@ impl<'a> Fonts<'a> {
         buffer.vao.draw_instanced(4, buffer.amount, DrawMode::TriangleStrip);
     }
 
-    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
+    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4) {
         self.font_program.bind();
+        self.font_program.set_u_projection(proj_matrix);
         font.texture.bind_to_unit(0);
         font.uv_buf.bind_as_storage(5);
-        for (i, (vbo, vao)) in font.buffs.iter_mut().enumerate() {
-            if i == 0 {
-                self.font_program.set_u_projection(vp_matrix);
-            } else {
-                self.font_program.set_u_projection(proj_matrix);
-            }
-            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-        }
+
+        let (vbo, vao) = &font.buff;
+        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
     }
 }
 
@@ -123,7 +119,7 @@ pub struct Font<'a> {
     glyphs: [GlyphInfo; WESTERN_CHAR_COUNT],
     ascender: f32,
     descender: f32,
-    buffs: [(DynamicBuffer<'a, GlyphAttrs>, VertexArrayObject<'a>); 2],
+    buff: (DynamicBuffer<'a, GlyphAttrs>, VertexArrayObject<'a>),
     uv_buf: StaticBuffer<'a, UvData>,
 }
 
@@ -171,18 +167,18 @@ pub const ATLAS_WIDTH: usize = ATLAS_PARAMS.1;
 pub const ATLAS_COLUMNS: usize = ATLAS_PARAMS.2;
 
 #[derive(Debug, Clone, Copy)]
-pub struct TextRenderConfig<'a> {
+pub struct TextRenderConfig<'a, 'b> {
     pub text: &'a str,
     pub position: glm::Vec2,
     pub line_height: f32,
     pub rotation: f32,
     pub position_mode: PositionMode,
     pub color: glm::U8Vec4,
-    pub group: usize,
     pub depth: u16,
+    pub recenter: Option<&'b Camera>,
 }
 
-impl<'a> TextRenderConfig<'a> {
+impl<'a, 'b> TextRenderConfig<'a, 'b> {
     pub fn new(text: &'a str, position: glm::Vec2, line_height: f32, color: glm::U8Vec4) -> Self {
         Self {
             text,
@@ -191,8 +187,8 @@ impl<'a> TextRenderConfig<'a> {
             position_mode: PositionMode::Center,
             color,
             rotation: 0.0,
-            group: 0,
             depth: 1000,
+            recenter: None
         }
     }
 
@@ -206,13 +202,13 @@ impl<'a> TextRenderConfig<'a> {
         return self;
     }
 
-    pub fn set_group(mut self, group: usize) -> Self {
-        self.group = group;
+    pub fn set_rotation(mut self, rotation: f32) -> Self {
+        self.rotation = rotation;
         return self;
     }
 
-    pub fn set_rotation(mut self, rotation: f32) -> Self {
-        self.rotation = rotation;
+    pub fn set_recenter(mut self, recenter: &'b Camera) -> Self {
+        self.recenter = Some(recenter);
         return self;
     }
 }
@@ -292,11 +288,8 @@ impl<'a> Font<'a> {
         }
 
         let texture = Texture::from_font_raw(renderer, raw_image_data.as_slice(), ATLAS_WIDTH);
-        let buffs = std::array::from_fn(|_| {
-            let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
-            let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            return (vbo, vao);
-        });
+        let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
+        let vao = VertexArrayObject::new(renderer, &[&vbo]);
         let uv_buf = StaticBuffer::new(renderer, &uvs);
 
         return Ok(Self {
@@ -304,15 +297,14 @@ impl<'a> Font<'a> {
             glyphs,
             ascender: font.ascender() as f32,
             descender: font.descender() as f32,
-            buffs,
+            buff: (vbo, vao),
             uv_buf,
         });
     }
 
     pub fn reset(&mut self) {
-        for (vbo, _) in self.buffs.iter_mut() {
-            vbo.reset_index();
-        }
+        let vbo = &mut self.buff.0;
+        vbo.reset_index();
     }
 
     pub fn bind_to_unit(&self, unit: u32) {
@@ -323,7 +315,7 @@ impl<'a> Font<'a> {
         let glyphs = &self.glyphs;
         let ascender = self.ascender;
         let descender = self.descender;
-        let vbo = &mut self.buffs[text.group].0;
+        let vbo = &mut self.buff.0;
         Self::generate_vertex(glyphs, ascender, descender, text,
             |vertex| vbo.write(&vertex));
     }
@@ -360,6 +352,7 @@ impl<'a> Font<'a> {
     ) {   
         let font_height = ascender - descender;
 
+        let recenter = config.recenter;
         let cos = config.rotation.cos();
         let sin = config.rotation.sin();
         let dir_x = glm::vec2(cos, sin);
@@ -391,9 +384,15 @@ impl<'a> Font<'a> {
                 let tl = cursor_pos + (dir_x * lx0) + (dir_y * ly1);
                 let tr = cursor_pos + (dir_x * lx1) + (dir_y * ly1);
 
+                let (tli16, tri16) = if let Some(camera) = recenter {
+                    (vec_to_short_recenter(tl, &camera), vec_to_short_recenter(tr, &camera))
+                } else {
+                    (vec_to_short(&tl), vec_to_short(&tr))
+                };
+
                 on_generation(GlyphAttrs {
-                    top_left: vec_to_short(&tl),
-                    top_right: vec_to_short(&tr),
+                    top_left: tli16,
+                    top_right: tri16,
                     character_idx: idx as u8,
                     color: config.color,
                     depth: config.depth,
@@ -405,8 +404,6 @@ impl<'a> Font<'a> {
     }
 
     pub fn finish(&self) {
-        for (vbo, _) in self.buffs.iter() {
-            vbo.flush();
-        }
+        self.buff.0.flush();
     }
 }

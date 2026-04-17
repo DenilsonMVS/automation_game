@@ -87,22 +87,22 @@ impl<const SIZE: usize> Memory<Instruction, SIZE> {
             &visualization[0],
             position + glm::vec2(0.0, 0.0),
             line_height, code_colors[0],
-        ).set_mode(PositionMode::TopLeft).set_group(1));
+        ).set_mode(PositionMode::TopLeft));
         font.add_text(&TextRenderConfig::new(
             &visualization[1],
             position + glm::vec2(glyph_space * 5.0, 0.0),
             line_height, code_colors[1],
-        ).set_mode(PositionMode::TopLeft).set_group(1));
+        ).set_mode(PositionMode::TopLeft));
         font.add_text(&TextRenderConfig::new(
             &visualization[2],
             position + glm::vec2(glyph_space * 10.0, 0.0),
             line_height, code_colors[2],
-        ).set_mode(PositionMode::TopLeft).set_group(1));
+        ).set_mode(PositionMode::TopLeft));
         font.add_text(&TextRenderConfig::new(
             &visualization[3],
             position + glm::vec2(glyph_space * 15.0, 0.0),
             line_height, code_colors[3],
-        ).set_mode(PositionMode::TopLeft).set_group(1));   
+        ).set_mode(PositionMode::TopLeft));   
     }
 
     fn draw_line_simplified(
@@ -117,7 +117,7 @@ impl<const SIZE: usize> Memory<Instruction, SIZE> {
             &simplified_visualization,
             position + glm::vec2(0.0, 0.0),
             line_height, code_colors,
-        ).set_mode(PositionMode::TopLeft).set_group(1));
+        ).set_mode(PositionMode::TopLeft));
     }
 
     pub fn send_draw(&self,
@@ -223,7 +223,7 @@ impl<const SIZE: usize> Memory<u8, SIZE> {
                 text_center,
                 unit_size.y,
                 value_color,
-            ).set_group(1));
+            ));
         }
     }
 }

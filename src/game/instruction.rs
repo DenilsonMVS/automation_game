@@ -331,3 +331,125 @@ impl Syscall {
     }
 }
 
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_register_address_masking() {
+        // O endereço deve ser mascarado para 4 bits (0-15)
+        let reg = RegisterAddress::new(17); // 10001 em binário
+        assert_eq!(reg.get_raw(), 1);
+    }
+
+    #[test]
+    fn test_lui_encoding_decoding() {
+        let rd = RegisterAddress::new(5);
+        let imm = 200;
+        let inst = Instruction::new_lui(rd, imm as u16);
+        
+        if let UnpackedInstruction::Lui(unpacked_rd, unpacked_imm) = inst.unpack() {
+            assert_eq!(unpacked_rd.get_raw(), 5);
+            assert_eq!(unpacked_imm, 200);
+        } else {
+            panic!("Deveria ser uma instrução LUI");
+        }
+    }
+
+    #[test]
+    fn test_addi_encoding_decoding() {
+        let rs = RegisterAddress::new(1);
+        let rd = RegisterAddress::new(2);
+        let imm = 10; // ADDI usa imm4
+        let inst = Instruction::new_addi(rs, rd, imm);
+        
+        if let UnpackedInstruction::AddI(r_rs, r_rd, r_imm) = inst.unpack() {
+            assert_eq!(r_rs.get_raw(), 1);
+            assert_eq!(r_rd.get_raw(), 2);
+            assert_eq!(r_imm, 10);
+        } else {
+            panic!("Deveria ser uma instrução ADDI");
+        }
+    }
+
+    #[test]
+    fn test_add_encoding_decoding() {
+        let r1 = RegisterAddress::new(10);
+        let r2 = RegisterAddress::new(11);
+        let rd = RegisterAddress::new(12);
+        let inst = Instruction::new_add(r1, r2, rd);
+        
+        if let UnpackedInstruction::Add(unpacked_r1, unpacked_r2, unpacked_rd) = inst.unpack() {
+            assert_eq!(unpacked_r1.get_raw(), 10);
+            assert_eq!(unpacked_r2.get_raw(), 11);
+            assert_eq!(unpacked_rd.get_raw(), 12);
+        } else {
+            panic!("Deveria ser uma instrução ADD");
+        }
+    }
+
+    #[test]
+    fn test_beq_encoding_decoding() {
+        let r1 = RegisterAddress::new(1);
+        let r2 = RegisterAddress::new(2);
+        let jump = 15;
+        let inst = Instruction::new_beq(r1, r2, jump);
+        
+        if let UnpackedInstruction::Beq(u_r1, u_r2, u_jump) = inst.unpack() {
+            assert_eq!(u_r1.get_raw(), 1);
+            assert_eq!(u_r2.get_raw(), 2);
+            assert_eq!(u_jump, 15);
+        } else {
+            panic!("Deveria ser uma instrução BEQ");
+        }
+    }
+
+    #[test]
+    fn test_syscall_conversion() {
+        let sys = Syscall::Mine;
+        let raw = sys.to_raw();
+        assert_eq!(raw, 5);
+        assert_eq!(Syscall::from_raw(5), Syscall::Mine);
+        
+        // Teste de Nop / Inválido
+        assert_eq!(Syscall::from_raw(99), Syscall::Nop);
+    }
+
+    #[test]
+    fn test_visualization_strings() {
+        let inst = Instruction::new_add(
+            RegisterAddress::new(1), 
+            RegisterAddress::new(2), 
+            RegisterAddress::new(3)
+        );
+        let vis = inst.unpack().get_visualization();
+        assert_eq!(vis[0], "ADD");
+        assert_eq!(vis[1], "x1");
+        assert_eq!(vis[2], "x2");
+        assert_eq!(vis[3], "x3");
+
+        let simple_vis = inst.unpack().get_simplified_visualization();
+        assert_eq!(simple_vis, "x3 = x1 + x2");
+    }
+
+    #[test]
+    fn test_nop_visualization() {
+        let inst = Instruction::new_sys(Syscall::Nop);
+        let simple_vis = inst.unpack().get_simplified_visualization();
+        assert_eq!(simple_vis, "NOP");
+    }
+
+    #[test]
+    fn test_addi_truncation() {
+        let rs = RegisterAddress::new(1);
+        let rd = RegisterAddress::new(2);
+        // 16 é 10000 em binário. Com a máscara & 0xf, deve virar 0.
+        let inst = Instruction::new_addi(rs, rd, 16);
+        
+        if let UnpackedInstruction::AddI(_, _, imm) = inst.unpack() {
+            assert_eq!(imm, 0, "O imediato de ADDI deve ser limitado a 4 bits (max 15)");
+        }
+    }
+}

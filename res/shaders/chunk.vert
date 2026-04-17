@@ -23,7 +23,8 @@ void main() {
     vec2 vertice_rel_position = center_position + a_size * OFFSETS[gl_VertexID % 4];
     vec2 vertice_global_position = u_chunk_start_pos + vertice_rel_position;
 
-    gl_Position = u_vp * vec4(vertice_global_position, 0, 1);
+    vec2 transformed = (u_vp * vec4(vertice_global_position, 0, 1)).xy;
+    gl_Position = vec4(transformed, 0.999999, 1);
 
     v_color = a_color;
 }
