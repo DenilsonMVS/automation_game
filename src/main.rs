@@ -9,7 +9,7 @@ use std::time;
 use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{graph::GraphRenderer, main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -45,7 +45,6 @@ pub struct MainContext<'a, 'b> {
     // 'a long lifetime
     pub renderer: &'a Renderer,
     pub simple_shape_renderer: &'b mut SimpleShapeRenderer<'a>,
-    pub graph_renderer: &'b GraphRenderer<'a>,
     pub font: &'b mut Font<'a>,
     pub camera: &'b Camera,
     
@@ -67,13 +66,13 @@ fn main() {
     renderer.enable(Capability::Blend);
     renderer.enable(Capability::DepthTest);
     renderer.depth_func(DepthFunc::Less);
+    renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
     renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 0.0));
 
     let fonts = Fonts::new(renderer);
     let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
     let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
-    let graph_renderer = GraphRenderer::new(renderer).unwrap();
     
     let mut camera = Camera::new();
 
@@ -148,7 +147,6 @@ fn main() {
                 window_size,
                 mouse_pos,
                 simple_shape_renderer: &mut simple_shape_renderer,
-                graph_renderer: &graph_renderer,
                 font: &mut font,
                 delta,
                 halt,
@@ -174,14 +172,11 @@ fn main() {
 
         simple_shape_renderer.draw(renderer, &proj_matrix, &vp_matrix);
 
-        renderer.blend_func(BlendFactor::One, BlendFactor::OneMinusSrc1Color);
         renderer.depth_mask(false);
         fonts.draw(&mut font, &proj_matrix);
+        renderer.depth_mask(true);
 
         fence = Some(renderer.new_fence());
-
-        renderer.depth_mask(true);
-        renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
         window.swap_buffers();
     }
