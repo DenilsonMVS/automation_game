@@ -8,20 +8,21 @@ use crate::{game::logic::world::{CHUNK_MAG, CHUNK_SIZE, Chunk, GridPosition, Wor
 #[vertex(divisor = 1)]
 struct ChunkPosition {
     #[normalized]
-    color: glm::U8Vec4,
-    size: f32,
+    color: glm::U8Vec3,
+    #[normalized]
+    size: u8,
 }
 
 impl GridPosition {
     fn get_render_info(&self) -> ChunkPosition {
         match self {
-            Self::None => ChunkPosition { color: glm::vec4(0, 0,0, 0), size: 0.0 },
+            Self::None => ChunkPosition { color: glm::vec3(0, 0,0), size: 0 },
             Self::Resource(quantity, original_size_base) => ChunkPosition {
                 size: {
                     let max_qtd = Self::get_starting_amount(*original_size_base);
-                    (*quantity as f32 / max_qtd as f32).sqrt()
+                    ((*quantity as f32 / max_qtd as f32).sqrt() * 255.0).clamp(0.0, 255.0) as u8
                 },
-                color: glm::vec4(20, 150, 20, 255),
+                color: glm::vec3(20, 150, 20),
             },
         }
     }

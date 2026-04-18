@@ -1,7 +1,7 @@
 
 #version 460 core
 
-layout (location = 0) in vec4 a_color; 
+layout (location = 0) in vec3 a_color; 
 layout (location = 1) in float a_size;
 
 uniform mat4 u_vp;
@@ -26,5 +26,5 @@ void main() {
     vec2 transformed = (u_vp * vec4(vertice_global_position, 0, 1)).xy;
     gl_Position = vec4(transformed, 0.999999, 1);
 
-    v_color = a_color;
+    v_color = vec4(a_color, 1);
 }
