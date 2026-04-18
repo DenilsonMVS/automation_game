@@ -189,6 +189,30 @@ impl<'a> SimpleShapeRenderer<'a> {
         });
     }
 
+    pub fn preview_render_box(
+        &self,
+        position: glm::Vec2,
+        size: glm::Vec2,
+        position_mode: PositionMode,
+    ) -> RenderBox {
+        RenderBox::new_simple(position, position_mode, size)
+    }
+
+    pub fn send_render_box(
+        &mut self,
+        simple_box: &RenderBox,
+        color: glm::U8Vec4,
+        depth: u16,
+        group: usize,
+    ) {
+        self.rec_buffs[group].0.write(&RectangleVertex {
+            top_left: simple_box.get_top_left(),
+            top_right: simple_box.get_top_right(),
+            bottom_right: simple_box.get_bottom_right(),
+            color, depth,
+        });
+    }
+
     pub fn send_rectangle(
         &mut self,
         position: glm::Vec2,
@@ -199,12 +223,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         group: usize,
     ) -> RenderBox {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
-        self.rec_buffs[group].0.write(&RectangleVertex {
-            top_left: simple_box.get_top_left(),
-            top_right: simple_box.get_top_right(),
-            bottom_right: simple_box.get_bottom_right(),
-            color, depth,
-        });
+        self.send_render_box(&simple_box, color, depth, group);
         return simple_box;
     }
 

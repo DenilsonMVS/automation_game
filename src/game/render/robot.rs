@@ -4,7 +4,7 @@ use crate::{game::logic::robot::Robot, graphics::{camera::Camera, renderer::{fon
 const ROBOT_SIZE: f32 = 0.8;
 const WEEL_DIAMETER: f32 = 0.26;
 const WEEL_DISTANCE: f32 = 0.37;
-const ROBOT_DEPTH: u16 = 5000;
+pub const ROBOT_DEPTH: u16 = 5000;
 const WEELS_DEPTH: u16 = ROBOT_DEPTH + 1;
 const WEEL_COLOR: [u8; 3] = [45, 40, 40];
 

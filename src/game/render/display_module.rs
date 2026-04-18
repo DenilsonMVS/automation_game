@@ -1,5 +1,7 @@
 use nalgebra_glm as glm;
-use crate::{game::logic::display_module::DisplayModule, graphics::{camera::Camera, renderer::fonts::{Font, TextRenderConfig}}};
+use crate::{game::{logic::display_module::DisplayModule, render::robot::ROBOT_DEPTH}, graphics::{camera::Camera, renderer::fonts::{Font, TextRenderConfig}}};
+
+const DISPLAY_DEPTH: u16 = ROBOT_DEPTH - 1;
 
 impl DisplayModule {
     pub fn send(&self, font: &mut Font, position: glm::Vec2, camera: &Camera) {
@@ -10,7 +12,7 @@ impl DisplayModule {
                 position,
                 0.5,
                 glm::vec4(20, 45, 90, 255),
-            ).set_depth(0).set_recenter(camera));
+            ).set_depth(DISPLAY_DEPTH).set_recenter(camera));
         }
     }
 }
