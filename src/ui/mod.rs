@@ -102,7 +102,6 @@ pub struct Box {
     background_color: glm::U8Vec4,
     size: glm::Vec2,
     position: glm::Vec2,
-    position_mode: PositionMode,
     children: Vec<UiElement>,
 }
 
@@ -116,7 +115,6 @@ impl Box {
             background_color,
             size,
             position,
-            position_mode: PositionMode::Center,
             children: vec![]
         }
     }
@@ -137,11 +135,6 @@ impl Box {
         self
     }
 
-    pub fn with_position_mode(mut self, mode: PositionMode) -> Self {
-        self.position_mode = mode;
-        self
-    }
-
     pub fn with_children(mut self, children: Vec<UiElement>) -> Self {
         self.children = children;
         self
@@ -154,14 +147,26 @@ impl WrapIntoUiElement for Box {
     }
 }
 
+
 #[derive(Debug)]
 pub struct Text {
     content: String,
     line_height: f32,
     position: glm::Vec2,
-    position_mode: PositionMode,
     color: glm::U8Vec4,
 }
+
+impl Text {
+    pub fn new(content: String, line_height: f32, position: glm::Vec2, color: glm::U8Vec4) -> Self {
+        Self {
+            content,
+            line_height,
+            position,
+            color,
+        }
+    }
+}
+
 
 fn space_evenly(amount: i32, width: f32, total_width: f32) -> impl Iterator<Item = f32> {
     let amount_f = amount as f32;
@@ -181,7 +186,6 @@ pub fn first_test() -> UiElement {
                 glm::vec2(width, width),
                 glm::vec4(200, 100, 30, 255)
             )
-            .with_position_mode(PositionMode::TopLeft)
             .wrap_ui()
         )
         .collect();

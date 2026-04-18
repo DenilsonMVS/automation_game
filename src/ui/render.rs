@@ -7,11 +7,10 @@ impl UiElement {
         let border_depth = parent_depth - 1;
         match self {
             Self::Box(ui_box) => {
-                let outer_render_box = simple_shape_renderer.preview_render_box(
-                    parent_top_left + ui_box.position,
-                    ui_box.size,
-                    ui_box.position_mode,
-                );
+                let outer_render_box = RenderBox {
+                    min: parent_top_left + ui_box.position - glm::vec2(0.0, ui_box.size.y),
+                    max: parent_top_left + ui_box.position + glm::vec2(ui_box.size.x, 0.0),
+                };
 
                 let margin_render_box = RenderBox {
                     min: outer_render_box.min + glm::vec2(ui_box.margin.left, ui_box.margin.bottom),
@@ -52,7 +51,9 @@ impl UiElement {
                     );
                 } 
             },
-            Self::Text(text) => todo!(),
+            Self::Text(text) => {
+                
+            },
         }
     }
 }

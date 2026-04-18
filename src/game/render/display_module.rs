@@ -8,11 +8,10 @@ impl DisplayModule {
         if let Some(value) = self.get_value() {
             let value = format!("{}", value);
             font.add_text(&TextRenderConfig::new(
-                &value,
+                &[(&value, glm::vec4(20, 45, 90, 255))],
                 position,
                 0.5,
-                glm::vec4(20, 45, 90, 255),
-            ).set_depth(DISPLAY_DEPTH).set_recenter(camera));
+            ).set_depth(DISPLAY_DEPTH).set_recenter(camera).set_max_line_width(0.5));
         }
     }
 }

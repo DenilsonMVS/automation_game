@@ -16,7 +16,7 @@ use crate::graphics::{camera::Camera, renderer::{
 use nalgebra_glm as glm;
 use anyhow::Result;
 
-const GLYPHS_PER_RENDER: usize = 1 << 10;
+const GLYPHS_PER_RENDER: usize = 1 << 11;
 
 #[repr(C)]
 #[derive(GlVertex)]
@@ -167,28 +167,38 @@ pub const ATLAS_WIDTH: usize = ATLAS_PARAMS.1;
 pub const ATLAS_COLUMNS: usize = ATLAS_PARAMS.2;
 
 #[derive(Debug, Clone, Copy)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
+    Justify,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct TextRenderConfig<'a, 'b> {
-    pub text: &'a str,
+    pub text: &'a [(&'a str, glm::U8Vec4)],
     pub position: glm::Vec2,
     pub line_height: f32,
+    pub max_line_width: f32,
     pub rotation: f32,
     pub position_mode: PositionMode,
-    pub color: glm::U8Vec4,
     pub depth: u16,
     pub recenter: Option<&'b Camera>,
+    pub align: TextAlign,
 }
 
 impl<'a, 'b> TextRenderConfig<'a, 'b> {
-    pub fn new(text: &'a str, position: glm::Vec2, line_height: f32, color: glm::U8Vec4) -> Self {
+    pub fn new(text: &'a [(&'a str, glm::U8Vec4)], position: glm::Vec2, line_height: f32) -> Self {
         Self {
             text,
             position,
             line_height,
             position_mode: PositionMode::Center,
-            color,
             rotation: 0.0,
             depth: 1000,
-            recenter: None
+            max_line_width: 1e9,
+            recenter: None,
+            align: TextAlign::Left,
         }
     }
 
@@ -209,6 +219,16 @@ impl<'a, 'b> TextRenderConfig<'a, 'b> {
 
     pub fn set_recenter(mut self, recenter: &'b Camera) -> Self {
         self.recenter = Some(recenter);
+        return self;
+    }
+
+    pub fn set_max_line_width(mut self, max_line_width: f32) -> Self {
+        self.max_line_width = max_line_width;
+        return self;
+    }
+
+    pub fn set_align(mut self, align: TextAlign) -> Self {
+        self.align = align;
         return self;
     }
 }
@@ -343,6 +363,80 @@ impl<'a> Font<'a> {
         }
     }
 
+    fn separate_in_blocks(glyphs: &[GlyphInfo; WESTERN_CHAR_COUNT], config: &TextRenderConfig) -> Vec<(u32, u32, f32, bool)> {
+        let mut blocks = Vec::new();
+        let mut block_start = (0, 0);
+        let mut current_advance = 0.0;
+
+        for (i, (text, _)) in config.text.iter().enumerate() {
+            for (j, c) in text.chars().enumerate() {
+                if c == '\n' {
+                    blocks.push((block_start.0, block_start.1, current_advance, true));
+                    block_start = (i as u32, (j + 1) as u32);
+                    current_advance = 0.0;
+                    continue;
+                }
+
+                let Some(idx) = map_char_to_index(c) else { continue };
+                let advance = glyphs[idx].advance;
+
+                if c == ' ' {
+                    if current_advance > 0.0 {
+                        blocks.push((block_start.0, block_start.1, current_advance, false));
+                    }
+                    block_start = (i as u32, (j + 1) as u32);
+                    current_advance = 0.0;
+                } else {
+                    current_advance += advance;
+                }
+            }
+        }
+
+        if current_advance > 0.0 || blocks.is_empty() {
+            blocks.push((block_start.0, block_start.1, current_advance, false));
+        }
+
+        blocks
+    }
+
+    fn select_blocks_for_line(
+        glyphs: &[GlyphInfo; WESTERN_CHAR_COUNT],
+        blocks: &[(u32, u32, f32, bool)],
+        max_width: f32,
+    ) -> (Vec<u32>, f32) {
+        let space_advance = glyphs[map_char_to_index(' ').unwrap()].advance;
+
+        let mut line_starts = Vec::new();
+        let mut current_line_width = 0.0;
+        let mut overall_max_width: f32 = 0.0;
+        
+        if !blocks.is_empty() {
+            line_starts.push(0);
+        }
+
+        for (idx, &(_, _, block_width, force_newline)) in blocks.iter().enumerate() {
+            let is_first_in_line = line_starts.last() == Some(&(idx as u32));
+            let added_width = if is_first_in_line { block_width } else { block_width + space_advance };
+
+            if !is_first_in_line && current_line_width + added_width > max_width {
+                line_starts.push(idx as u32);
+                overall_max_width = overall_max_width.max(current_line_width);
+                current_line_width = block_width;
+            } else {
+                current_line_width += added_width;
+            }
+
+            if force_newline && idx + 1 < blocks.len() {
+                line_starts.push((idx + 1) as u32);
+                overall_max_width = overall_max_width.max(current_line_width);
+                current_line_width = 0.0; 
+            }
+        }
+        
+        overall_max_width = overall_max_width.max(current_line_width);
+        (line_starts, overall_max_width)
+    }
+
     fn generate_vertex(
         glyphs: &[GlyphInfo; WESTERN_CHAR_COUNT],
         ascender: f32,
@@ -351,18 +445,22 @@ impl<'a> Font<'a> {
         mut on_generation: impl FnMut(GlyphAttrs)
     ) {   
         let font_height = ascender - descender;
+        let scale = config.line_height / font_height;
 
-        let recenter = config.recenter;
         let cos = config.rotation.cos();
         let sin = config.rotation.sin();
         let dir_x = glm::vec2(cos, sin);
         let dir_y = glm::vec2(-sin, cos);
 
-        let total_width = config.text.chars().fold(0.0f32, |acc, c|
-            map_char_to_index(c).map_or(acc, |idx| acc + glyphs[idx].advance));
+        let blocks = Self::separate_in_blocks(glyphs, config);
+        let (line_start_indices, max_width_actual) = Self::select_blocks_for_line(
+            glyphs, 
+            &blocks, 
+            config.max_line_width / scale,
+        );
 
-        let scale = config.line_height / font_height;
-        let full_size = glm::vec2(total_width * scale, font_height * scale);
+        let total_height = line_start_indices.len() as f32 * config.line_height;
+        let full_size = glm::vec2(max_width_actual * scale, total_height);
 
         let obox = OrientedBox::new_rotated(
             config.position,
@@ -371,34 +469,85 @@ impl<'a> Font<'a> {
             dir_y
         );
 
-        let mut cursor_pos = obox.bot_left - (dir_y * (descender * scale));
+        let space_advance = map_char_to_index(' ')
+            .map_or(0.0, |idx| glyphs[idx].advance * scale);
 
-        for c in config.text.chars() {
-            if let Some(idx) = map_char_to_index(c) {
-                let info = &glyphs[idx];
+        for (line_idx, &start_block_idx) in line_start_indices.iter().enumerate() {
+            let end_block_idx = line_start_indices
+                .get(line_idx + 1)
+                .cloned()
+                .unwrap_or(blocks.len() as u32);
+
+            let num_blocks = end_block_idx - start_block_idx;
+            
+            // Uma linha termina em quebra forçada se o seu último bloco tiver a flag true
+            let ends_with_force = blocks[(end_block_idx - 1) as usize].3;
+            let is_last_line = line_idx == line_start_indices.len() - 1;
+            
+            let mut current_line_width = 0.0;
+            for b_idx in start_block_idx..end_block_idx {
+                current_line_width += blocks[b_idx as usize].2 * scale;
+            }
+            if num_blocks > 1 {
+                current_line_width += (num_blocks - 1) as f32 * space_advance;
+            }
+
+            let mut extra_space_per_gap = 0.0;
+            let x_offset = match config.align {
+                TextAlign::Left => 0.0,
+                TextAlign::Center => (full_size.x - current_line_width) * 0.5,
+                TextAlign::Right => full_size.x - current_line_width,
+                TextAlign::Justify => {
+                    // NÃO justifica se for a última linha OU se terminou em \n
+                    if !is_last_line && !ends_with_force && num_blocks > 1 {
+                        extra_space_per_gap = (full_size.x - current_line_width) / (num_blocks - 1) as f32;
+                    }
+                    0.0
+                },
+            };
+
+            let line_offset = (line_idx as f32) * config.line_height;
+            let mut cursor_pos = obox.top_left 
+                - (dir_y * (line_offset + ascender * scale))
+                + (dir_x * x_offset);
+
+            for b_idx in start_block_idx..end_block_idx {
+                let (str_idx, char_idx, _, _) = blocks[b_idx as usize]; // Ignoramos a flag aqui
+                let (text_segment, color) = &config.text[str_idx as usize];
                 
-                let lx0 = info.bound_min.x * scale;
-                let lx1 = info.bound_max.x * scale;
-                let ly1 = info.bound_max.y * scale;
+                for c in text_segment.chars().skip(char_idx as usize) {
+                    if c == '\n' || c == ' ' { break; }
 
-                let tl = cursor_pos + (dir_x * lx0) + (dir_y * ly1);
-                let tr = cursor_pos + (dir_x * lx1) + (dir_y * ly1);
+                    let Some(idx) = map_char_to_index(c) else { continue };
+                    let info = &glyphs[idx];
+                    
+                    let lx0 = info.bound_min.x * scale;
+                    let lx1 = info.bound_max.x * scale;
 
-                let (tli16, tri16) = if let Some(camera) = recenter {
-                    (vec_to_short_recenter(tl, &camera), vec_to_short_recenter(tr, &camera))
-                } else {
-                    (vec_to_short(&tl), vec_to_short(&tr))
-                };
+                    let ly1 = info.bound_max.y * scale;
+                    let tl = cursor_pos + (dir_x * lx0) + (dir_y * ly1);
+                    let tr = cursor_pos + (dir_x * lx1) + (dir_y * ly1);
+ 
+                    let (tli16, tri16) = if let Some(camera) = config.recenter {
+                        (vec_to_short_recenter(tl, &camera), vec_to_short_recenter(tr, &camera))
+                    } else {
+                        (vec_to_short(&tl), vec_to_short(&tr))
+                    };
 
-                on_generation(GlyphAttrs {
-                    top_left: tli16,
-                    top_right: tri16,
-                    character_idx: idx as u8,
-                    color: config.color,
-                    depth: config.depth,
-                });
+                    on_generation(GlyphAttrs {
+                        top_left: tli16,
+                        top_right: tri16,
+                        character_idx: idx as u8,
+                        color: *color,
+                        depth: config.depth,
+                    });
 
-                cursor_pos += dir_x * (info.advance * scale);
+                    cursor_pos += dir_x * (info.advance * scale);
+                }
+
+                if b_idx + 1 < end_block_idx {
+                    cursor_pos += dir_x * (space_advance + extra_space_per_gap);
+                }
             }
         }
     }
