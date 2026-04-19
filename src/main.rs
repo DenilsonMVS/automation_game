@@ -7,7 +7,7 @@ pub mod ui;
 
 use std::time;
 
-use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
+use glfw::{Action, Context, Glfw, GlfwReceiver, MouseButton, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
 use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::{RenderBox, screen_pos_to_world_pos}, simple_shape_renderer::SimpleShapeRenderer}}, ui::first_test};
@@ -99,7 +99,7 @@ fn main() {
 
     let mut fence: Option<Fence> = None;
 
-    let test = first_test();
+    let mut test = first_test();
 
     while !window.should_close() {
 
@@ -116,11 +116,13 @@ fn main() {
         let vp_matrix = proj_matrix * view_matrix;
         let i_proj_matrix = glm::inverse(&proj_matrix);
         let mouse_pos = get_mouse_pos(window, window_size, &i_proj_matrix);
+        let mut mouse_clicked = false;
 
         glfw.poll_events();
         let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
         for (_, event) in messages.iter() {
             match event {
+                WindowEvent::MouseButton(MouseButton::Left, Action::Press, _) => mouse_clicked = true,
                 WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
                 WindowEvent::Key(glfw::Key::Space, _, glfw::Action::Press, _) => halt = !halt,
                 WindowEvent::Key(glfw::Key::F11, _, glfw::Action::Press, _) => {
@@ -175,16 +177,25 @@ fn main() {
             scene.handle_input(&mut main_context);
             scene.game_logic(&mut main_context);
 
+            let mut ctx = ();
+            test.update(
+                &root_ui_render_box,
+                mouse_pos,
+                mouse_clicked,
+                main_context.window,
+                &mut ctx,
+            );
+
             if let Some(fence) = fence {
                 fence.wait();
             }
 
             scene.send(&mut main_context);
+            test.send(main_context.font, main_context.simple_shape_renderer, &root_ui_render_box);
 
             renderer.clear(&[ClearField::Color, ClearField::Depth]);
 
             scene.generate_output(&mut main_context);
-            test.render(&mut font, &mut simple_shape_renderer, &root_ui_render_box);
         }
 
         simple_shape_renderer.finish();

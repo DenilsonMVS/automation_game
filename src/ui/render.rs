@@ -1,4 +1,4 @@
-use crate::{graphics::renderer::{fonts::{Font, TextRenderConfig}, positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::{DirectionInfo, UiElement}};
+use crate::{graphics::renderer::{fonts::{Font, TextRenderConfig}, positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::{DirectionInfo, Div, UiElement}};
 use nalgebra_glm as glm;
 
 fn ui_coord_inversion(vec: glm::Vec2) -> glm::Vec2 {
@@ -6,7 +6,7 @@ fn ui_coord_inversion(vec: glm::Vec2) -> glm::Vec2 {
 }
  
 impl RenderBox {
-    fn sub_box(&self, position: glm::Vec2, size: glm::Vec2) -> Self {
+    pub(super) fn sub_div(&self, position: glm::Vec2, size: glm::Vec2) -> Self {
         let top_left = self.get_top_left();
         let offset_applied = top_left + ui_coord_inversion(position);
         let size_applied = offset_applied + ui_coord_inversion(size);
@@ -16,7 +16,7 @@ impl RenderBox {
         }
     }
 
-    fn cut(&self, cut: &DirectionInfo<f32>) -> Self {
+    pub(super) fn cut(&self, cut: &DirectionInfo<f32>) -> Self {
         Self {
             min: self.min + glm::vec2(cut.left, cut.bottom),
             max: self.max - glm::vec2(cut.right, cut.top),
@@ -27,88 +27,126 @@ impl RenderBox {
 struct RenderPassContext<'pass, 'data> {
     font: &'pass mut Font<'data>,
     simple_shape_renderer: &'pass mut SimpleShapeRenderer<'data>,
-    transparent_boxes: Vec<(RenderBox, glm::U8Vec4, u16)>,
+    transparent_dives: Vec<(RenderBox, glm::U8Vec4, u16)>,
 }
 
-impl UiElement {
-    pub fn render<'data>(
+impl<C> UiElement<C> {
+    pub fn send<'data>(
         &self,
         font: &mut Font<'data>,
         simple_shape_renderer: &mut SimpleShapeRenderer<'data>,
-        parent_render_box: &RenderBox,
+        parent_render_div: &RenderBox,
     ) {
         let mut context = RenderPassContext {
             font, simple_shape_renderer,
-            transparent_boxes: vec![],
+            transparent_dives: vec![],
         };
 
-        self.render_rec(&mut context, 100, parent_render_box);
+        self.send_rec(&mut context, 100, parent_render_div);
 
-        for (render_box, color, depth) in context.transparent_boxes {
+        for (render_div, color, depth) in context.transparent_dives {
             simple_shape_renderer.send_render_box(
-                &render_box,
+                &render_div,
                 color, depth, 1,
             );
         }
     }
 
-    fn decide_box_rendering(
+    fn test_transparent(
         context: &mut RenderPassContext,
-        render_box: &RenderBox,
+        render_div: &RenderBox,
         color: glm::U8Vec4,
         depth: u16,
     ) {
-        if color.w != 0 {
-            if color.w != 255 {
-                context.transparent_boxes.push(
-                    (*render_box, color, depth));
-            } else {
-                context.simple_shape_renderer.send_render_box(
-                    &render_box,
-                    color, depth, 1,
-                );
-            }
+        if color.w != 0 && color.w != 255 {
+            context.transparent_dives.push(
+                (*render_div, color, depth));
         }
     }
 
-    fn render_rec(&self, context: &mut RenderPassContext, parent_depth: u16, parent_render_box: &RenderBox) {
+    fn test_opaque(
+        context: &mut RenderPassContext,
+        render_div: &RenderBox,
+        color: glm::U8Vec4,
+        depth: u16,
+    ) {
+        if color.w == 255 {
+            context.simple_shape_renderer.send_render_box(
+                &render_div,
+                color, depth, 1,
+            );
+        }
+    }
+
+    fn has_border(border: &DirectionInfo<f32>) -> bool {
+        border.bottom > 0.0 || border.top > 0.0 ||
+        border.left > 0.0 || border.right > 0.0
+    }
+
+    fn send_div(
+        ui_div: &Div<C>,
+        context: &mut RenderPassContext,
+        parent_depth: u16,
+        parent_render_div: &RenderBox,
+        custom_border_color: Option<glm::U8Vec4>,
+        custom_background_color: Option<glm::U8Vec4>,
+    ) {
+        let border_color = custom_border_color.unwrap_or(ui_div.border_color);
+        let background_color = custom_background_color.unwrap_or(ui_div.background_color);
+
         let current_depth = parent_depth - 2;
         let border_depth = parent_depth - 1;
+
+        let outer_render_div = parent_render_div.sub_div(ui_div.position, ui_div.size);
+        let margin_render_div = outer_render_div.cut(&ui_div.margin);
+        let border_render_div = margin_render_div.cut(&ui_div.border);
+        let padding_render_div = border_render_div.cut(&ui_div.padding);
+        
+        if Self::has_border(&ui_div.border) {
+            Self::test_transparent(context, &margin_render_div, border_color, border_depth);
+        }
+        Self::test_transparent(context, &border_render_div, background_color, current_depth);
+
+        for child in ui_div.children.iter() {
+            child.send_rec(context, current_depth, &padding_render_div);
+        }
+
+        Self::test_opaque(context, &border_render_div, background_color, current_depth);
+        if Self::has_border(&ui_div.border) {
+            Self::test_opaque(context, &margin_render_div, border_color, border_depth);
+        }
+    }
+
+    fn send_rec(&self, context: &mut RenderPassContext, parent_depth: u16, parent_render_div: &RenderBox) {
         match self {
-            Self::Box(ui_box) => {
-                let outer_render_box = parent_render_box.sub_box(ui_box.position, ui_box.size);
-                let margin_render_box = outer_render_box.cut(&ui_box.margin);
-                let border_render_box = margin_render_box.cut(&ui_box.border);
-                let padding_render_box = border_render_box.cut(&ui_box.padding);
-                
-                for child in ui_box.children.iter() {
-                    child.render_rec(context, current_depth, &padding_render_box);
-                }
-
-                Self::decide_box_rendering(context, &border_render_box, ui_box.background_color, current_depth);
-                
-
-                if    
-                    ui_box.border.bottom > 0.0 || ui_box.border.top > 0.0 ||
-                    ui_box.border.left > 0.0 || ui_box.border.right > 0.0
-                {
-                    Self::decide_box_rendering(context, &margin_render_box, ui_box.border_color, border_depth);
-                }
-            },
+            Self::Div(ui_div) =>
+                Self::send_div(ui_div, context, parent_depth, parent_render_div, None, None),
             Self::Text(text) => {
-                let max_line_width = parent_render_box.max.x - parent_render_box.min.x;
+                let max_line_width = parent_render_div.max.x - parent_render_div.min.x;
                 context.font.add_text(
                     &TextRenderConfig::new(
                         &[(&text.content, text.color)],
-                        parent_render_box.get_top_left(),
+                        parent_render_div.get_top_left(),
                         text.line_height,
                     )
                     .set_align(text.align)
                     .set_mode(PositionMode::TopLeft)
-                    .set_depth(current_depth)
+                    .set_depth(parent_depth - 1)
                     .set_max_line_width(max_line_width),
                 );
             },
+            Self::Button(button) =>
+                if button.is_hovered {
+                    Self::send_div(
+                        &button.container,
+                        context, parent_depth,
+                        parent_render_div,
+                        Some(button.hover_border_color),
+                        Some(button.hover_color),
+                    )
+                } else {
+                    Self::send_div(&button.container, context, parent_depth, parent_render_div, None, None)
+                },
         }
     }
 }

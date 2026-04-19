@@ -4,11 +4,13 @@ use nalgebra_glm as glm;
 use crate::graphics::renderer::fonts::TextAlign;
 
 pub mod render;
+pub mod logic;
 
 #[derive(Debug)]
-pub enum UiElement {
-    Box(Box),
-    Text(Text),
+pub enum UiElement<C> {
+    Div(Box<Div<C>>),
+    Text(Box<Text>),
+    Button(Box<Button<C>>),
 }
 
 #[derive(Debug)]
@@ -88,13 +90,13 @@ impl<T: Default> Default for DirectionInfo<T> {
     }
 }
 
-pub trait WrapIntoUiElement {
-    fn wrap_ui(self) -> UiElement;
+pub trait WrapIntoUiElement<C> {
+    fn wrap_ui(self) -> UiElement<C>;
 }
 
 
 #[derive(Debug)]
-pub struct Box {
+pub struct Div<C> {
     margin: DirectionInfo<f32>,
     border: DirectionInfo<f32>,
     border_color: glm::U8Vec4,
@@ -102,10 +104,10 @@ pub struct Box {
     background_color: glm::U8Vec4,
     size: glm::Vec2,
     position: glm::Vec2,
-    children: Vec<UiElement>,
+    children: Vec<UiElement<C>>,
 }
 
-impl Box {
+impl<C> Div<C> {
     pub fn new(position: glm::Vec2, size: glm::Vec2, background_color: glm::U8Vec4,) -> Self {
         Self {
             margin: Default::default(),
@@ -135,18 +137,61 @@ impl Box {
         self
     }
 
-    pub fn with_children(mut self, children: Vec<UiElement>) -> Self {
+    pub fn with_children(mut self, children: Vec<UiElement<C>>) -> Self {
         self.children = children;
         self
     }
 }
 
-impl WrapIntoUiElement for Box {
-    fn wrap_ui(self) -> UiElement {
-        UiElement::Box(self)
+impl<C> WrapIntoUiElement<C> for Div<C> {
+    fn wrap_ui(self) -> UiElement<C> {
+        UiElement::Div(Box::new(self))
     }
 }
 
+#[derive(Debug)]
+pub struct Button<C> {
+    container: Div<C>,
+    hover_color: glm::U8Vec4,
+    hover_border_color: glm::U8Vec4,
+    on_click: fn(&mut C),
+    on_hover: Option<fn(&mut C)>,
+    is_hovered: bool,
+}
+
+impl<C> Button<C> {
+    pub fn new(container: Div<C>, on_click: fn(&mut C)) -> Self {
+        Self {
+            hover_color: container.background_color,
+            hover_border_color: container.border_color,
+            container: container,
+            on_click,
+            on_hover: None,
+            is_hovered: false,
+        }
+    }
+
+    pub fn with_hover_color(mut self, color: glm::U8Vec4) -> Self {
+        self.hover_color = color;
+        self
+    }
+
+    pub fn with_hover_border_color(mut self, color: glm::U8Vec4) -> Self {
+        self.hover_border_color = color;
+        self
+    }
+
+    pub fn with_on_hover(mut self, on_hover: fn(&mut C)) -> Self {
+        self.on_hover = Some(on_hover);
+        self
+    }
+}
+
+impl<C> WrapIntoUiElement<C> for Button<C> {
+    fn wrap_ui(self) -> UiElement<C> {
+        UiElement::Button(Box::new(self))
+    }
+}
 
 #[derive(Debug)]
 pub struct Text {
@@ -172,9 +217,9 @@ impl Text {
     }
 }
 
-impl WrapIntoUiElement for Text {
-    fn wrap_ui(self) -> UiElement {
-        UiElement::Text(self)
+impl<C> WrapIntoUiElement<C> for Text {
+    fn wrap_ui(self) -> UiElement<C> {
+        UiElement::Text(Box::new(self))
     }
 }
 
@@ -187,12 +232,13 @@ fn space_evenly(amount: i32, width: f32, total_width: f32) -> impl Iterator<Item
     (0..amount).map(move |i| (i as f32) * step)
 }
 
-pub fn first_test() -> UiElement {
+pub fn first_test() -> UiElement<()> {
     let width = 0.08;
-    let children: Vec<UiElement> =
+    let children: Vec<UiElement<()>> =
         space_evenly(10, width, 0.88)
-        .map(|position|
-            Box::new(
+        .enumerate()
+        .map(|(i, position)| {
+            let div = Div::new(
                 glm::vec2(position, 0.0),
                 glm::vec2(width, width),
                 glm::vec4(200, 100, 30, 150)
@@ -202,12 +248,20 @@ pub fn first_test() -> UiElement {
                 Text::new("A".to_owned(), 0.07, glm::vec4(20, 20, 40, 200))
                     .set_align(TextAlign::Center)
                     .wrap_ui(),
-            ])
-            .wrap_ui()
-        )
+            ]);
+
+            if i == 0 {
+                Button::new(div, |_| println!("Click!"))
+                    .with_hover_color(glm::vec4(220, 120, 50, 255))
+                    .with_on_hover(|_| println!("yay"))
+                    .wrap_ui()
+            } else {
+                div.wrap_ui()
+            }
+        })
         .collect();
 
-    let root = Box::new(
+    let root = Div::new(
         glm::vec2(0.5, 0.5),
         glm::vec2(1.0, 0.2),
         glm::vec4(20, 20, 40, 255)
