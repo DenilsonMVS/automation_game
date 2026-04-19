@@ -22,6 +22,13 @@ impl RenderBox {
             max: self.max - glm::vec2(cut.right, cut.top),
         }
     }
+
+    pub(super) fn apply_offset(&self, offset: glm::Vec2) -> Self {
+        Self {
+            min: self.min + offset,
+            max: self.max + offset,
+        }
+    }
 }
 
 struct RenderPassContext<'pass, 'data> {
@@ -145,8 +152,23 @@ impl<C> UiElement<C> {
                         Some(button.hover_color),
                     )
                 } else {
-                    Self::send_div(&button.container, context, parent_depth, parent_render_div, None, None)
+                    Self::send_div(
+                        &button.container,
+                        context, parent_depth,
+                        parent_render_div,
+                        None,
+                        None,
+                    )
                 },
+            Self::DragBox(drag_box) =>
+                Self::send_div(
+                    &drag_box.container,
+                    context,
+                    parent_depth,
+                    &parent_render_div.apply_offset(drag_box.offset),
+                    None,
+                    None,
+                ),
         }
     }
 }

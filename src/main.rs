@@ -96,6 +96,7 @@ fn main() {
     let mut previous_frame = time::Instant::now();
     let mut is_fullscreen = false;
     let mut halt = true;
+    let mut previous_mouse_position = glm::vec2(0.0, 0.0);
 
     let mut fence: Option<Fence> = None;
 
@@ -117,12 +118,18 @@ fn main() {
         let i_proj_matrix = glm::inverse(&proj_matrix);
         let mouse_pos = get_mouse_pos(window, window_size, &i_proj_matrix);
         let mut mouse_clicked = false;
+        let mut mouse_released = false;
 
         glfw.poll_events();
         let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
         for (_, event) in messages.iter() {
             match event {
-                WindowEvent::MouseButton(MouseButton::Left, Action::Press, _) => mouse_clicked = true,
+                WindowEvent::MouseButton(MouseButton::Left, Action::Press, _) => {
+                    mouse_clicked = true;
+                },
+                WindowEvent::MouseButton(MouseButton::Left, Action::Release, _) => {
+                    mouse_released = true;
+                },
                 WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
                 WindowEvent::Key(glfw::Key::Space, _, glfw::Action::Press, _) => halt = !halt,
                 WindowEvent::Key(glfw::Key::F11, _, glfw::Action::Press, _) => {
@@ -181,10 +188,13 @@ fn main() {
             test.update(
                 &root_ui_render_box,
                 mouse_pos,
+                previous_mouse_position,
                 mouse_clicked,
+                mouse_released,
                 main_context.window,
                 &mut ctx,
             );
+            previous_mouse_position = mouse_pos;
 
             if let Some(fence) = fence {
                 fence.wait();

@@ -11,6 +11,7 @@ pub enum UiElement<C> {
     Div(Box<Div<C>>),
     Text(Box<Text>),
     Button(Box<Button<C>>),
+    DragBox(Box<DragBox<C>>),
 }
 
 #[derive(Debug)]
@@ -194,6 +195,25 @@ impl<C> WrapIntoUiElement<C> for Button<C> {
 }
 
 #[derive(Debug)]
+pub struct DragBox<C> {
+    container: Div<C>,
+    offset: glm::Vec2,
+    selected: bool,
+}
+
+impl<C> DragBox<C> {
+    pub fn new(container: Div<C>) -> Self {
+        Self { container, offset: glm::vec2(0.0, 0.0), selected: false }
+    }
+}
+
+impl<C> WrapIntoUiElement<C> for DragBox<C> {
+    fn wrap_ui(self) -> UiElement<C> {
+        UiElement::DragBox(Box::new(self))
+    }
+}
+
+#[derive(Debug)]
 pub struct Text {
     content: String,
     line_height: f32,
@@ -261,7 +281,7 @@ pub fn first_test() -> UiElement<()> {
         })
         .collect();
 
-    let root = Div::new(
+    let root = DragBox::new(Div::new(
         glm::vec2(0.5, 0.5),
         glm::vec2(1.0, 0.2),
         glm::vec4(20, 20, 40, 255)
@@ -269,7 +289,7 @@ pub fn first_test() -> UiElement<()> {
     .with_margin(DirectionInfo::all(0.02))
     .with_border(DirectionInfo::all(0.02), glm::vec4(200, 200, 30, 255))
     .with_padding(DirectionInfo::all(0.02))
-    .with_children(children)
+    .with_children(children))
     .wrap_ui();
 
     root

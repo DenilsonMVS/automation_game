@@ -31,7 +31,7 @@ pub enum BaseDimensions {
     Height(f32),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct RenderBox {
     pub min: glm::Vec2,
     pub max: glm::Vec2,
