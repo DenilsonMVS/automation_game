@@ -403,12 +403,11 @@ impl<'a> Font<'a> {
         glyphs: &[GlyphInfo; WESTERN_CHAR_COUNT],
         blocks: &[(u32, u32, f32, bool)],
         max_width: f32,
-    ) -> (Vec<u32>, f32) {
+    ) -> Vec<u32> {
         let space_advance = glyphs[map_char_to_index(' ').unwrap()].advance;
 
         let mut line_starts = Vec::new();
         let mut current_line_width = 0.0;
-        let mut overall_max_width: f32 = 0.0;
         
         if !blocks.is_empty() {
             line_starts.push(0);
@@ -420,7 +419,6 @@ impl<'a> Font<'a> {
 
             if !is_first_in_line && current_line_width + added_width > max_width {
                 line_starts.push(idx as u32);
-                overall_max_width = overall_max_width.max(current_line_width);
                 current_line_width = block_width;
             } else {
                 current_line_width += added_width;
@@ -428,13 +426,11 @@ impl<'a> Font<'a> {
 
             if force_newline && idx + 1 < blocks.len() {
                 line_starts.push((idx + 1) as u32);
-                overall_max_width = overall_max_width.max(current_line_width);
                 current_line_width = 0.0; 
             }
         }
         
-        overall_max_width = overall_max_width.max(current_line_width);
-        (line_starts, overall_max_width)
+        line_starts
     }
 
     fn generate_vertex(
@@ -453,14 +449,14 @@ impl<'a> Font<'a> {
         let dir_y = glm::vec2(-sin, cos);
 
         let blocks = Self::separate_in_blocks(glyphs, config);
-        let (line_start_indices, max_width_actual) = Self::select_blocks_for_line(
+        let line_start_indices = Self::select_blocks_for_line(
             glyphs, 
             &blocks, 
             config.max_line_width / scale,
         );
 
         let total_height = line_start_indices.len() as f32 * config.line_height;
-        let full_size = glm::vec2(max_width_actual * scale, total_height);
+        let full_size = glm::vec2(config.max_line_width, total_height);
 
         let obox = OrientedBox::new_rotated(
             config.position,

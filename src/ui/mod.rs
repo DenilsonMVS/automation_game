@@ -1,7 +1,7 @@
 
 
 use nalgebra_glm as glm;
-use crate::graphics::renderer::positioning::PositionMode;
+use crate::graphics::renderer::fonts::TextAlign;
 
 pub mod render;
 
@@ -152,18 +152,29 @@ impl WrapIntoUiElement for Box {
 pub struct Text {
     content: String,
     line_height: f32,
-    position: glm::Vec2,
     color: glm::U8Vec4,
+    align: TextAlign,
 }
 
 impl Text {
-    pub fn new(content: String, line_height: f32, position: glm::Vec2, color: glm::U8Vec4) -> Self {
+    pub fn new(content: String, line_height: f32, color: glm::U8Vec4) -> Self {
         Self {
             content,
             line_height,
-            position,
             color,
+            align: TextAlign::Left,
         }
+    }
+
+    pub fn set_align(mut self, align: TextAlign) -> Self {
+        self.align = align;
+        self
+    }
+}
+
+impl WrapIntoUiElement for Text {
+    fn wrap_ui(self) -> UiElement {
+        UiElement::Text(self)
     }
 }
 
@@ -184,14 +195,20 @@ pub fn first_test() -> UiElement {
             Box::new(
                 glm::vec2(position, 0.0),
                 glm::vec2(width, width),
-                glm::vec4(200, 100, 30, 255)
+                glm::vec4(200, 100, 30, 150)
             )
+            .with_padding(DirectionInfo::all(0.005))
+            .with_children(vec![
+                Text::new("A".to_owned(), 0.07, glm::vec4(20, 20, 40, 200))
+                    .set_align(TextAlign::Center)
+                    .wrap_ui(),
+            ])
             .wrap_ui()
         )
         .collect();
 
     let root = Box::new(
-        glm::vec2(0.5, -0.5),
+        glm::vec2(0.5, 0.5),
         glm::vec2(1.0, 0.2),
         glm::vec4(20, 20, 40, 255)
     )
@@ -203,5 +220,3 @@ pub fn first_test() -> UiElement {
 
     root
 }
-
-

@@ -10,7 +10,7 @@ use std::time;
 use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use nalgebra_glm::{self as glm, Mat4};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::screen_pos_to_world_pos, simple_shape_renderer::SimpleShapeRenderer}}, ui::first_test};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::{RenderBox, screen_pos_to_world_pos}, simple_shape_renderer::SimpleShapeRenderer}}, ui::first_test};
 
 fn get_window_size(window: &PWindow) -> glm::Vec2 {
     let (x, y) = window.get_size();
@@ -35,14 +35,18 @@ fn get_mouse_pos(window: &PWindow, window_size: glm::Vec2, i_projection_matrix: 
     return screen_pos_to_world_pos(glm::vec2(x as f32, y as f32), window_size, i_projection_matrix);
 }
 
-fn get_root_ui_position(window_size: glm::Vec2) -> glm::Vec2 {
+fn get_root_ui_render_box(window_size: glm::Vec2) -> RenderBox {
     let ratio = window_size.x / window_size.y;
     if window_size.x > window_size.y {
-        let bot_left= glm::vec2(-ratio, -1.0);
-        bot_left + glm::vec2(0.0, 2.0)
+        RenderBox {
+            min: glm::vec2(-ratio, -1.0),
+            max: glm::vec2( ratio,  1.0),
+        }
     } else {
-        let top_left = glm::vec2(-1.0, ratio);
-        top_left
+        RenderBox {
+            min: glm::vec2(-1.0, -1.0 / ratio),
+            max: glm::vec2( 1.0,  1.0 / ratio),
+        }
     }
 }
 
@@ -106,7 +110,7 @@ fn main() {
         let window_size = get_window_size(window);
         unsafe { gl::Viewport(0, 0, window_size.x as i32, window_size.y as i32); }
 
-        let root_ui_position = get_root_ui_position(window_size);
+        let root_ui_render_box = get_root_ui_render_box(window_size);
         let proj_matrix = get_projection_matrix(window_size);
         let view_matrix = camera.get_view_matrix();
         let vp_matrix = proj_matrix * view_matrix;
@@ -180,7 +184,7 @@ fn main() {
             renderer.clear(&[ClearField::Color, ClearField::Depth]);
 
             scene.generate_output(&mut main_context);
-            test.render(&mut simple_shape_renderer, 100, root_ui_position);
+            test.render(&mut font, &mut simple_shape_renderer, &root_ui_render_box);
         }
 
         simple_shape_renderer.finish();
