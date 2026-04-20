@@ -1,6 +1,5 @@
 use crate::{game::{logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
 
-
 pub struct MainScene<'a> {
     logic: GameState,
     render: RenderState<'a>,
@@ -16,10 +15,6 @@ impl<'a> MainScene<'a> {
 
 impl<'a> Scene for MainScene<'a> {    
     fn game_logic(&mut self, context: &mut crate::MainContext) {
-        if context.halt {
-            return;
-        }
-
         self.logic.update(context);
     }
 
@@ -28,10 +23,6 @@ impl<'a> Scene for MainScene<'a> {
     }
 
     fn generate_output(&mut self, context: &mut crate::MainContext) {
-        self.render.draw(&context.vp_matrix);
-    }
-
-    fn handle_input(&mut self, context: &mut crate::MainContext) {
-        
+        self.render.draw(&context.camera.get_vp_matrix(&context.input_state.get_projection_matrix()));
     }
 }

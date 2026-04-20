@@ -121,15 +121,16 @@ impl GameState {
 
     pub fn update(&mut self, context: &mut MainContext) {
         let mut is_instruction_tick = false;
+        let delta = context.input_state.get_delta();
 
-        self.last_instruction_time_passed += context.delta;
+        self.last_instruction_time_passed += delta;
         if self.last_instruction_time_passed >= INSTRUCTION_PERIOD {
             is_instruction_tick = true;
             self.last_instruction_time_passed -= INSTRUCTION_PERIOD;
         }
 
         for robot in self.robots.iter_mut() {
-            robot.update(context.delta, is_instruction_tick, &mut self.world);
+            robot.update(delta, is_instruction_tick, &mut self.world);
         }
     }
 

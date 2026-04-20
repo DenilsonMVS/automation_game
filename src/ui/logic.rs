@@ -1,5 +1,4 @@
 use crate::{graphics::renderer::positioning::RenderBox, ui::{Button, Div, DragBox, UiElement}};
-use glfw::Window;
 use nalgebra_glm as glm;
 
 #[derive(Debug, Default)]

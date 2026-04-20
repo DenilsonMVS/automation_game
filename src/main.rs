@@ -1,224 +1,186 @@
-
 pub mod graphics;
-pub mod sounds;
 pub mod game;
+// pub mod ui;
 pub mod open_simplex;
-pub mod ui;
 
-use std::time;
+use std::num::{NonZero, NonZeroU32};
 
-use glfw::{Action, Context, Glfw, GlfwReceiver, MouseButton, PWindow, WindowEvent};
-use nalgebra_glm::{self as glm, Mat4};
+use enum_map::EnumMap;
+use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
+use winit::{event::{ElementState, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey, SmolStr}, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{camera::Camera, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::{RenderBox, screen_pos_to_world_pos}, simple_shape_renderer::SimpleShapeRenderer}}, ui::first_test};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, camera::Camera, input_state::InputState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, positioning::RenderBox, simple_shape_renderer::SimpleShapeRenderer}}};
+use nalgebra_glm as glm;
 
-fn get_window_size(window: &PWindow) -> glm::Vec2 {
-    let (x, y) = window.get_size();
-    return glm::vec2(x as f32, y as f32);
+pub struct MainContext<'a, 'b> {
+    input_state: &'a InputState,
+    camera: &'a Camera,
+    simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
+    font: &'a mut Font<'b>,
 }
 
-fn get_projection_matrix(window_size: glm::Vec2) -> glm::Mat4 {
-    let ratio = window_size.x / window_size.y;
-
-    let projection = if window_size.x > window_size.y {
-        glm::ortho(-ratio, ratio, -1.0, 1.0, -1.0, 1.0)
-    } else {
-        let inv_ratio = window_size.y / window_size.x;
-        glm::ortho(-1.0, 1.0, -inv_ratio, inv_ratio, -1.0, 1.0)
-    };
-
-    return projection;
+struct State<'a> {
+    window: Window,
+    gl_context: PossiblyCurrentContext,
+    gl_surface: Surface<WindowSurface>,
+    camera: Camera,
+    scene: MainScene<'a>,
+    renderer: &'a Renderer,
+    fence: Option<Fence>,
+    input_state: InputState,
+    fonts: Fonts<'a>,
+    font: Font<'a>,
+    simple_shape_renderer: SimpleShapeRenderer<'a>,
 }
 
-fn get_mouse_pos(window: &PWindow, window_size: glm::Vec2, i_projection_matrix: &glm::Mat4) -> glm::Vec2 {
-    let (x, y) = window.get_cursor_pos();
-    return screen_pos_to_world_pos(glm::vec2(x as f32, y as f32), window_size, i_projection_matrix);
-}
+impl<'a> ApplicationState<'a> for State<'a> {
+    fn new(
+        window: Window,
+        gl_context: PossiblyCurrentContext,
+        gl_surface: Surface<WindowSurface>,
+        renderer: &'a Renderer,
+    ) -> Self {
+        renderer.enable(Capability::Multisample);
+        renderer.enable(Capability::Blend);
+        renderer.enable(Capability::DepthTest);
+        renderer.depth_func(DepthFunc::Less);
+        renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
-fn get_root_ui_render_box(window_size: glm::Vec2) -> RenderBox {
-    let ratio = window_size.x / window_size.y;
-    if window_size.x > window_size.y {
-        RenderBox {
-            min: glm::vec2(-ratio, -1.0),
-            max: glm::vec2( ratio,  1.0),
+        renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
+
+        let camera = Camera::new();
+        let scene = MainScene::new(&renderer);
+
+        let fonts = Fonts::new(renderer);
+        let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
+        let simple_shape_renderer = SimpleShapeRenderer::new(renderer);
+
+        Self {
+            window,
+            gl_context,
+            gl_surface,
+            camera,
+            renderer,
+            scene,
+            fence: None,
+            input_state: InputState::new(Self::get_window_size()),
+            fonts, font,
+            simple_shape_renderer,
         }
-    } else {
-        RenderBox {
-            min: glm::vec2(-1.0, -1.0 / ratio),
-            max: glm::vec2( 1.0,  1.0 / ratio),
+    }
+
+    fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::RedrawRequested => self.redraw(),
+            WindowEvent::Resized(new_size) => {
+                self.input_state.update_window_size(glm::vec2(
+                    new_size.width as f32,
+                    new_size.height as f32,
+                ));
+                if let (Some(w), Some(h)) = (NonZeroU32::new(new_size.width), NonZeroU32::new(new_size.height)) {
+                    self.gl_surface.resize(&self.gl_context, w, h);
+                }
+                unsafe { gl::Viewport(0, 0, new_size.width as i32, new_size.height as i32); }
+            },
+            WindowEvent::CursorMoved { position, .. } =>
+                self.input_state.update_mouse_position(glm::vec2(
+                    position.x as f32,
+                    position.y as f32,
+                )),
+            WindowEvent::MouseWheel { delta, .. } =>
+                match delta {
+                    MouseScrollDelta::LineDelta(_, y) => self.camera.handle_scroll(y),
+                    _ => {},
+                },
+            WindowEvent::KeyboardInput { event, .. } => {
+                if event.repeat {
+                    return;
+                }
+
+                if event.state == ElementState::Released {
+                    match event.logical_key {
+                        Key::Named(winit::keyboard::NamedKey::F11) => {
+                            if self.window.fullscreen().is_some() {
+                                self.window.set_fullscreen(None);
+                            } else {
+                                self.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                            }
+                        },
+                        _ => {},
+                    }
+                }
+
+                match event.physical_key {
+                    PhysicalKey::Code(key @ (KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD)) =>
+                        self.input_state.update_key(key, event.state),
+                    _ => {},
+                }
+            },
+            _ => (),
         }
+    }
+
+    fn get_window_title() -> &'static str {
+        "Automation game"
+    }
+
+    fn get_window_size() -> glm::Vec2 {
+        glm::vec2(800.0, 600.0)
     }
 }
 
+impl<'a> State<'a> {
+    fn redraw(&mut self) {
+        self.camera.update_movement(&self.input_state);
 
-#[allow(dead_code)]
-pub struct MainContext<'a, 'b> {
-    // 'b current frame lifetime
-    pub glfw: &'b mut Glfw,
-    pub window: &'b mut PWindow,
-    pub events: &'b mut GlfwReceiver<(f64, WindowEvent)>,
-
-    // 'a long lifetime
-    pub renderer: &'a Renderer,
-    pub simple_shape_renderer: &'b mut SimpleShapeRenderer<'a>,
-    pub font: &'b mut Font<'a>,
-    pub camera: &'b Camera,
-    
-    pub proj_matrix: Mat4,
-    pub i_proj_matrix: Mat4,
-    pub vp_matrix: Mat4,
-    pub window_size: glm::Vec2,
-    pub mouse_pos: glm::Vec2,
-    pub delta: f32,
-    pub halt: bool,
-}
-
-fn main() {
-
-    let mut setup = graphics::Graphics::new(glm::U32Vec2::new(800, 600), "Automation game").unwrap();
-    let (glfw, window, events, renderer) = setup.get();
-
-    renderer.enable(Capability::Multisample);
-    renderer.enable(Capability::Blend);
-    renderer.enable(Capability::DepthTest);
-    renderer.depth_func(DepthFunc::Less);
-    renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
-
-    renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 0.0));
-
-    let fonts = Fonts::new(renderer);
-    let mut font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
-    let mut simple_shape_renderer: SimpleShapeRenderer<'_> = SimpleShapeRenderer::new(renderer);
-    
-    let mut camera = Camera::new();
-
-    let mut scene = MainScene::new(renderer);
-    let mut previous_frame = time::Instant::now();
-    let mut is_fullscreen = false;
-    let mut halt = true;
-    let mut previous_mouse_position = glm::vec2(0.0, 0.0);
-
-    let mut fence: Option<Fence> = None;
-
-    let mut test = first_test();
-
-    while !window.should_close() {
-
-        let now = time::Instant::now();
-        let delta = now.duration_since(previous_frame).as_secs_f32() * 10.0;
-        previous_frame = now;
-
-        let window_size = get_window_size(window);
-        unsafe { gl::Viewport(0, 0, window_size.x as i32, window_size.y as i32); }
-
-        let root_ui_render_box = get_root_ui_render_box(window_size);
-        let proj_matrix = get_projection_matrix(window_size);
-        let view_matrix = camera.get_view_matrix();
-        let vp_matrix = proj_matrix * view_matrix;
-        let i_proj_matrix = glm::inverse(&proj_matrix);
-        let mouse_pos = get_mouse_pos(window, window_size, &i_proj_matrix);
-        let mut mouse_clicked = false;
-        let mut mouse_released = false;
-
-        glfw.poll_events();
-        let messages: Vec<(f64, WindowEvent)> = glfw::flush_messages(events).collect();
-        for (_, event) in messages.iter() {
-            match event {
-                WindowEvent::MouseButton(MouseButton::Left, Action::Press, _) => {
-                    mouse_clicked = true;
-                },
-                WindowEvent::MouseButton(MouseButton::Left, Action::Release, _) => {
-                    mouse_released = true;
-                },
-                WindowEvent::Scroll(_, scroll) => camera.handle_scroll(*scroll as f32),
-                WindowEvent::Key(glfw::Key::Space, _, glfw::Action::Press, _) => halt = !halt,
-                WindowEvent::Key(glfw::Key::F11, _, glfw::Action::Press, _) => {
-                    if is_fullscreen {
-                        window.set_monitor(
-                            glfw::WindowMode::Windowed,
-                            100, 100,
-                            800, 600,
-                            None,
-                        );
-                    } else {
-                        glfw.with_primary_monitor(|_, monitor| {
-                            if let Some(m) = monitor {
-                                let video_mode = m.get_video_mode().unwrap();
-                                window.set_monitor(
-                                    glfw::WindowMode::FullScreen(m),
-                                    0, 0,
-                                    video_mode.width, 
-                                    video_mode.height,
-                                    Some(video_mode.refresh_rate)
-                                );
-                            }
-                        });
-                    }
-
-                    is_fullscreen = !is_fullscreen;
-                },
-                _ => {}
-            }
-        }
-        camera.handle_keyboard_input(window, delta);
-
-
-        simple_shape_renderer.reset();
-        font.reset();
+        self.simple_shape_renderer.reset();
+        self.font.reset();
 
         {
             let mut main_context = MainContext {
-                glfw, window, events, renderer,
-                proj_matrix,
-                i_proj_matrix,
-                vp_matrix,
-                window_size,
-                mouse_pos,
-                simple_shape_renderer: &mut simple_shape_renderer,
-                font: &mut font,
-                delta,
-                halt,
-                camera: &camera
+                input_state: &self.input_state,
+                camera: &self.camera,
+                simple_shape_renderer: &mut self.simple_shape_renderer,
+                font: &mut self.font,
             };
 
-            scene.handle_input(&mut main_context);
-            scene.game_logic(&mut main_context);
+            self.scene.game_logic(&mut main_context);
 
-            let mut ctx = ();
-            test.update(
-                &root_ui_render_box,
-                mouse_pos,
-                previous_mouse_position,
-                mouse_clicked,
-                mouse_released,
-                main_context.window,
-                &mut ctx,
-            );
-            previous_mouse_position = mouse_pos;
-
-            if let Some(fence) = fence {
+            if let Some(fence) = &self.fence {
                 fence.wait();
             }
 
-            scene.send(&mut main_context);
-            test.send(main_context.font, main_context.simple_shape_renderer, &root_ui_render_box);
-
-            renderer.clear(&[ClearField::Color, ClearField::Depth]);
-
-            scene.generate_output(&mut main_context);
+            self.scene.send(&mut main_context);
+            
+            self.renderer.clear(&[ClearField::Color, ClearField::Depth]);
+            
+            self.scene.generate_output(&mut main_context);
         }
+        
+        self.simple_shape_renderer.finish();
+        self.font.finish();
 
-        simple_shape_renderer.finish();
-        font.finish();
+        let proj_matrix = self.input_state.get_projection_matrix();
+        let vp_matrix = self.camera.get_vp_matrix(&proj_matrix);
+        self.simple_shape_renderer.draw(self.renderer, &proj_matrix, &vp_matrix);
 
-        simple_shape_renderer.draw(renderer, &proj_matrix, &vp_matrix);
+        self.renderer.depth_mask(false);
+        self.fonts.draw(&mut self.font, &proj_matrix);
+        self.renderer.depth_mask(true);
 
-        renderer.depth_mask(false);
-        fonts.draw(&mut font, &proj_matrix);
-        renderer.depth_mask(true);
+        self.fence = Some(self.renderer.new_fence());
 
-        fence = Some(renderer.new_fence());
 
-        window.swap_buffers();
+        self.gl_surface.swap_buffers(&self.gl_context).unwrap();
+        self.window.request_redraw();
+
+        self.input_state.next_frame();
     }
+}
+
+fn main() {
+    let event_loop = EventLoop::new().unwrap();
+    let mut app = App::<State>::new();
+    event_loop.run_app(&mut app).unwrap();
 }

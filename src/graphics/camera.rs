@@ -1,6 +1,7 @@
 
-use glfw::{Action, Key, PWindow};
 use nalgebra_glm as glm;
+
+use crate::graphics::input_state::{Actions, InputState};
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -26,19 +27,24 @@ impl Camera {
         return view;
     }
 
-    pub fn handle_keyboard_input(&mut self, window: &PWindow, delta: f32) {
-        let camera_keys = [
-            (Key::W, glm::vec2( 0.0f32,  1.0f32)),
-            (Key::A, glm::vec2(-1.0f32,  0.0f32)),
-            (Key::S, glm::vec2( 0.0f32, -1.0f32)),
-            (Key::D, glm::vec2( 1.0f32,  0.0f32)),
+    pub fn get_vp_matrix(&self, projection_matrix: &glm::Mat4) -> glm::Mat4 {
+        projection_matrix * self.get_view_matrix()
+    }
+
+    pub fn update_movement(&mut self, input_state: &InputState) {
+        let actions  = [
+            (Actions::MoveBottom, glm::vec2( 0.0, -1.0)),
+            (Actions::MoveLeft,   glm::vec2(-1.0,  0.0)),
+            (Actions::MoveRight,  glm::vec2( 1.0,  0.0)),
+            (Actions::MoveUp,     glm::vec2( 0.0,  1.0)),
         ];
 
-        for (key, change) in camera_keys {
-            if window.get_key(key) == Action::Press {
-                self.position += change / self.zoom * delta * CAMERA_MOVEMENT_SENSITIVITY;
-            }
-        }
+        self.position += actions
+            .iter()
+            .fold(glm::vec2(0.0, 0.0),
+                |prev, (action, value)| 
+                    if input_state.get_actions()[*action] { prev + value } else { prev }
+            ) / self.zoom * input_state.get_delta() * CAMERA_MOVEMENT_SENSITIVITY;
     }
 
     pub fn handle_scroll(&mut self, scroll: f32) {

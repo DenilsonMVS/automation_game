@@ -200,7 +200,7 @@ impl Drop for Fence {
 pub struct Renderer;
 
 impl Renderer {
-    pub(super) fn new() -> Self {
+    pub(super) const fn new() -> Self {
         Self
     }
 
