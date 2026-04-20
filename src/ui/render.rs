@@ -1,7 +1,7 @@
 use crate::{graphics::renderer::{fonts::{Font, TextRenderConfig}, positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::{DirectionInfo, Div, UiElement}};
 use nalgebra_glm as glm;
 
-fn ui_coord_inversion(vec: glm::Vec2) -> glm::Vec2 {
+pub(super) fn ui_coord_inversion(vec: glm::Vec2) -> glm::Vec2 {
     glm::vec2(vec.x, -vec.y)
 }
  

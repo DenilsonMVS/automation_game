@@ -199,11 +199,17 @@ pub struct DragBox<C> {
     container: Div<C>,
     offset: glm::Vec2,
     selected: bool,
+    on_release: Option<fn (&mut C, glm::Vec2)>,
 }
 
 impl<C> DragBox<C> {
     pub fn new(container: Div<C>) -> Self {
-        Self { container, offset: glm::vec2(0.0, 0.0), selected: false }
+        Self { container, offset: glm::vec2(0.0, 0.0), selected: false, on_release: None }
+    }
+
+    pub fn with_on_release(mut self, on_release: fn (&mut C, glm::Vec2)) -> Self {
+        self.on_release = Some(on_release);
+        self
     }
 }
 
@@ -290,6 +296,7 @@ pub fn first_test() -> UiElement<()> {
     .with_border(DirectionInfo::all(0.02), glm::vec4(200, 200, 30, 255))
     .with_padding(DirectionInfo::all(0.02))
     .with_children(children))
+    .with_on_release(|_, pos| println!("{:?}", pos))
     .wrap_ui();
 
     root

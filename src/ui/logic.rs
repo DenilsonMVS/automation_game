@@ -1,4 +1,4 @@
-use crate::{graphics::{input_state::InputState, renderer::positioning::RenderBox}, ui::{Button, Div, DragBox, UiElement}};
+use crate::{graphics::{input_state::InputState, renderer::positioning::RenderBox}, ui::{Button, Div, DragBox, UiElement, render::ui_coord_inversion}};
 use nalgebra_glm as glm;
 use winit::window::{CursorIcon, Window};
 
@@ -102,7 +102,12 @@ impl<C> UiElement<C> {
                 rtn.grabbed_descendant = true;
             }
         } else if context.input_state.mouse_up() {
-            drag_box.selected = false;
+            if drag_box.selected {
+                if let Some(on_release) = drag_box.on_release {
+                    on_release(&mut context.context, ui_coord_inversion(drag_box.offset));
+                }
+                drag_box.selected = false;
+            }
         } else if drag_box.selected {
             let diff = context.input_state.get_mouse_position() - context.input_state.get_previous_mouse_position();
             drag_box.offset += diff;
