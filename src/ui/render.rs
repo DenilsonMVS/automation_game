@@ -34,7 +34,7 @@ impl RenderBox {
 struct RenderPassContext<'pass, 'data> {
     font: &'pass mut Font<'data>,
     simple_shape_renderer: &'pass mut SimpleShapeRenderer<'data>,
-    transparent_dives: Vec<(RenderBox, glm::U8Vec4, u16)>,
+    transparent_divs: Vec<(RenderBox, glm::U8Vec4, u16)>,
 }
 
 impl<C> UiElement<C> {
@@ -46,12 +46,12 @@ impl<C> UiElement<C> {
     ) {
         let mut context = RenderPassContext {
             font, simple_shape_renderer,
-            transparent_dives: vec![],
+            transparent_divs: vec![],
         };
 
         self.send_rec(&mut context, 100, parent_render_div);
 
-        for (render_div, color, depth) in context.transparent_dives {
+        for (render_div, color, depth) in context.transparent_divs {
             simple_shape_renderer.send_render_box(
                 &render_div,
                 color, depth, 1,
@@ -66,7 +66,7 @@ impl<C> UiElement<C> {
         depth: u16,
     ) {
         if color.w != 0 && color.w != 255 {
-            context.transparent_dives.push(
+            context.transparent_divs.push(
                 (*render_div, color, depth));
         }
     }

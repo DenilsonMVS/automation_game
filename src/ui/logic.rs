@@ -1,19 +1,18 @@
-use crate::{graphics::renderer::positioning::RenderBox, ui::{Button, Div, DragBox, UiElement}};
+use crate::{graphics::{input_state::InputState, renderer::positioning::RenderBox}, ui::{Button, Div, DragBox, UiElement}};
 use nalgebra_glm as glm;
+use winit::window::{CursorIcon, Window};
 
 #[derive(Debug, Default)]
 struct ReturnData {
+    hovered_grab_box: bool,
     grabbed_descendant: bool,
     child_render_box: RenderBox,
     hovered_button: bool,
 }
 
-struct UpdatePassContext<'a, C> {
-    mouse_position: glm::Vec2,
-    mouse_clicked: bool,
-    mouse_released: bool,
+struct UiPassContext<'a, C> {
+    input_state: &'a InputState,
     context: &'a mut C,
-    previous_mouse_position: glm::Vec2,
 }
 
 impl RenderBox {
@@ -26,34 +25,27 @@ impl RenderBox {
 impl<C> UiElement<C> {
     pub fn update(
         &mut self,
-        parent_render_div: &RenderBox,
-        mouse_position: glm::Vec2,
-        previous_mouse_position: glm::Vec2,
-        mouse_clicked: bool,
-        mouse_released: bool,
-        window: &mut Window,
+        input_state: &InputState,
         context: &mut C,
+        window: &Window,
     ) {
-        let mut context = UpdatePassContext {
-            mouse_position,
-            mouse_clicked,
-            mouse_released,
-            context,
-            previous_mouse_position,
-        };
-        let rtn = self.update_rec(parent_render_div, &mut context);
+        let mut pass_context = UiPassContext { input_state, context };
+        let rtn = self.update_rec(&input_state.get_root_ui_render_box(), &mut pass_context);
         
-        // let cursor_hand = glfw::Cursor::standard(glfw::StandardCursor::Hand);
-        // let cursor_arrow = glfw::Cursor::standard(glfw::StandardCursor::Arrow);
+        let icon = if rtn.hovered_button {
+            CursorIcon::Pointer
+        } else if rtn.grabbed_descendant {
+            CursorIcon::Grabbing
+        } else if rtn.hovered_grab_box {
+            CursorIcon::Grab
+        } else {
+            CursorIcon::Default
+        };
 
-        // window.set_cursor(Some(if rtn.hovered_button {
-        //     cursor_hand
-        // } else {
-        //     cursor_arrow
-        // }));
+        window.set_cursor(icon);
     }
 
-    fn update_div(ui_div: &mut Div<C>, parent_render_div: &RenderBox, context: &mut UpdatePassContext<C>) -> ReturnData {
+    fn update_div(ui_div: &mut Div<C>, parent_render_div: &RenderBox, context: &mut UiPassContext<C>) -> ReturnData {
         let outer_render_div = parent_render_div.sub_div(ui_div.position, ui_div.size);
         let margin_render_div = outer_render_div.cut(&ui_div.margin);
         let border_render_div = margin_render_div.cut(&ui_div.border);
@@ -62,26 +54,28 @@ impl<C> UiElement<C> {
         let mut rtn = ReturnData {
             grabbed_descendant: false,
             hovered_button: false,
+            hovered_grab_box: false,
             child_render_box: margin_render_div,
         };
         for child in ui_div.children.iter_mut() {
             let child_rtn = child.update_rec(&padding_render_div, context);
             rtn.grabbed_descendant |= child_rtn.grabbed_descendant;
             rtn.hovered_button |= child_rtn.hovered_button;
+            rtn.hovered_grab_box |= child_rtn.hovered_grab_box;
         }
 
         rtn
     }
 
-    fn update_button(button: &mut Button<C>, parent_render_div: &RenderBox, context: &mut UpdatePassContext<C>) -> ReturnData {
+    fn update_button(button: &mut Button<C>, parent_render_div: &RenderBox, context: &mut UiPassContext<C>) -> ReturnData {
         let div = &mut button.container;
         let mut rtn = Self::update_div(div, parent_render_div, context);
         
-        button.is_hovered = rtn.child_render_box.is_point_inside(context.mouse_position);
+        button.is_hovered = rtn.child_render_box.is_point_inside(context.input_state.get_mouse_position());
         rtn.hovered_button |= button.is_hovered;
 
         if button.is_hovered {
-            if context.mouse_clicked {
+            if context.input_state.mouse_down() {
                 (button.on_click)(&mut context.context);
             }
             if let Some(on_hover) = button.on_hover {
@@ -92,7 +86,7 @@ impl<C> UiElement<C> {
         rtn
     }
 
-    fn update_drag_box(drag_box: &mut DragBox<C>, parent_render_div: &RenderBox, context: &mut UpdatePassContext<C>) -> ReturnData {
+    fn update_drag_box(drag_box: &mut DragBox<C>, parent_render_div: &RenderBox, context: &mut UiPassContext<C>) -> ReturnData {
         let div = &mut drag_box.container;
         let mut rtn = Self::update_div(
             div,
@@ -100,22 +94,25 @@ impl<C> UiElement<C> {
             context,
         );
 
-        if context.mouse_clicked {
-            if !rtn.grabbed_descendant {
+        rtn.hovered_grab_box |= rtn.child_render_box.is_point_inside(context.input_state.get_mouse_position());
+
+        if context.input_state.mouse_down() {
+            if !rtn.grabbed_descendant && !rtn.hovered_button {
                 drag_box.selected = true;
                 rtn.grabbed_descendant = true;
             }
-        } else if context.mouse_released {
+        } else if context.input_state.mouse_up() {
             drag_box.selected = false;
         } else if drag_box.selected {
-            let diff = context.mouse_position - context.previous_mouse_position;
+            let diff = context.input_state.get_mouse_position() - context.input_state.get_previous_mouse_position();
             drag_box.offset += diff;
+            rtn.grabbed_descendant = true;
         }
 
         rtn
     }
 
-    fn update_rec(&mut self, parent_render_div: &RenderBox, context: &mut UpdatePassContext<C>) -> ReturnData {
+    fn update_rec(&mut self, parent_render_div: &RenderBox, context: &mut UiPassContext<C>) -> ReturnData {
         match self {
             Self::Div(ui_div) =>
                 Self::update_div(ui_div, parent_render_div, context),
@@ -126,6 +123,7 @@ impl<C> UiElement<C> {
             _ => ReturnData {
                 grabbed_descendant: false,
                 hovered_button: false,
+                hovered_grab_box: false,
                 child_render_box: Default::default(),
             },
         }

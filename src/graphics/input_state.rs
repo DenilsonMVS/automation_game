@@ -2,7 +2,7 @@
 use std::time::Instant;
 use enum_map::{Enum, EnumMap};
 use nalgebra_glm as glm;
-use winit::{event::ElementState, keyboard::{KeyCode, PhysicalKey}};
+use winit::{event::ElementState, keyboard::KeyCode};
 use crate::graphics::renderer::positioning::RenderBox;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
@@ -19,6 +19,7 @@ struct UnitState {
     mouse_screen_position: glm::Vec2,
     current_time: Instant,
     actions: EnumMap<Actions, bool>,
+    mouse_is_pressed: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -39,14 +40,36 @@ impl InputState {
                 mouse_screen_position: glm::vec2(0.0, 0.0),
                 current_time: now,
                 actions,
+                mouse_is_pressed: false,
             },
             previous_frame: UnitState {
                 window_size,
                 mouse_screen_position: glm::vec2(0.0, 0.0),
                 current_time: now,
                 actions,
+                mouse_is_pressed: false,
             },
         }
+    }
+
+    pub fn on_mouse_down(&mut self) {
+        self.current_frame.mouse_is_pressed = true;
+    }
+
+    pub fn on_mouse_up(&mut self) {
+        self.current_frame.mouse_is_pressed = false;
+    }
+
+    pub fn is_mouse_pressed(&self) -> bool {
+        self.current_frame.mouse_is_pressed
+    }
+
+    pub fn mouse_down(&self) -> bool {
+        !self.previous_frame.mouse_is_pressed && self.current_frame.mouse_is_pressed
+    }
+
+    pub fn mouse_up(&self) -> bool {
+        self.previous_frame.mouse_is_pressed && !self.current_frame.mouse_is_pressed
     }
 
     pub fn get_actions(&self) -> &EnumMap<Actions, bool> {
@@ -94,17 +117,39 @@ impl InputState {
 
     pub fn get_root_ui_render_box(&self) -> RenderBox {
         let window_size = self.current_frame.window_size;
-        let ratio = window_size.x / window_size.y;
         if window_size.x > window_size.y {
+            let ratio = window_size.x / window_size.y;
             RenderBox {
                 min: glm::vec2(-ratio, -1.0),
                 max: glm::vec2( ratio,  1.0),
             }
         } else {
+            let ratio = window_size.y / window_size.x;
             RenderBox {
-                min: glm::vec2(-1.0, -1.0 / ratio),
-                max: glm::vec2( 1.0,  1.0 / ratio),
+                min: glm::vec2(-1.0, -ratio),
+                max: glm::vec2( 1.0,  ratio),
             }
         }
+    }
+
+    fn screen_to_space_position(&self, position: glm::Vec2) -> glm::Vec2 {
+        let window_size = self.current_frame.window_size;
+        let normalized = position.component_div(&window_size);
+        let inverted = glm::vec2(normalized.x * 2.0 - 1.0, 1.0 - 2.0 * normalized.y);
+        if window_size.x > window_size.y {
+            let ratio = window_size.x / window_size.y;
+            glm::vec2(inverted.x * ratio, inverted.y)
+        } else {
+            let ratio = window_size.y / window_size.x;
+            glm::vec2(inverted.x, inverted.y * ratio)
+        }
+    }
+
+    pub fn get_mouse_position(&self) -> glm::Vec2 {
+        self.screen_to_space_position(self.current_frame.mouse_screen_position)
+    }
+
+    pub fn get_previous_mouse_position(&self) -> glm::Vec2 {
+        self.screen_to_space_position(self.previous_frame.mouse_screen_position)
     }
 }

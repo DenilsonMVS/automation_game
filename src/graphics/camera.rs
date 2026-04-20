@@ -48,7 +48,7 @@ impl Camera {
     }
 
     pub fn handle_scroll(&mut self, scroll: f32) {
-        self.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * scroll)
+        self.zoom *= f32::exp(-CAMERA_ZOOM_SENSITIVITY * scroll)
     }
 
     pub fn get_position(&self) -> glm::Vec2 {
@@ -57,5 +57,9 @@ impl Camera {
 
     pub fn get_zoom(&self) -> f32 {
         self.zoom
+    }
+
+    pub fn get_mouse_world_pos(&self, mouse_position: glm::Vec2) -> glm::Vec2 {
+        mouse_position / self.zoom + self.position
     }
 }
