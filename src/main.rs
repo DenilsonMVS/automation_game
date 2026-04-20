@@ -1,6 +1,5 @@
 pub mod graphics;
 pub mod game;
-pub mod ui;
 pub mod open_simplex;
 
 use std::num::{NonZeroU32};
@@ -8,7 +7,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey}, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, camera::Camera, input_state::InputState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{UiElement, first_test}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, camera::Camera, input_state::InputState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -30,7 +29,6 @@ struct State<'a> {
     fonts: Fonts<'a>,
     font: Font<'a>,
     simple_shape_renderer: SimpleShapeRenderer<'a>,
-    test: UiElement<()>,
 }
 
 impl<'a> ApplicationState<'a> for State<'a> {
@@ -66,7 +64,6 @@ impl<'a> ApplicationState<'a> for State<'a> {
             input_state: InputState::new(Self::get_window_size()),
             fonts, font,
             simple_shape_renderer,
-            test: first_test(),
         }
     }
 
@@ -154,19 +151,12 @@ impl<'a> State<'a> {
             };
 
             self.scene.game_logic(&mut main_context);
-            let mut context = ();
-            self.test.update(&self.input_state, &mut context, &self.window);
 
             if let Some(fence) = &self.fence {
                 fence.wait();
             }
 
             self.scene.send(&mut main_context);
-            self.test.send(
-                main_context.font,
-                main_context.simple_shape_renderer,
-                &self.input_state.get_root_ui_render_box(),
-            );
             
             self.renderer.clear(&[ClearField::Color, ClearField::Depth]);
             
