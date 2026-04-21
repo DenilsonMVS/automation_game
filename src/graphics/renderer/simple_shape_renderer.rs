@@ -1,7 +1,7 @@
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 
-use crate::graphics::renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}};
+use crate::graphics::{renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
 const FORMS_PER_RENDER: usize = 1 << 20;
 
@@ -190,7 +190,6 @@ impl<'a> SimpleShapeRenderer<'a> {
     }
 
     pub fn preview_render_box(
-        &self,
         position: glm::Vec2,
         size: glm::Vec2,
         position_mode: PositionMode,

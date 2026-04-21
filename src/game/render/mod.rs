@@ -1,6 +1,8 @@
 use crate::{MainContext, game::{logic::{GameState, world::World}, render::world::ViewWorld}, graphics::renderer::Renderer};
 use nalgebra_glm as glm;
 
+pub const UI_BASE_DEPTH: u16 = 1000;
+
 pub mod display_module;
 pub mod robot;
 pub mod world;
@@ -15,11 +17,8 @@ impl<'a> RenderState<'a> {
     }
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
-        let simple_shape_renderer = &mut context.simple_shape_renderer;
-        let font = &mut context.font;
-
         for robot in logic_state.get_robots().iter() {
-            robot.send(simple_shape_renderer, font, context.camera);
+            robot.send(context);
         }
 
         self.world.send(logic_state.get_world());

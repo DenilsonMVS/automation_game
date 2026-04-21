@@ -130,7 +130,7 @@ impl GameState {
         }
 
         for robot in self.robots.iter_mut() {
-            robot.update(delta, is_instruction_tick, &mut self.world);
+            robot.update(is_instruction_tick, &mut self.world, context);
         }
     }
 

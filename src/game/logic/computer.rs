@@ -1,4 +1,4 @@
-use crate::game::logic::{instruction::{Instruction, RegisterAddress, Syscall, UnpackedInstruction}, memory::{GenericMemory, InstructionMemory, PROGRAM_COUNTER_IDX, RegisterMemory}};
+use crate::{game::logic::{instruction::{Instruction, RegisterAddress, Syscall, UnpackedInstruction}, memory::{GenericMemory, InstructionMemory, PROGRAM_COUNTER_IDX, RegisterMemory}}};
 
 
 const MEMORY_RANK: usize = 4;
@@ -60,9 +60,12 @@ fn replace_zero(value: u8, replacement: u8) -> u8 {
 
 impl Computer {
     pub fn new(instructions: [Instruction; MEMORY_SIZE]) -> Self {
-        Self { registers: RegisterMemory::new([0; MEMORY_SIZE]), instructions: InstructionMemory::new(instructions) }
+        Self {
+            registers: RegisterMemory::new([0; MEMORY_SIZE]),
+            instructions: InstructionMemory::new(instructions),
+        }
     }
-    
+
     pub fn run_computer(&mut self) -> Option<Syscall> {
         let mut return_sys = None;
 

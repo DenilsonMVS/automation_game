@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World};
+use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
 
 const EPS: f32 = 0.0001;
 
@@ -30,7 +30,14 @@ impl Robot {
         }
     }
 
-    pub fn update(&mut self, delta: f32, is_instruction_tick: bool, world : &mut World) {
+    pub fn update(
+        &mut self,
+        is_instruction_tick: bool,
+        world : &mut World,
+        main_context: &mut MainContext,
+    ) {
+        let delta = main_context.input_state.get_delta();
+
         match self.context {
             ComputeContext::Computer => {
                 if is_instruction_tick {
@@ -84,6 +91,10 @@ impl Robot {
         };
 
         self.movement_logic(delta, self.movement_module.calculate_accelleration());
+    }
+
+    pub fn get_computer(&self) -> &Computer {
+        &self.computer
     }
 
     fn movement_logic(&mut self, delta: f32, acc: glm::Vec2) {

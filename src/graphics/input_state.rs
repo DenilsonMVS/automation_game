@@ -13,6 +13,13 @@ pub enum Actions {
     MoveBottom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusStatus {
+    Clear,
+    Focused,
+    PendingClear,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct UnitState {
     window_size: glm::Vec2,

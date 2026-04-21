@@ -107,6 +107,15 @@ impl RenderBox {
     pub fn get_bottom_right(&self) -> glm::Vec2 {
         glm::vec2(self.max.x, self.min.y)
     }
+
+    pub fn get_bottom_left(&self) -> glm::Vec2 {
+        self.min
+    }
+
+    pub fn is_point_inside(&self, point: glm::Vec2) -> bool {
+        self.min.x <= point.x && self.max.x >= point.x &&
+        self.min.y <= point.y && self.max.y >= point.y
+    }
 }
 
 pub struct OrientedBox {

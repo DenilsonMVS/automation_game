@@ -5,13 +5,13 @@ pub mod open_simplex;
 use std::num::{NonZeroU32};
 
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
-use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey}, window::Window};
+use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey}, window::{Cursor, CursorIcon, Window}};
 
 use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, camera::Camera, input_state::InputState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
-    input_state: &'a InputState,
+    input_state: &'a mut InputState,
     camera: &'a Camera,
     simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
     font: &'a mut Font<'b>,
@@ -137,6 +137,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
 impl<'a> State<'a> {
     fn redraw(&mut self) {
+        self.window.set_cursor(Cursor::Icon(CursorIcon::Default));
         self.camera.update_movement(&self.input_state);
 
         self.simple_shape_renderer.reset();
@@ -144,7 +145,7 @@ impl<'a> State<'a> {
 
         {
             let mut main_context = MainContext {
-                input_state: &self.input_state,
+                input_state: &mut self.input_state,
                 camera: &self.camera,
                 simple_shape_renderer: &mut self.simple_shape_renderer,
                 font: &mut self.font,
