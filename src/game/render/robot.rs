@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::robot::Robot, graphics::{renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{MainContext, game::logic::robot::Robot, graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::button_area::ButtonArea};
 
 const ROBOT_SIZE: f32 = 0.8;
 const WEEL_DIAMETER: f32 = 0.26;
@@ -55,12 +55,13 @@ impl Robot {
         }
 
         let render_box = self.get_render_box();
+        context.ui.push_button_area(ButtonArea::new_from_world_pos(render_box, |_, _| println!("aaaa"), context.ui.get_camera()));
         context.simple_shape_renderer.send_render_box(
             &render_box,
             self.get_color(),
             ROBOT_DEPTH, 0
         );
 
-        self.get_display_module().send(context.font, self.get_position(), context.camera);
+        self.get_display_module().send(context.font, self.get_position(), context.ui.get_camera());
     }
 }

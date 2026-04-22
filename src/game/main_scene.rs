@@ -23,6 +23,6 @@ impl<'a> Scene for MainScene<'a> {
     }
 
     fn generate_output(&mut self, context: &mut crate::MainContext) {
-        self.render.draw(&context.camera.get_vp_matrix(&context.input_state.get_projection_matrix()));
+        self.render.draw(&context.ui.get_camera().get_vp_matrix(&context.ui.get_projection_matrix()));
     }
 }

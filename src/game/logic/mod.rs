@@ -121,7 +121,7 @@ impl GameState {
 
     pub fn update(&mut self, context: &mut MainContext) {
         let mut is_instruction_tick = false;
-        let delta = context.input_state.get_delta();
+        let delta = context.ui.get_delta();
 
         self.last_instruction_time_passed += delta;
         if self.last_instruction_time_passed >= INSTRUCTION_PERIOD {

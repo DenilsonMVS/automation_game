@@ -36,7 +36,7 @@ impl Robot {
         world : &mut World,
         main_context: &mut MainContext,
     ) {
-        let delta = main_context.input_state.get_delta();
+        let delta = main_context.ui.get_delta();
 
         match self.context {
             ComputeContext::Computer => {

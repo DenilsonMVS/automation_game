@@ -1,11 +1,6 @@
 
 use nalgebra_glm as glm;
 
-use crate::graphics::input_state::{Actions, InputState};
-
-const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
-const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
-
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
     position: glm::Vec2,
@@ -13,10 +8,10 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new() -> Self {
+    pub fn new(position: glm::Vec2, zoom: f32) -> Self {
         Self {
-            position: glm::vec2(0.0, 0.0),
-            zoom: 1.0,
+            position,
+            zoom,
         }
     }
 
@@ -31,26 +26,6 @@ impl Camera {
         projection_matrix * self.get_view_matrix()
     }
 
-    pub fn update_movement(&mut self, input_state: &InputState) {
-        let actions  = [
-            (Actions::MoveBottom, glm::vec2( 0.0, -1.0)),
-            (Actions::MoveLeft,   glm::vec2(-1.0,  0.0)),
-            (Actions::MoveRight,  glm::vec2( 1.0,  0.0)),
-            (Actions::MoveUp,     glm::vec2( 0.0,  1.0)),
-        ];
-
-        self.position += actions
-            .iter()
-            .fold(glm::vec2(0.0, 0.0),
-                |prev, (action, value)| 
-                    if input_state.get_actions()[*action] { prev + value } else { prev }
-            ) / self.zoom * input_state.get_delta() * CAMERA_MOVEMENT_SENSITIVITY;
-    }
-
-    pub fn handle_scroll(&mut self, scroll: f32) {
-        self.zoom *= f32::exp(CAMERA_ZOOM_SENSITIVITY * scroll)
-    }
-
     pub fn get_position(&self) -> glm::Vec2 {
         self.position
     }
@@ -61,5 +36,9 @@ impl Camera {
 
     pub fn ndc_to_world_pos(&self, ndc_pos: glm::Vec2) -> glm::Vec2 {
         ndc_pos / self.zoom + self.position
+    }
+
+    pub fn world_to_ndc_pos(&self, world_pos: glm::Vec2) -> glm::Vec2 {
+        (world_pos - self.position) * self.zoom
     }
 }

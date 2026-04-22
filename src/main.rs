@@ -1,31 +1,30 @@
 pub mod graphics;
 pub mod game;
 pub mod open_simplex;
+pub mod ui;
 
 use std::num::{NonZeroU32};
 
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
-use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, PhysicalKey}, window::{Cursor, CursorIcon, Window}};
+use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, camera::Camera, input_state::InputState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
-    input_state: &'a mut InputState,
-    camera: &'a Camera,
     simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
     font: &'a mut Font<'b>,
+    ui: &'a mut Ui,
 }
 
-struct State<'a> {
+pub struct State<'a> {
     window: Window,
+    ui: Ui,
     gl_context: PossiblyCurrentContext,
     gl_surface: Surface<WindowSurface>,
-    camera: Camera,
     scene: MainScene<'a>,
     renderer: &'a Renderer,
     fence: Option<Fence>,
-    input_state: InputState,
     fonts: Fonts<'a>,
     font: Font<'a>,
     simple_shape_renderer: SimpleShapeRenderer<'a>,
@@ -46,7 +45,6 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
-        let camera = Camera::new();
         let scene = MainScene::new(&renderer);
 
         let fonts = Fonts::new(renderer);
@@ -57,11 +55,10 @@ impl<'a> ApplicationState<'a> for State<'a> {
             window,
             gl_context,
             gl_surface,
-            camera,
+            ui: Ui::new(Self::get_window_size()),
             renderer,
             scene,
             fence: None,
-            input_state: InputState::new(Self::get_window_size()),
             fonts, font,
             simple_shape_renderer,
         }
@@ -72,7 +69,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::Resized(new_size) => {
-                self.input_state.update_window_size(glm::vec2(
+                self.ui.update_window_size(glm::vec2(
                     new_size.width as f32,
                     new_size.height as f32,
                 ));
@@ -82,22 +79,14 @@ impl<'a> ApplicationState<'a> for State<'a> {
                 unsafe { gl::Viewport(0, 0, new_size.width as i32, new_size.height as i32); }
             },
             WindowEvent::CursorMoved { position, .. } =>
-                self.input_state.update_mouse_position(glm::vec2(
-                    position.x as f32,
-                    position.y as f32,
-                )),
+                self.ui.update_mouse_position(glm::vec2(position.x as f32, position.y as f32)),
             WindowEvent::MouseWheel { delta, .. } =>
                 match delta {
-                    MouseScrollDelta::LineDelta(_, y) => self.camera.handle_scroll(y),
+                    MouseScrollDelta::LineDelta(_, y) => self.ui.on_mouse_scroll(y),
                     _ => {},
                 },
-            WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
-                if state == ElementState::Pressed {
-                    self.input_state.on_mouse_down();
-                } else {
-                    self.input_state.on_mouse_up();
-                }
-            },
+            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } =>
+                self.ui.mouse_click(),
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.repeat {
                     return;
@@ -116,11 +105,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
                     }
                 }
 
-                match event.physical_key {
-                    PhysicalKey::Code(key @ (KeyCode::KeyW | KeyCode::KeyA | KeyCode::KeyS | KeyCode::KeyD)) =>
-                        self.input_state.update_key(key, event.state),
-                    _ => {},
-                }
+                self.ui.on_key_event(event);
             },
             _ => (),
         }
@@ -137,18 +122,20 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
 impl<'a> State<'a> {
     fn redraw(&mut self) {
-        self.window.set_cursor(Cursor::Icon(CursorIcon::Default));
-        self.camera.update_movement(&self.input_state);
+        let mut context= UiContext {
+            window: &self.window,
+            scene: &mut self.scene,
+        };
+        self.ui.on_render_start(&mut context);
 
         self.simple_shape_renderer.reset();
         self.font.reset();
 
         {
             let mut main_context = MainContext {
-                input_state: &mut self.input_state,
-                camera: &self.camera,
                 simple_shape_renderer: &mut self.simple_shape_renderer,
                 font: &mut self.font,
+                ui: &mut self.ui,
             };
 
             self.scene.game_logic(&mut main_context);
@@ -167,8 +154,8 @@ impl<'a> State<'a> {
         self.simple_shape_renderer.finish();
         self.font.finish();
 
-        let proj_matrix = self.input_state.get_projection_matrix();
-        let vp_matrix = self.camera.get_vp_matrix(&proj_matrix);
+        let proj_matrix = self.ui.get_projection_matrix();
+        let vp_matrix = self.ui.get_camera().get_vp_matrix(&proj_matrix);
         self.simple_shape_renderer.draw(self.renderer, &proj_matrix, &vp_matrix);
 
         self.renderer.depth_mask(false);
@@ -180,7 +167,7 @@ impl<'a> State<'a> {
         self.gl_surface.swap_buffers(&self.gl_context).unwrap();
         self.window.request_redraw();
 
-        self.input_state.next_frame();
+        self.ui.on_render_end();
     }
 }
 

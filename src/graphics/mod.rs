@@ -1,7 +1,6 @@
 
 pub mod renderer;
 pub mod camera;
-pub mod input_state;
 
 #[cfg(debug_assertions)]
 extern "system" fn gl_debug_output(
