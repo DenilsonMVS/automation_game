@@ -1,14 +1,14 @@
 use std::{alloc::{self, Layout}, ops::{Index, IndexMut}, ptr};
 use std::marker::PhantomData;
 
-pub struct CompactStableVector<T: Unpin> {
+pub struct StableIndexVector<T: Unpin> {
     ptr: *mut u8,
     len: usize,
     capacity: usize,
     _marker: PhantomData<T>,
 }
 
-impl<T: Unpin> CompactStableVector<T> {
+impl<T: Unpin> StableIndexVector<T> {
     pub fn new() -> Self {
         Self {
             ptr: ptr::null_mut(),
@@ -156,7 +156,7 @@ impl<T: Unpin> CompactStableVector<T> {
         }
     }
 
-    pub fn iter_unordered(&self) -> impl Iterator<Item = (usize, &T)> {
+    pub fn iter_enumerate_unordered(&self) -> impl Iterator<Item = (usize, &T)> {
         let rev_base = unsafe { self.rev_ptr() };
         let data_base = unsafe { self.data_ptr() };
         
@@ -165,7 +165,7 @@ impl<T: Unpin> CompactStableVector<T> {
         })
     }
 
-    pub fn iter_unordered_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
+    pub fn iter_enumerate_unordered_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
         let rev_base = unsafe { self.rev_ptr() };
         let data_base = unsafe { self.data_ptr() };
         
@@ -173,24 +173,58 @@ impl<T: Unpin> CompactStableVector<T> {
             (*rev_base.add(pos), &mut *data_base.add(pos))
         })
     }
+
+    pub fn iter_unordered(&self) -> impl Iterator<Item = &T> {
+        let data_base = unsafe { self.data_ptr() };
+        
+        (0..self.len).map(move |pos| unsafe {
+            &*data_base.add(pos)
+        })
+    }
+
+    pub fn iter_unordered_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        let data_base = unsafe { self.data_ptr() };
+        
+        (0..self.len).map(move |pos| unsafe {
+            &mut *data_base.add(pos)
+        })
+    }
+
+    pub fn get(&self, id: usize) -> Option<&T> {
+        if !self.is_valid(id) {
+            None
+        } else {
+            unsafe {
+                Some(&*self.data_ptr().add(*self.index_ptr().add(id)))
+            }
+        }
+    }
+
+    pub fn get_mut(&mut self, id: usize) -> Option<&mut T> {
+        if !self.is_valid(id) {
+            None
+        } else {
+            unsafe {
+                Some(&mut *self.data_ptr().add(*self.index_ptr().add(id)))
+            }
+        }
+    }
 }
 
-impl<T: Unpin> Index<usize> for CompactStableVector<T> {
+impl<T: Unpin> Index<usize> for StableIndexVector<T> {
     type Output = T;
     fn index(&self, id: usize) -> &Self::Output {
-        if !self.is_valid(id) { panic!("ID inválido"); }
-        unsafe { &*self.data_ptr().add(*self.index_ptr().add(id)) }
+        self.get(id).unwrap()
     }
 }
 
-impl<T: Unpin> IndexMut<usize> for CompactStableVector<T> {
+impl<T: Unpin> IndexMut<usize> for StableIndexVector<T> {
     fn index_mut(&mut self, id: usize) -> &mut Self::Output {
-        if !self.is_valid(id) { panic!("ID inválido"); }
-        unsafe { &mut *self.data_ptr().add(*self.index_ptr().add(id)) }
+        self.get_mut(id).unwrap()
     }
 }
 
-impl<T: Unpin> Drop for CompactStableVector<T> {
+impl<T: Unpin> Drop for StableIndexVector<T> {
     fn drop(&mut self) {
         if self.capacity > 0 {
             unsafe {
@@ -210,11 +244,11 @@ impl<T: Unpin> Drop for CompactStableVector<T> {
 mod tests {
     use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
-    use crate::stable_index_vector::CompactStableVector;
+    use crate::stable_index_vector::StableIndexVector;
 
     #[test]
     fn test_basico_push_get() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let id0 = v.push(10);
         let id1 = v.push(20);
 
@@ -226,7 +260,7 @@ mod tests {
 
     #[test]
     fn test_reciclagem_de_id() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let id0 = v.push("A");
         let id1 = v.push("B");
 
@@ -243,7 +277,7 @@ mod tests {
 
     #[test]
     fn test_estabilidade_apos_remocao() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let _id0 = v.push(1.1);
         let id1 = v.push(2.2);
         let id2 = v.push(3.3);
@@ -258,30 +292,30 @@ mod tests {
 
     #[test]
     fn test_mutabilidade() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let id = v.push(10);
         
         v[id] = 50; // IndexMut
         assert_eq!(v[id], 50);
 
-        for (_, val) in v.iter_unordered_mut() {
+        for val in v.iter_unordered_mut() {
             *val += 10;
         }
         assert_eq!(v[id], 60);
     }
 
     #[test]
-    #[should_panic(expected = "ID inválido")]
+    #[should_panic]
     fn test_panic_acesso_invalido() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let id = v.push(1);
         v.remove(id);
-        let _ = v[id]; // Deve dar panic
+        let _ = v[id];
     }
 
     #[test]
     fn test_crescimento_da_capacidade() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         // Força vários grow() (capacidade dobra: 1, 2, 4, 8, 16...)
         for i in 0..20 {
             v.push(i);
@@ -299,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_estresse_de_crescimento_extremo() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let total = 10_000;
         let mut ids = Vec::new();
 
@@ -318,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_reciclagem_lifo_profunda() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         
         // Pushes iniciais
         let id0 = v.push(0); // 0
@@ -343,7 +377,7 @@ mod tests {
         let drop_count = Arc::new(AtomicUsize::new(0));
         
         {
-            let mut v = CompactStableVector::new();
+            let mut v = StableIndexVector::new();
             
             for _ in 0..100 {
                 v.push(DropTracker(drop_count.clone()));
@@ -369,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_intercalamento_caotico() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let mut ids = Vec::new();
 
         // 1. Enche um pouco
@@ -395,7 +429,7 @@ mod tests {
 
     #[test]
     fn test_iter_unordered_match() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         v.push(10);
         v.push(20);
         let id2 = v.push(30);
@@ -403,21 +437,21 @@ mod tests {
         v.push(40);
 
         // O iterador unordered deve retornar exatamente o que o Index retorna
-        for (id, val) in v.iter_unordered() {
+        for (id, val) in v.iter_enumerate_unordered() {
             assert_eq!(*val, v[id]);
         }
     }
 
     #[test]
     fn test_zero_capacity_remove() {
-        let mut v: CompactStableVector<i32> = CompactStableVector::new();
+        let mut v: StableIndexVector<i32> = StableIndexVector::new();
         assert_eq!(v.remove(0), None);
         assert_eq!(v.is_valid(0), false);
     }
 
     #[test]
     fn test_single_element_lifecycle() {
-        let mut v = CompactStableVector::new();
+        let mut v = StableIndexVector::new();
         let id = v.push(42);
         assert_eq!(v.remove(id), Some(42));
         assert_eq!(v.len, 0);

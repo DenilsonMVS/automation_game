@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
+use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, ui::button_area::ButtonArea};
 
 const EPS: f32 = 0.0001;
 
@@ -34,9 +34,10 @@ impl Robot {
         &mut self,
         is_instruction_tick: bool,
         world : &mut World,
-        main_context: &mut MainContext,
+        context: &mut MainContext,
+        robot_idx: usize,
     ) {
-        let delta = main_context.ui.get_delta();
+        let delta = context.ui.get_delta();
 
         match self.context {
             ComputeContext::Computer => {
@@ -91,6 +92,12 @@ impl Robot {
         };
 
         self.movement_logic(delta, self.movement_module.calculate_accelleration());
+
+        let render_box = self.get_render_box();
+        context.ui.push_button_area(ButtonArea::new_from_world_pos(
+            render_box, move |context, _|
+                context.scene.logic.robot_info_opened = Some(robot_idx),
+            context.ui.get_camera(),));
     }
 
     pub fn get_computer(&self) -> &Computer {

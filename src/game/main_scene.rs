@@ -1,8 +1,8 @@
 use crate::{game::{logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
 
 pub struct MainScene<'a> {
-    logic: GameState,
-    render: RenderState<'a>,
+    pub logic: GameState,
+    pub render: RenderState<'a>,
 }
 
 impl<'a> MainScene<'a> {

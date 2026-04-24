@@ -16,6 +16,7 @@ const INSTRUCTION_PERIOD: f32 = 0.25;
 pub struct GameState {
     world: World,
     robots: Vec<Robot>,
+    pub robot_info_opened: Option<usize>,
     last_instruction_time_passed: f32,
 }
 
@@ -24,6 +25,7 @@ impl GameState {
         Self {
             last_instruction_time_passed: 0.0,
             world: World::new(),
+            robot_info_opened: None,
             robots: vec![
                 Robot::new(glm::vec2(0.0, 0.0), [
                     Instruction::new_lui(X14, 1),
@@ -129,8 +131,8 @@ impl GameState {
             self.last_instruction_time_passed -= INSTRUCTION_PERIOD;
         }
 
-        for robot in self.robots.iter_mut() {
-            robot.update(is_instruction_tick, &mut self.world, context);
+        for (idx, robot) in self.robots.iter_mut().enumerate() {
+            robot.update(is_instruction_tick, &mut self.world, context, idx);
         }
     }
 

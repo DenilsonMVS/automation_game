@@ -55,7 +55,6 @@ impl Robot {
         }
 
         let render_box = self.get_render_box();
-        context.ui.push_button_area(ButtonArea::new_from_world_pos(render_box, |_, _| println!("aaaa"), context.ui.get_camera()));
         context.simple_shape_renderer.send_render_box(
             &render_box,
             self.get_color(),

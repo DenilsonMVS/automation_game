@@ -2,24 +2,27 @@ use crate::{graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{U
 use nalgebra_glm as glm;
 use winit::window::{Cursor, CursorIcon};
 
-#[derive(Debug)]
 pub struct ButtonArea {
     bounding_box: RenderBox,
-    on_click: fn(&mut UiContext, &Ui),
+    on_click: Box<dyn Fn(&mut UiContext, &Ui)>,
 }
 
 impl ButtonArea {
-    pub fn new(bounding_box: RenderBox, on_click: fn(&mut UiContext, &Ui)) -> Self {
-        Self { bounding_box, on_click }
+    pub fn new<T>(bounding_box: RenderBox, on_click: T) -> Self
+    where T: Fn(&mut UiContext, &Ui) + 'static
+    {
+        Self { bounding_box, on_click: Box::new(on_click) }
     }
 
-    pub fn new_from_world_pos(world_box: RenderBox, on_click: fn(&mut UiContext, &Ui), camera: &Camera) -> Self {
+    pub fn new_from_world_pos<T>(world_box: RenderBox, on_click: T, camera: &Camera) -> Self
+    where T: Fn(&mut UiContext, &Ui) + 'static
+    {
         Self {
             bounding_box: RenderBox {
                 min: camera.world_to_ndc_pos(world_box.min),
                 max: camera.world_to_ndc_pos(world_box.max),
             },
-            on_click,
+            on_click: Box::new(on_click),
         }
     }
 

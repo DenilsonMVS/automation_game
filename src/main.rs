@@ -2,6 +2,7 @@ pub mod graphics;
 pub mod game;
 pub mod open_simplex;
 pub mod ui;
+pub mod stable_index_vector;
 
 use std::num::{NonZeroU32};
 
@@ -85,8 +86,11 @@ impl<'a> ApplicationState<'a> for State<'a> {
                     MouseScrollDelta::LineDelta(_, y) => self.ui.on_mouse_scroll(y),
                     _ => {},
                 },
-            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } =>
-                self.ui.mouse_click(),
+            WindowEvent::MouseInput { button: MouseButton::Left, state, .. } =>
+                match state {
+                    ElementState::Pressed => self.ui.mouse_pressed(),
+                    ElementState::Released => self.ui.mouse_released(),
+                },
             WindowEvent::KeyboardInput { event, .. } => {
                 if event.repeat {
                     return;

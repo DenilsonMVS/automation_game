@@ -116,6 +116,10 @@ impl RenderBox {
         self.min.x <= point.x && self.max.x >= point.x &&
         self.min.y <= point.y && self.max.y >= point.y
     }
+
+    pub fn apply_offset(&self, offset: glm::Vec2) -> Self {
+        Self { min: self.min + offset, max: self.max + offset }
+    }
 }
 
 pub struct OrientedBox {
