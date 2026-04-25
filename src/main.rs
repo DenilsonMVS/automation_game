@@ -9,7 +9,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
+use crate::{game::{main_scene::MainScene, scene::{Event, EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -66,7 +66,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
     }
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
-        match event {
+        match &event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::Resized(new_size) => {
@@ -83,7 +83,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
                 self.ui.update_mouse_position(glm::vec2(position.x as f32, position.y as f32)),
             WindowEvent::MouseWheel { delta, .. } =>
                 match delta {
-                    MouseScrollDelta::LineDelta(_, y) => self.ui.on_mouse_scroll(y),
+                    MouseScrollDelta::LineDelta(_, y) => self.ui.on_mouse_scroll(*y),
                     _ => {},
                 },
             WindowEvent::MouseInput { button: MouseButton::Left, state, .. } =>
@@ -113,6 +113,8 @@ impl<'a> ApplicationState<'a> for State<'a> {
             },
             _ => (),
         }
+
+        self.scene.handle_event(Event::new(EventType::Winit(&event)));
     }
 
     fn get_window_title() -> &'static str {

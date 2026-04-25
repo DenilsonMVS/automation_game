@@ -1,4 +1,4 @@
-use crate::{game::{logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
+use crate::{game::{logic::GameState, render::RenderState, scene::{Event, Scene}}, graphics::renderer::Renderer};
 
 pub struct MainScene<'a> {
     pub logic: GameState,
@@ -13,7 +13,13 @@ impl<'a> MainScene<'a> {
     }
 }
 
-impl<'a> Scene for MainScene<'a> {    
+impl<'a> Scene for MainScene<'a> {
+    fn handle_event(&mut self, event: Event) {
+        match event {
+            _ => {},
+        }
+    }
+
     fn game_logic(&mut self, context: &mut crate::MainContext) {
         self.logic.update(context);
     }

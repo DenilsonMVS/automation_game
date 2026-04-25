@@ -75,7 +75,7 @@ impl Ui {
         &self.camera
     }
 
-    pub fn on_key_event(&mut self, event: KeyEvent) {
+    pub fn on_key_event(&mut self, event: &KeyEvent) {
         match event.physical_key {
             PhysicalKey::Code(code) =>
                 if let Some(idx) = map_key_to_index(code) {
