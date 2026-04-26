@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::{computer::{PC, X0, X2, X3, X14, X15}, instruction::{Instruction, Syscall}, robot::Robot, world::World}};
+use crate::{MainContext, game::logic::{computer::{PC, X0, X2, X3, X14, X15}, instruction::{Instruction, Syscall}, robot::Robot, world::World}, ui::Ui};
 
 pub mod world;
 pub mod compute_context;
@@ -21,7 +21,7 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new() -> Self {
+    pub fn new(ui: &mut Ui) -> Self {
         Self {
             last_instruction_time_passed: 0.0,
             world: World::new(),
@@ -44,7 +44,7 @@ impl GameState {
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
-                ]),
+                ], ui),
                 Robot::new(glm::vec2(0.0, -1.0), [
                     Instruction::new_lui(X14, 1),
                     Instruction::new_sys(Syscall::Display),
@@ -62,7 +62,7 @@ impl GameState {
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
-                ]),
+                ], ui),
                 Robot::new(glm::vec2(0.0, -2.0), [
                     Instruction::new_lui(X14, 1),
                     Instruction::new_sys(Syscall::Display),
@@ -80,7 +80,7 @@ impl GameState {
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
-                ]),
+                ], ui),
                 Robot::new(glm::vec2(0.0, 1.0), [
                     Instruction::new_lui(X14, 1),
                     Instruction::new_sys(Syscall::Display),
@@ -98,7 +98,7 @@ impl GameState {
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
-                ]),
+                ], ui),
                 Robot::new(glm::vec2(0.0, 2.0), [
                     Instruction::new_lui(X14, 1),
                     Instruction::new_sys(Syscall::Display),
@@ -116,7 +116,7 @@ impl GameState {
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
                     Instruction::new_sys(Syscall::Nop),
-                ]),
+                ], ui),
             ],
         }
     }
@@ -131,8 +131,8 @@ impl GameState {
             self.last_instruction_time_passed -= INSTRUCTION_PERIOD;
         }
 
-        for (idx, robot) in self.robots.iter_mut().enumerate() {
-            robot.update(is_instruction_tick, &mut self.world, context, idx);
+        for robot in self.robots.iter_mut() {
+            robot.update(is_instruction_tick, &mut self.world, context);
         }
     }
 

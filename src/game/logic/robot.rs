@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, ui::button_area::ButtonArea};
+use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, ui::{Ui, button_area::ButtonArea}};
 
 const EPS: f32 = 0.0001;
 
@@ -13,13 +13,14 @@ pub struct Robot {
     movement_module: MovementModule,
     mining_module: MiningModule,
     display_module: DisplayModule,
-    computer: Computer,
+    pub computer: Computer,
     color: glm::U8Vec3,
     context: ComputeContext,
+    pub button_id: usize,
 }
 
 impl Robot {
-    pub fn new(position: glm::Vec2, instructions: [Instruction; MEMORY_SIZE]) -> Self {
+    pub fn new(position: glm::Vec2, instructions: [Instruction; MEMORY_SIZE], ui: &mut Ui) -> Self {
         Self {
             computer: Computer::new(instructions),
             movement_module: MovementModule::new(position),
@@ -27,6 +28,8 @@ impl Robot {
             color: glm::vec3(120, 200, 190),
             context: ComputeContext::Computer,
             display_module: DisplayModule::new(),
+            button_id: ui.button_manager.push_buton_area(ButtonArea::new(
+                Self::get_render_box(position).world_to_ndc_pos(&ui.camera))),
         }
     }
 
@@ -35,9 +38,9 @@ impl Robot {
         is_instruction_tick: bool,
         world : &mut World,
         context: &mut MainContext,
-        robot_idx: usize,
     ) {
-        let delta = context.ui.get_delta();
+        let ui = &mut context.ui;
+        let delta = ui.get_delta();
 
         match self.context {
             ComputeContext::Computer => {
@@ -93,11 +96,11 @@ impl Robot {
 
         self.movement_logic(delta, self.movement_module.calculate_accelleration());
 
-        let render_box = self.get_render_box();
-        context.ui.push_button_area(ButtonArea::new_from_world_pos(
-            render_box, move |context, _|
-                context.scene.logic.robot_info_opened = Some(robot_idx),
-            context.ui.get_camera(),));
+        let render_box = Self::get_render_box(self.get_position()).world_to_ndc_pos(&ui.camera);
+        ui.button_manager.update_button_area(
+            self.button_id,
+            ButtonArea::new(render_box),
+        );
     }
 
     pub fn get_computer(&self) -> &Computer {

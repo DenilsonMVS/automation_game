@@ -71,6 +71,31 @@ impl RenderBox {
         return Self { min, max };
     }
 
+    pub fn cut(&self, amount: f32) -> Self {
+        Self {
+            min: self.min + glm::vec2(amount, amount),
+            max: self.max - glm::vec2(amount, amount),
+        }
+    }
+
+    pub fn ndc_to_world_pos(&self, camera: &Camera) -> Self {
+        Self {
+            min: camera.ndc_to_world_pos(self.min),
+            max: camera.ndc_to_world_pos(self.max),
+        }
+    }
+
+    pub fn world_to_ndc_pos(&self, camera: &Camera) -> Self {
+        Self {
+            min: camera.world_to_ndc_pos(self.min),
+            max: camera.world_to_ndc_pos(self.max),
+        }
+    }
+
+    pub fn get_size(&self) -> glm::Vec2 {
+        self.max - self.min
+    }
+
     pub fn new_simple(
         position: glm::Vec2,
         position_mode: PositionMode,

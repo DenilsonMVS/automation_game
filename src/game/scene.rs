@@ -1,29 +1,19 @@
 use winit::event::WindowEvent;
-
+use nalgebra_glm as glm;
 use crate::MainContext;
 
-pub struct Event<'a> {
-    event_type: EventType<'a>,
-    received: bool,
-}
-
-impl<'a> Event<'a> {
-    pub fn new(event_type: EventType<'a>) -> Self {
-        Self { event_type, received: false }
-    }
-
-    pub fn get_event(&mut self) -> &EventType<'a> {
-        self.received = true;
-        &self.event_type
-    }
-}
-
-pub enum EventType<'a> {
-    Winit(&'a WindowEvent),
+#[derive(Debug)]
+pub enum EventType {
+    Winit(Box<WindowEvent>),
+    ButtonPressed(usize),
+    Grabbed(usize),
+    Moved(Box<(usize, glm::Vec2)>),
+    Released(usize),
+    FinalEvent,
 }
 
 pub trait Scene {
-    fn handle_event(&mut self, event: Event);
+    fn handle_event(&mut self, event: &EventType, context: &mut crate::MainContext);
     fn game_logic(&mut self, context: &mut MainContext);
     fn send(&mut self, context: &mut MainContext);
     fn generate_output(&mut self, context: &mut MainContext);

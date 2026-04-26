@@ -1,11 +1,13 @@
-use std::time::Instant;
+use std::{mem, time::Instant};
 
-use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, stable_index_vector::StableIndexVector, ui::{button_area::ButtonArea, drag_area::DragArea}};
+use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{button_manager::ButtonManager, drag_area_manager::DragAreaManager}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::{Cursor, CursorIcon, Window}};
 
 pub mod button_area;
 pub mod drag_area;
+pub mod button_manager;
+pub mod drag_area_manager;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -26,7 +28,6 @@ fn map_key_to_index(key: KeyCode) -> Option<usize> {
 }
 
 pub struct Ui {
-    button_areas: Vec<ButtonArea>,
     ndc_mouse_position: glm::Vec2,
     previous_ndc_mouse_position: glm::Vec2,
     window_size: glm::Vec2,
@@ -34,18 +35,19 @@ pub struct Ui {
     previous_frame_time: Instant,
     mouse_pressed: bool,
     mouse_released: bool,
-    camera: Camera,
+    pub camera: Camera,
     pressed_keys: [bool; 4],
 
-    selected_drag_area: Option<usize>,
-    drag_areas: StableIndexVector<DragArea>,
+    pub button_manager: ButtonManager,
+    pub drag_area_manager: DragAreaManager,
+
+    pub events: Vec<EventType>,
 }
 
 impl Ui {
     pub fn new(window_size: glm::Vec2) -> Self {
         let current_time = Instant::now();
         Self {
-            button_areas: vec![],
             ndc_mouse_position: glm::vec2(0.0, 0.0),
             previous_ndc_mouse_position: glm::vec2(0.0, 0.0),
             window_size,
@@ -58,17 +60,11 @@ impl Ui {
             camera: Camera::new(glm::vec2(0.0, 0.0), 1.0),
             pressed_keys: [false; 4],
 
-            selected_drag_area: None,
-            drag_areas: StableIndexVector::new(),
+            button_manager: ButtonManager::new(),
+            drag_area_manager: DragAreaManager::new(),
+
+            events: vec![],
         }
-    }
-
-    pub fn push_drag_area(&mut self, drag_area: DragArea) -> usize {
-        self.drag_areas.push(drag_area)
-    }
-
-    pub fn remove_drag_area(&mut self, id: usize) -> Option<DragArea> {
-        self.drag_areas.remove(id)
     }
 
     pub fn get_camera(&self) -> &Camera {
@@ -92,10 +88,6 @@ impl Ui {
         }
     }
 
-    pub fn push_button_area(&mut self, button_area: ButtonArea) {
-        self.button_areas.push(button_area);
-    }
-
     pub fn update_mouse_position(&mut self, screen_position: glm::Vec2) {
         self.ndc_mouse_position = self.screen_to_ndc_position(screen_position);
     }
@@ -105,58 +97,6 @@ impl Ui {
             self.camera.get_position(),
             self.camera.get_zoom() * (scroll * CAMERA_ZOOM_SENSITIVITY).exp(),
         );
-    }
-
-    fn handle_drag_areas(&mut self, context: &mut UiContext) {
-
-        if self.selected_drag_area.is_some() {
-            context.window.set_cursor(Cursor::Icon(CursorIcon::Grabbing));
-        } else {
-            for drag_area in self.drag_areas.iter_unordered() {
-                if drag_area.get_current_position().is_point_inside(self.ndc_mouse_position) {
-                    context.window.set_cursor(Cursor::Icon(CursorIcon::Grab));
-                    break;
-                }
-            }
-        }
-
-        if self.selected_drag_area.is_none() && self.mouse_pressed {
-            // Testar para caso de podermos selecionar uma drag area
-
-            for (id, drag_area) in self.drag_areas.iter_enumerate_unordered() {
-                if drag_area.get_current_position().is_point_inside(self.ndc_mouse_position) {
-                    self.selected_drag_area = Some(id);
-                    drag_area.on_grab(context, self);
-                    break;
-                }
-            }
-
-        } else if
-            self.mouse_released &&
-            let Some(id) = self.selected_drag_area &&
-            let Some(drag_area) = self.drag_areas.get(id)
-        {
-            // Soltamos a drag area
-            self.selected_drag_area = None;
-            drag_area.on_release(context, self);
-        } else if
-            let Some(id) = self.selected_drag_area &&
-            self.ndc_mouse_position != self.previous_ndc_mouse_position
-        {
-            // Movemos a drag area
-            if let Some(drag_area) = self.drag_areas.get_mut(id) {
-                let diff = self.ndc_mouse_position - self.previous_ndc_mouse_position;
-                drag_area.update_offset(diff);
-            }
-
-            if let Some(drag_area) = self.drag_areas.get(id) {
-                drag_area.on_move(context, self);
-            }
-        }
-    }
-
-    pub fn get_drag_area(&self, idx: usize) -> Option<&DragArea> {
-        self.drag_areas.get(idx)
     }
 
     pub fn on_render_start(&mut self, context: &mut UiContext) {
@@ -180,13 +120,20 @@ impl Ui {
             }
         }
 
-        for button_area in self.button_areas.iter() {
-            button_area.test(self.ndc_mouse_position, context, self.mouse_pressed, self);
-        }
-
-        self.handle_drag_areas(context);
-
-        self.button_areas.clear();
+        self.drag_area_manager.on_frame_start(
+            &mut self.events,
+            self.mouse_pressed,
+            self.mouse_released,
+            self.previous_ndc_mouse_position,
+            self.ndc_mouse_position,
+            context.window,
+        );
+        self.button_manager.on_frame_start(
+            &mut self.events,
+            self.mouse_pressed,
+            self.ndc_mouse_position,
+            context.window,
+        );
     }
 
     pub fn mouse_pressed(&mut self) {
@@ -198,6 +145,9 @@ impl Ui {
     }
 
     pub fn on_render_end(&mut self) {
+        self.drag_area_manager.on_frame_end();
+        self.button_manager.on_frame_end();
+
         self.previous_ndc_mouse_position = self.ndc_mouse_position;
         self.mouse_pressed = false;
         self.mouse_released = false;
@@ -233,5 +183,10 @@ impl Ui {
             let ratio = window_size.y / window_size.x;
             glm::vec2(inverted.x, inverted.y * ratio)
         }
+    }
+
+    pub fn take_events(&mut self) -> Vec<EventType> {
+        self.events.push(EventType::FinalEvent);
+        mem::take(&mut self.events)
     }
 }

@@ -1,3 +1,5 @@
+use serde_json::map::IntoIter;
+
 use crate::game::logic::instruction::Instruction;
 
 
@@ -76,6 +78,10 @@ pub struct InstructionMemory<const SIZE: usize> {
 impl<const SIZE: usize> InstructionMemory<SIZE> {
     pub fn new(memory: [Instruction; SIZE]) -> Self {
         Self { memory }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Instruction> {
+        self.memory.iter()
     }
 }
 

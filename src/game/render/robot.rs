@@ -25,9 +25,9 @@ impl Robot {
             color, 2000, 0);
     }
 
-    pub fn get_render_box(&self) -> RenderBox {
+    pub fn get_render_box(position: glm::Vec2) -> RenderBox {
         SimpleShapeRenderer::preview_render_box(
-            self.get_position(),
+            position,
             glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
             PositionMode::Center,
         )
@@ -54,7 +54,7 @@ impl Robot {
             );
         }
 
-        let render_box = self.get_render_box();
+        let render_box = Self::get_render_box(self.get_position());
         context.simple_shape_renderer.send_render_box(
             &render_box,
             self.get_color(),

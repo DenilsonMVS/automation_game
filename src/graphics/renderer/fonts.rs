@@ -196,7 +196,7 @@ impl<'a, 'b> TextRenderConfig<'a, 'b> {
             position_mode: PositionMode::Center,
             rotation: 0.0,
             depth: 1000,
-            max_line_width: 1e9,
+            max_line_width: 1e2,
             recenter: None,
             align: TextAlign::Left,
         }
@@ -369,30 +369,28 @@ impl<'a> Font<'a> {
         let mut current_advance = 0.0;
 
         for (i, (text, _)) in config.text.iter().enumerate() {
+            if current_advance == 0.0 {
+                block_start = (i as u32, 0);
+            }
+
             for (j, c) in text.chars().enumerate() {
                 if c == '\n' {
                     blocks.push((block_start.0, block_start.1, current_advance, true));
                     block_start = (i as u32, (j + 1) as u32);
                     current_advance = 0.0;
-                    continue;
-                }
-
-                let Some(idx) = map_char_to_index(c) else { continue };
-                let advance = glyphs[idx].advance;
-
-                if c == ' ' {
-                    if current_advance > 0.0 {
-                        blocks.push((block_start.0, block_start.1, current_advance, false));
-                    }
+                } else if c == ' ' {
+                    blocks.push((block_start.0, block_start.1, current_advance, false));
                     block_start = (i as u32, (j + 1) as u32);
                     current_advance = 0.0;
                 } else {
-                    current_advance += advance;
+                    let Some(idx) = map_char_to_index(c) else { continue };
+                    current_advance += glyphs[idx].advance;
                 }
             }
         }
 
-        if current_advance > 0.0 || blocks.is_empty() {
+        // Fecha o último bloco se houver texto pendente
+        if !config.text.is_empty() && (current_advance > 0.0 || blocks.is_empty()) {
             blocks.push((block_start.0, block_start.1, current_advance, false));
         }
 

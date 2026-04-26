@@ -1,4 +1,6 @@
-use crate::{game::{logic::GameState, render::RenderState, scene::{Event, Scene}}, graphics::renderer::Renderer};
+use winit::event::{ElementState, MouseButton, WindowEvent};
+
+use crate::{game::{logic::{GameState, robot}, render::RenderState, scene::{EventType, Scene}}, graphics::renderer::Renderer, ui::Ui};
 
 pub struct MainScene<'a> {
     pub logic: GameState,
@@ -6,17 +8,40 @@ pub struct MainScene<'a> {
 }
 
 impl<'a> MainScene<'a> {
-    pub fn new(renderer: &'a Renderer) -> Self {
-        let logic = GameState::new();
+    pub fn new(renderer: &'a Renderer, ui: &mut Ui) -> Self {
+        let logic = GameState::new(ui);
         let render = RenderState::new(renderer, logic.get_world());
         return Self { logic, render };
     }
 }
 
 impl<'a> Scene for MainScene<'a> {
-    fn handle_event(&mut self, event: Event) {
+    fn handle_event(&mut self, event: &EventType, context: &mut crate::MainContext) {
         match event {
-            _ => {},
+            EventType::Winit(event) => match **event {
+                WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } =>
+                    self.render.receive_generic_click(),
+                _ => {},
+            },
+            EventType::ButtonPressed(button_id) => {
+                if let Some(robot) = self.logic.get_robots()
+                    .iter()
+                    .find(|robot| robot.button_id == *button_id)
+                {
+                    self.render.receive_button_click(*button_id, context.ui, robot);
+                }
+                
+                self.render.receive_ui_click();
+            },
+            EventType::FinalEvent => self.render.receive_finish_event(),
+            EventType::Grabbed(_) => self.render.receive_ui_click(),
+            EventType::Released(id) => {
+                self.render.receive_release_event(*id);
+                self.render.receive_ui_click();
+            },
+            EventType::Moved(info) =>
+                self.render.receive_move_event(info.as_ref().0, info.as_ref().1),
+            // _ => {},
         }
     }
 

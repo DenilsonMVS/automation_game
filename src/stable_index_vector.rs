@@ -18,6 +18,10 @@ impl<T: Unpin> StableIndexVector<T> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
     unsafe fn get_layout(capacity: usize) -> (Layout, usize, usize, usize) {
         let data_layout = Layout::array::<T>(capacity).unwrap();
         let index_layout = Layout::array::<usize>(capacity).unwrap();

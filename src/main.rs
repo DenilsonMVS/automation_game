@@ -9,7 +9,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::{Event, EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
+use crate::{game::{main_scene::MainScene, scene::{EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -46,7 +46,8 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
-        let scene = MainScene::new(&renderer);
+        let mut ui = Ui::new(Self::get_window_size());
+        let scene = MainScene::new(&renderer, &mut ui);
 
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
@@ -56,7 +57,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
             window,
             gl_context,
             gl_surface,
-            ui: Ui::new(Self::get_window_size()),
+            ui, 
             renderer,
             scene,
             fence: None,
@@ -114,7 +115,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
             _ => (),
         }
 
-        self.scene.handle_event(Event::new(EventType::Winit(&event)));
+        self.ui.events.push(EventType::Winit(Box::new(event)));
     }
 
     fn get_window_title() -> &'static str {
@@ -134,8 +135,7 @@ impl<'a> State<'a> {
         };
         self.ui.on_render_start(&mut context);
 
-        self.simple_shape_renderer.reset();
-        self.font.reset();
+        let events = self.ui.take_events();
 
         {
             let mut main_context = MainContext {
@@ -143,6 +143,13 @@ impl<'a> State<'a> {
                 font: &mut self.font,
                 ui: &mut self.ui,
             };
+
+            for event in events.iter() {
+                self.scene.handle_event(event, &mut main_context);
+            }
+
+            main_context.simple_shape_renderer.reset();
+            main_context.font.reset();
 
             self.scene.game_logic(&mut main_context);
 
