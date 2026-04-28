@@ -5,7 +5,7 @@ use nalgebra_glm as glm;
 
 pub struct DragAreaManager {
     drag_areas: StableIndexVector<DragArea>,
-    liveness: BitVec<u64, Lsb0>, 
+    liveness: BitVec<usize, Lsb0>, 
     grabbed_id: Option<usize>,
 }
 
@@ -26,30 +26,28 @@ impl DragAreaManager {
 
     pub fn push_drag_area(&mut self, drag_area: DragArea) -> usize {
         let id = self.drag_areas.push(drag_area);
-        self.ensure_liveness_capacity(id);
-        self.liveness.set(id, true);
+        self.keep_alive(id);
         id
     }
 
     pub fn update_drag_area(&mut self, id: usize, drag_area: DragArea) {
         if let Some(area) = self.drag_areas.get_mut(id) {
             *area = drag_area;
-            self.ensure_liveness_capacity(id);
-            self.liveness.set(id, true);
+            self.keep_alive(id);
         }
     }
 
     pub fn keep_alive(&mut self, id: usize) {
+        self.ensure_liveness_capacity(id);
         self.liveness.set(id, true);
     }
 
     pub fn get_drag_area(&mut self, id: usize) -> Option<&DragArea> {
-        if let Some(area) = self.drag_areas.get(id) {
-            self.liveness.set(id, true);
-            Some(area)
-        } else {
-            None
+        if self.drag_areas.get(id).is_some() {
+            self.keep_alive(id);
         }
+
+        self.drag_areas.get(id)
     }
 
     pub(super) fn on_frame_start(

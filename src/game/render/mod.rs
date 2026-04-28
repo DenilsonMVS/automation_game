@@ -40,13 +40,19 @@ impl<'a> RenderState<'a> {
         }
     }
 
-    pub fn receive_button_click(&mut self, button_id: usize, ui: &mut Ui, robot: &Robot) {
+    pub fn receive_button_click(&mut self, button_id: usize, ui: &mut Ui, robot: Option<&Robot>) {
+        if let Some(robot_info) = &mut self.robot_info {
+            robot_info.receive_button_click(button_id, ui);
+        }
+
         let robot_info_button_id = self.robot_info.as_ref().map(|r| r.robot_button_id);
         if robot_info_button_id == Some(button_id) {
             return;
         }
 
-        self.robot_info = Some(RobotInfo::new(ui, button_id, robot));
+        if let Some(robot) = robot {
+            self.robot_info = Some(RobotInfo::new(ui, button_id, robot));
+        }
     }
 
     pub fn receive_release_event(&mut self, id: usize) {
@@ -71,11 +77,8 @@ impl<'a> RenderState<'a> {
 
         self.world.send(logic_state.get_world());
 
-        if
-            let Some(robot_info) = &mut self.robot_info &&
-            let Some(robot) = logic_state.get_robots().iter().find(|robot| robot.button_id == robot_info.robot_button_id)
-        {            
-            robot_info.send(context, robot);
+        if let Some(robot_info) = &mut self.robot_info {            
+            robot_info.send(context);
         }
     }
 

@@ -24,12 +24,12 @@ impl<'a> Scene for MainScene<'a> {
                 _ => {},
             },
             EventType::ButtonPressed(button_id) => {
-                if let Some(robot) = self.logic.get_robots()
-                    .iter()
-                    .find(|robot| robot.button_id == *button_id)
-                {
-                    self.render.receive_button_click(*button_id, context.ui, robot);
-                }
+                self.render.receive_button_click(
+                    *button_id,
+                    context.ui,
+                    self.logic.get_robots().iter()
+                        .find(|robot| robot.button_id == *button_id),
+                );
                 
                 self.render.receive_ui_click();
             },
