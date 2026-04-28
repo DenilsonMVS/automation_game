@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, ui::{Ui, button_area::ButtonArea}};
+use crate::{MainContext, game::{logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, render::{UI_BASE_DEPTH, robot::ROBOT_DEPTH}}, ui::{Ui, simple_area::SimpleArea}};
 
 const EPS: f32 = 0.0001;
 
@@ -28,8 +28,8 @@ impl Robot {
             color: glm::vec3(120, 200, 190),
             context: ComputeContext::Computer,
             display_module: DisplayModule::new(),
-            button_id: ui.button_manager.push_buton_area(ButtonArea::new(
-                Self::get_render_box(position).world_to_ndc_pos(&ui.camera))),
+            button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new(
+                Self::get_render_box(position).world_to_ndc_pos(&ui.camera), UI_BASE_DEPTH - 1)),
         }
     }
 
@@ -97,9 +97,9 @@ impl Robot {
         self.movement_logic(delta, self.movement_module.calculate_accelleration());
 
         let render_box = Self::get_render_box(self.get_position()).world_to_ndc_pos(&ui.camera);
-        ui.button_manager.update_button_area(
+        ui.simple_area_manager.update_simple_area(
             self.button_id,
-            ButtonArea::new(render_box),
+            SimpleArea::new_button(render_box, ROBOT_DEPTH),
         );
     }
 

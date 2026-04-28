@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, button_area::ButtonArea, drag_area::DragArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -27,6 +27,7 @@ pub struct RobotInfo {
     instructions: Vec<InstructionConfig>,
     add_instruction_button_id: usize,
     pub robot_button_id: usize,
+    pub info_area_id: usize,
 }
 
 impl RobotInfo {
@@ -43,8 +44,8 @@ impl RobotInfo {
             }).collect();
 
         Self {
-            add_instruction_button_id: ui.button_manager.push_buton_area(ButtonArea::new(
-               Self::get_add_instruction_button_box(top_left))),
+            add_instruction_button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+               Self::get_add_instruction_button_box(top_left), UI_BASE_DEPTH - 1)),
             dnd: Dnd::new(
                 top_left + Self::get_idx_default_offset(0),
                 glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
@@ -52,6 +53,10 @@ impl RobotInfo {
                 instructions.len(), ui),
             instructions,
             robot_button_id,
+            info_area_id: ui.simple_area_manager.push_simple_area(SimpleArea::new(
+                Self::get_outer_area_render_box(top_left),
+                UI_BASE_DEPTH,
+            )),
         }
     }
 
@@ -81,12 +86,12 @@ impl RobotInfo {
         }
     }
 
-    fn get_idx_drag_area(idx: usize, top_left: glm::Vec2) -> DragArea {
-        DragArea::new(RenderBox::new_simple(
+    fn get_idx_drag_area(idx: usize, top_left: glm::Vec2) -> SimpleArea {
+        SimpleArea::new_button(RenderBox::new_simple(
             top_left + Self::get_idx_default_offset(idx),
             PositionMode::TopLeft,
             glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
-        ))
+        ), UI_BASE_DEPTH - 1)
     }
 
     pub fn receive_move_event(&mut self, id: usize, movement: glm::Vec2) {
@@ -97,15 +102,27 @@ impl RobotInfo {
         self.dnd.receive_release_event(id);
     }
 
+    fn get_outer_area_render_box(top_left: glm::Vec2) -> RenderBox {
+        RenderBox::new_simple(
+            top_left + glm::vec2(INFO_MARGIN, -INFO_MARGIN),
+            PositionMode::TopLeft,
+            glm::vec2(INFO_WIDTH + BUTTON_AREA_WIDTH, INFO_HEIGHT),
+        )
+    }
+
     pub fn send(&mut self, context: &mut MainContext) {
         let top_left = context.ui.get_ndc_render_box().get_top_left();
         self.dnd.top_left_position = top_left + Self::get_idx_default_offset(0);
         self.dnd.update(context.ui);
+        context.ui.simple_area_manager.update_simple_area(self.info_area_id, SimpleArea::new(
+            Self::get_outer_area_render_box(top_left),
+            UI_BASE_DEPTH,
+        ));
 
         let add_instruction_button_box = Self::get_add_instruction_button_box(top_left);
-        context.ui.button_manager.update_button_area(
+        context.ui.simple_area_manager.update_simple_area(
             self.add_instruction_button_id,
-            ButtonArea::new(add_instruction_button_box),
+            SimpleArea::new_button(add_instruction_button_box, UI_BASE_DEPTH - 1),
         );
         context.simple_shape_renderer.send_render_box(
             &add_instruction_button_box,
@@ -154,10 +171,8 @@ impl RobotInfo {
             );
         }
 
-        context.simple_shape_renderer.send_rectangle(
-            top_left + glm::vec2(INFO_MARGIN, -INFO_MARGIN),
-            glm::vec2(INFO_WIDTH + BUTTON_AREA_WIDTH, INFO_HEIGHT),
-            PositionMode::TopLeft,
+        context.simple_shape_renderer.send_render_box(
+            &Self::get_outer_area_render_box(top_left),
             glm::vec4(15, 17, 26, 255),
             UI_BASE_DEPTH, 1,
         );

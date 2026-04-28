@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, drag_area::DragArea}};
+use crate::{game::render::UI_BASE_DEPTH, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, simple_area::SimpleArea}};
 
 /// Dnd (Drag and Drop) handles reordering logic for a vertical list of items.
 /// 
@@ -72,8 +72,10 @@ impl Dnd {
             top_left_position, unit_size, gap,
             order: (0..amount).map(|i| (
                 i, // Initial render position is just the index
-                ui.drag_area_manager.push_drag_area(DragArea::new(
-                    Self::get_index_bounding_box(top_left_position, unit_size, gap, i)))
+                ui.drag_area_manager.push_drag_area(SimpleArea::new(
+                    Self::get_index_bounding_box(top_left_position, unit_size, gap, i),
+                    UI_BASE_DEPTH - 1,
+                ))
             )).collect(),
             grabbed: None,
         }
@@ -95,7 +97,7 @@ impl Dnd {
         );
 
         // Register the interactive area with the UI manager.
-        let grab_id = ui.drag_area_manager.push_drag_area(DragArea::new(new_bbox));
+        let grab_id = ui.drag_area_manager.push_drag_area(SimpleArea::new(new_bbox, UI_BASE_DEPTH - 1));
 
         // Add the new entry to the order mapping: (render_position, drag_area_id).
         // Its original_idx will implicitly be its position in this vector.
@@ -156,7 +158,10 @@ impl Dnd {
                 *render_pos
             );
 
-            ui.drag_area_manager.update_drag_area(*grab_id, DragArea::new(current_box));
+            ui.drag_area_manager.update_drag_area(
+                *grab_id,
+                SimpleArea::new(current_box, UI_BASE_DEPTH - 1),
+            );
         }
     }
 

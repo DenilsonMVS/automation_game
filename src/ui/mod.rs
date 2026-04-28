@@ -1,13 +1,13 @@
 use std::{mem, time::Instant};
 
-use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{button_manager::ButtonManager, drag_area_manager::DragAreaManager}};
+use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{drag_area_manager::DragAreaManager, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area_manager::SimpleManager}};
 use nalgebra_glm as glm;
-use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::{Cursor, CursorIcon, Window}};
+use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::Window};
 
-pub mod button_area;
-pub mod drag_area;
-pub mod button_manager;
+pub mod simple_area;
+pub mod simple_area_manager;
 pub mod drag_area_manager;
+pub mod multi_area_conflict_resolver;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -38,7 +38,7 @@ pub struct Ui {
     pub camera: Camera,
     pressed_keys: [bool; 4],
 
-    pub button_manager: ButtonManager,
+    pub simple_area_manager: SimpleManager,
     pub drag_area_manager: DragAreaManager,
 
     pub events: Vec<EventType>,
@@ -60,7 +60,7 @@ impl Ui {
             camera: Camera::new(glm::vec2(0.0, 0.0), 1.0),
             pressed_keys: [false; 4],
 
-            button_manager: ButtonManager::new(),
+            simple_area_manager: SimpleManager::new(),
             drag_area_manager: DragAreaManager::new(),
 
             events: vec![],
@@ -102,7 +102,6 @@ impl Ui {
     pub fn on_render_start(&mut self, context: &mut UiContext) {
         self.previous_frame_time = self.current_time;
         self.current_time = Instant::now();
-        context.window.set_cursor(Cursor::Icon(CursorIcon::Default));
 
         let camera_movement_offsets = [
             glm::vec2( 0.0,  1.0),
@@ -120,18 +119,24 @@ impl Ui {
             }
         }
 
+        let mut areas_containing_mouse = Vec::new();
         self.drag_area_manager.on_frame_start(
-            &mut self.events,
+            &mut areas_containing_mouse,
+            self.ndc_mouse_position,
+        );
+        self.simple_area_manager.on_frame_start(
+            &mut areas_containing_mouse,
+            self.ndc_mouse_position,
+        );
+
+        resolve_multi_area_conflict(
             self.mouse_pressed,
             self.mouse_released,
+            self.ndc_mouse_position,
             self.previous_ndc_mouse_position,
-            self.ndc_mouse_position,
-            context.window,
-        );
-        self.button_manager.on_frame_start(
+            &areas_containing_mouse,
             &mut self.events,
-            self.mouse_pressed,
-            self.ndc_mouse_position,
+            &mut self.drag_area_manager,
             context.window,
         );
     }
@@ -146,7 +151,7 @@ impl Ui {
 
     pub fn on_render_end(&mut self) {
         self.drag_area_manager.on_frame_end();
-        self.button_manager.on_frame_end();
+        self.simple_area_manager.on_frame_end();
 
         self.previous_ndc_mouse_position = self.ndc_mouse_position;
         self.mouse_pressed = false;

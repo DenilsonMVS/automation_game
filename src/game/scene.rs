@@ -5,11 +5,13 @@ use crate::MainContext;
 #[derive(Debug)]
 pub enum EventType {
     Winit(Box<WindowEvent>),
-    ButtonPressed(usize),
+    SimpleAreaPressed(usize),
     Grabbed(usize),
     Moved(Box<(usize, glm::Vec2)>),
     Released(usize),
     FinalEvent,
+    HoverDragArea(usize),
+    HoverSimpleArea(usize),
 }
 
 pub trait Scene {

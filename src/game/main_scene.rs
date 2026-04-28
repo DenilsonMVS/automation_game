@@ -23,7 +23,7 @@ impl<'a> Scene for MainScene<'a> {
                     self.render.receive_generic_click(),
                 _ => {},
             },
-            EventType::ButtonPressed(button_id) => {
+            EventType::SimpleAreaPressed(button_id) => {
                 self.render.receive_button_click(
                     *button_id,
                     context.ui,
@@ -41,7 +41,7 @@ impl<'a> Scene for MainScene<'a> {
             },
             EventType::Moved(info) =>
                 self.render.receive_move_event(info.as_ref().0, info.as_ref().1),
-            // _ => {},
+            _ => {},
         }
     }
 
