@@ -28,6 +28,14 @@ impl Dnd {
         )
     }
 
+    pub fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    pub fn get_drag_box_id(&self, idx: usize) -> usize {
+        self.order[idx].1
+    }
+
     /// Removes an item based on its current visible position on the screen.
     /// Returns the original index of the removed item so the caller can 
     /// also remove it from their data source (e.g., the instruction list).
@@ -55,6 +63,35 @@ impl Dnd {
 
         // Return the 'original_idx' (which was the position in the vector before removal)
         Some(vector_pos)
+    }
+
+    /// Removes an item based on its original index (its position in the 'order' vector).
+    /// Returns the drag_area_id so the caller can remove it from the UI manager.
+    pub fn remove_original(&mut self, original_idx: usize) -> Option<usize> {
+        if original_idx >= self.order.len() {
+            return None;
+        }
+
+        // 1. Remove the item using the stable index
+        let (removed_render_pos, drag_id) = self.order.remove(original_idx);
+
+        // 2. Clear grab state if this specific item was being dragged
+        if let Some((grab_id_active, _)) = self.grabbed {
+            if grab_id_active == drag_id {
+                self.grabbed = None;
+            }
+        }
+
+        // 3. Update the visual positions of all remaining items.
+        // Items that were visually BELOW the removed one must slide UP.
+        for (r_pos, _) in self.order.iter_mut() {
+            if *r_pos > removed_render_pos {
+                *r_pos -= 1;
+            }
+        }
+
+        // Return the drag_id so you can call ui.drag_area_manager.remove_drag_area(id)
+        Some(drag_id)
     }
 
     /// Converts a raw pixel offset into a "slot shift" count.
@@ -261,6 +298,30 @@ mod tests {
         // Items should be in their natural order (0, 1, 2)
         assert_eq!(positions.len(), 3);
         assert!(!positions[0].1); // Not grabbed
+    }
+
+    #[test]
+    fn test_remove_original_logic() {
+        let mut dnd = Dnd::new_test(3); // Items: 0, 1, 2 nas posições visuais 0, 1, 2
+        
+        // 1. Vamos bagunçar a ordem primeiro: move o item 0 para o fim (Pos 2)
+        // Original 0 -> Pos 2
+        // Original 1 -> Pos 0
+        // Original 2 -> Pos 1
+        dnd.receive_move_event(0, glm::vec2(0.0, -60.0));
+        dnd.receive_release_event(0);
+
+        // 2. Remove o "Original 2" (que está visualmente na Pos 1)
+        let removed_id = dnd.remove_original(2).unwrap();
+        
+        assert_eq!(removed_id, 2);
+        assert_eq!(dnd.order.len(), 2);
+
+        // 3. Verificação:
+        // O item que estava na Pos 2 (Original 0) deve ter subido para a Pos 1
+        // O item que estava na Pos 0 (Original 1) deve continuar na Pos 0
+        assert_eq!(dnd.order[0].0, 1, "Original 0 should have moved from Pos 2 to 1");
+        assert_eq!(dnd.order[1].0, 0, "Original 1 should stay at Pos 0");
     }
 
     #[test]

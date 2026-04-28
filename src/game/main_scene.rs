@@ -41,7 +41,8 @@ impl<'a> Scene for MainScene<'a> {
             },
             EventType::Moved(info) =>
                 self.render.receive_move_event(info.as_ref().0, info.as_ref().1),
-            _ => {},
+            EventType::HoverSimpleArea(_) | EventType::HoverDragArea(_) =>
+                self.render.receive_hover_event(event),
         }
     }
 

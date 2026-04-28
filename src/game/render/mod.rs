@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::RobotInfo, world::ViewWorld}}, graphics::renderer::Renderer, ui::Ui};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::RobotInfo, world::ViewWorld}, scene::EventType}, graphics::renderer::Renderer, ui::Ui};
 use nalgebra_glm as glm;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
@@ -8,6 +8,7 @@ pub mod robot;
 pub mod world;
 pub mod robot_info;
 pub mod dnd;
+pub mod instruction_unit;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -37,6 +38,12 @@ impl<'a> RenderState<'a> {
     pub fn receive_move_event(&mut self, id: usize, offset: glm::Vec2) {
         if let Some(robot_info) = &mut self.robot_info {
             robot_info.receive_move_event(id, offset);
+        }
+    }
+
+    pub fn receive_hover_event(&mut self, event: &EventType) {
+        if let Some(robot_info) = &mut self.robot_info {
+            robot_info.receive_hover_event(event);
         }
     }
 
