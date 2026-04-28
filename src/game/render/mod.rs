@@ -7,6 +7,7 @@ pub mod display_module;
 pub mod robot;
 pub mod world;
 pub mod robot_info;
+pub mod dnd;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -71,7 +72,7 @@ impl<'a> RenderState<'a> {
         self.world.send(logic_state.get_world());
 
         if
-            let Some(robot_info) = &self.robot_info &&
+            let Some(robot_info) = &mut self.robot_info &&
             let Some(robot) = logic_state.get_robots().iter().find(|robot| robot.button_id == robot_info.robot_button_id)
         {            
             robot_info.send(context, robot);

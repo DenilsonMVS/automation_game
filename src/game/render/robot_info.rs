@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, memory::GenericMemory, robot::Robot}, render::UI_BASE_DEPTH}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, drag_area::DragArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, memory::GenericMemory, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, drag_area::DragArea}};
 use nalgebra_glm as glm;
 
 const INFO_WIDTH: f32 = 0.8;
@@ -10,27 +10,21 @@ const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - 2.0 * INFO_PADDING;
 const INSTRUCTION_HEIGHT: f32 = (INFO_HEIGHT - INFO_PADDING * (MEMORY_SIZE + 1) as f32) / MEMORY_SIZE as f32;
 const INSTRUCTION_PADDING: f32 = 0.01;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RobotInfo {
-    instruction_grab_boxes: Vec<(usize, glm::Vec2)>,
+    dnd: Dnd,
     pub robot_button_id: usize,
 }
 
 impl RobotInfo {
-    pub fn new(ui: &mut Ui, robot_button_id: usize, robot: &Robot) -> Self {
+    pub fn new(ui: &mut Ui, robot_button_id: usize, _robot: &Robot) -> Self {
         let top_left = ui.get_ndc_render_box().get_top_left();
-        let instruction_grab_boxes = robot.computer.instructions
-            .iter()
-            .filter(|inst| inst.unpack() != UnpackedInstruction::Sys(Syscall::Nop))
-            .enumerate()
-            .map(|(i, _)| (
-                ui.drag_area_manager.push_drag_area(Self::get_idx_drag_area(i, top_left)),
-                glm::vec2(0.0, 0.0),
-            ))
-            .collect();
-
         Self {
-            instruction_grab_boxes,
+            dnd: Dnd::new(
+                top_left + Self::get_idx_default_offset(0),
+                glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
+                INFO_PADDING,
+                MEMORY_SIZE, ui),
             robot_button_id,
         }
     }
@@ -51,89 +45,25 @@ impl RobotInfo {
     }
 
     pub fn receive_move_event(&mut self, id: usize, movement: glm::Vec2) {
-        if let Some((_, offset)) = self.instruction_grab_boxes
-            .iter_mut()
-            .find(|(instruction_id, _)| *instruction_id == id)
-        {
-            offset.y += movement.y;
-        }
+        self.dnd.receive_move_event(id, movement);
     }
 
     pub fn receive_release_event(&mut self, id: usize) {
-        if let Some((_, offset)) = self.instruction_grab_boxes
-            .iter_mut()
-            .find(|(instruction_id, _)| *instruction_id == id)
-        {
-            offset.y = 0.0;
-        }
+        self.dnd.receive_release_event(id);
     }
 
-    fn get_grabbed_idx(&self) -> Option<usize> {
-        self.instruction_grab_boxes
-            .iter()
-            .enumerate()
-            .find(|(_, (_, offset))| *offset != glm::vec2(0.0, 0.0))
-            .map(|(idx, _)| idx)
-    }
-
-    fn get_visualization_iter(&self) -> impl Iterator<Item = usize> + '_ {
-        let len = self.instruction_grab_boxes.len();
-        
-        // Calculamos o grabbed e o target uma única vez fora do iterador
-        let params = self.get_grabbed_idx().map(|g| {
-            let space = INSTRUCTION_HEIGHT + INFO_PADDING;
-            let offset_y = -self.instruction_grab_boxes[g].1.y;
-            let shift = (offset_y / space).round() as i32;
-            let t = (g as i32 + shift).clamp(0, (len - 1) as i32) as usize;
-            (g, t)
-        });
-
-        (0..len).map(move |i| {
-            let Some((grabbed, target)) = params else {
-                return i; // Se não está segurando nada, a ordem é 1:1
-            };
-
-            if i == target {
-                grabbed // Na posição alvo, mostre o item segurado
-            } else if grabbed < target && i >= grabbed && i < target {
-                i + 1 // Shift para cima se o item segurado desceu
-            } else if grabbed > target && i > target && i <= grabbed {
-                i - 1 // Shift para baixo se o item segurado subiu
-            } else {
-                i // Posição não afetada
-            }
-        })
-    }
-
-    pub fn send(&self, context: &mut MainContext, robot: &Robot) {
+    pub fn send(&mut self, context: &mut MainContext, robot: &Robot) {
         let top_left = context.ui.get_ndc_render_box().get_top_left();
-        let grabbed_idx = self.get_grabbed_idx();
+        self.dnd.top_left_position = top_left + Self::get_idx_default_offset(0);
+        self.dnd.update(context.ui);
 
-        for (i, (id, _)) in self.instruction_grab_boxes.iter().enumerate() {
-            context.ui.drag_area_manager.update_drag_area(
-                *id, Self::get_idx_drag_area(i, top_left));
-        }
+        let top_left = context.ui.get_ndc_render_box().get_top_left();
 
-        if let Some(g_idx) = grabbed_idx {
-            let instruction = robot.computer.instructions.read(g_idx).unpack();
-            if instruction != UnpackedInstruction::Sys(Syscall::Nop) {
-                let (_, offset) = self.instruction_grab_boxes[g_idx];
-                let bounding_box = Self::get_idx_drag_area(g_idx, top_left)
-                    .bounding_box
-                    .apply_offset(offset);
-
-                self.render_instruction_at(context, &instruction, &bounding_box, true);
-            }
-        }
-
-        for (visual_row, original_idx) in self.get_visualization_iter().enumerate() {
-            if Some(original_idx) == grabbed_idx { continue; }
-
-            let instruction = robot.computer.instructions.read(original_idx).unpack();
+        for (i, (bounding_box, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
+            let instruction = robot.computer.instructions.read(i).unpack();
             if instruction == UnpackedInstruction::Sys(Syscall::Nop) { continue; }
 
-            let bounding_box = Self::get_idx_drag_area(visual_row, top_left).bounding_box;
-            self.render_instruction_at(context, &instruction, &bounding_box, false);
+            self.render_instruction_at(context, &instruction, &bounding_box, is_grabbed);
         }
 
         for i in 0..MEMORY_SIZE {

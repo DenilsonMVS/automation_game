@@ -1,4 +1,4 @@
-use crate::{game::scene::EventType, stable_index_vector::StableIndexVector, ui::{UiContext, button_area::ButtonArea}};
+use crate::{game::scene::EventType, stable_index_vector::StableIndexVector, ui::button_area::ButtonArea};
 use nalgebra_glm as glm;
 use winit::window::{Cursor, CursorIcon, Window};
 

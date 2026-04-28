@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::robot::Robot, graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::button_area::ButtonArea};
+use crate::{MainContext, game::logic::robot::Robot, graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}};
 
 const ROBOT_SIZE: f32 = 0.8;
 const WEEL_DIAMETER: f32 = 0.26;
