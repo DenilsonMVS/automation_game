@@ -73,9 +73,9 @@ impl Computer {
         match unpacked_instruction {
             UnpackedInstruction::Lui(rd, imm) =>
                 self.registers.write(rd, imm),
-            UnpackedInstruction::AddI(rs, rd, imm) =>
+            UnpackedInstruction::Addi(rs, rd, imm) =>
                 self.registers.inst1(rs, rd, |x| x.wrapping_add(imm)),
-            UnpackedInstruction::SubI(rs, rd, imm) =>
+            UnpackedInstruction::Subi(rs, rd, imm) =>
                 self.registers.inst1(rs, rd, |x| x.wrapping_sub(imm)),
             UnpackedInstruction::Add(r1, r2, rd) =>
                 self.registers.inst2(r1, r2, rd, |a, b| a.wrapping_add(b)),

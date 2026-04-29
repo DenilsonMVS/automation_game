@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::RobotInfo, world::ViewWorld}, scene::EventType}, graphics::renderer::Renderer, ui::Ui};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::RobotInfo, world::ViewWorld}, scene::EventType}, graphics::renderer::{Renderer, fonts::Font}, ui::Ui};
 use nalgebra_glm as glm;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
@@ -9,6 +9,7 @@ pub mod world;
 pub mod robot_info;
 pub mod dnd;
 pub mod instruction_unit;
+pub mod menu;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -47,9 +48,9 @@ impl<'a> RenderState<'a> {
         }
     }
 
-    pub fn receive_button_click(&mut self, button_id: usize, ui: &mut Ui, robot: Option<&Robot>) {
+    pub fn receive_button_click(&mut self, button_id: usize, ui: &mut Ui, font: &Font, robot: Option<&Robot>) {
         if let Some(robot_info) = &mut self.robot_info {
-            robot_info.receive_button_click(button_id, ui);
+            robot_info.receive_button_click(button_id, ui, font);
         }
 
         let robot_info_button_id = self.robot_info.as_ref().map(|r| r.robot_button_id);

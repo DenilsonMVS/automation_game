@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}}, scene::EventType}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}}, scene::EventType}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -10,6 +10,22 @@ pub const INFO_WIDTH: f32 = 0.7;
 pub const INFO_HEIGHT: f32 = 1.6;
 pub const INFO_PADDING: f32 = 0.015;
 pub const INFO_MARGIN: f32 = 0.02;
+
+pub fn get_background_color() -> glm::U8Vec4 {
+    glm::vec4(15, 17, 26, 255)
+}
+
+pub fn get_secondary_background_color() -> glm::U8Vec4 {
+    glm::vec4(25, 28, 39, 255)
+}
+
+pub fn get_empty_color() -> glm::U8Vec4 {
+    glm::vec4(18, 20, 30, 255)
+}
+
+pub fn get_hovered_color() -> glm::U8Vec4 {
+    glm::vec4(45, 48, 59, 255)
+}
 
 #[derive(Debug)]
 pub struct RobotInfo {
@@ -71,7 +87,7 @@ impl RobotInfo {
         )
     }
 
-    pub fn receive_button_click(&mut self, id: usize, ui: &mut Ui) {
+    pub fn receive_button_click(&mut self, id: usize, ui: &mut Ui, font: &Font) {
         let top_left = ui.get_ndc_render_box().get_top_left();
 
         if id == self.add_instruction_button_id {
@@ -79,6 +95,7 @@ impl RobotInfo {
                 self.dnd.push(ui);
                 self.instructions.push(InstructionUnit::new_blank(
                     ui,
+                    font,
                     top_left + Self::get_idx_default_offset(self.instructions.len()),
                     self.dnd.get_drag_box_id(self.dnd.len() - 1),
                 ));
@@ -91,6 +108,10 @@ impl RobotInfo {
         {
             self.dnd.remove_original(instruction_to_remove);
             self.instructions.remove(instruction_to_remove);
+        } else {
+            for inst in self.instructions.iter_mut() {
+                inst.receive_simple_area_click(id, ui);
+            }
         }
     }
 
@@ -159,6 +180,7 @@ impl RobotInfo {
             self.instructions[i].update(
                 bbox.get_top_left(),
                 context.ui,
+                context.font,
             );
 
             self.instructions[i].send(context, is_grabbed, &bbox);
@@ -168,14 +190,14 @@ impl RobotInfo {
             let slot_box = Self::get_idx_drag_area(i, top_left).bounding_box;
             context.simple_shape_renderer.send_render_box(
                 &slot_box,
-                glm::vec4(18, 20, 30, 255),
+                get_empty_color(),
                 UI_BASE_DEPTH - 1, 1,
             );
         }
 
         context.simple_shape_renderer.send_render_box(
             &Self::get_outer_area_render_box(top_left),
-            glm::vec4(15, 17, 26, 255),
+            get_background_color(),
             UI_BASE_DEPTH, 1,
         );
     }

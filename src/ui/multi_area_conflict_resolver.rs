@@ -31,7 +31,7 @@ pub fn resolve_multi_area_conflict(
         if mouse_released {
             events.push(EventType::Released(id));
             drag_area_manager.grabbed_id = None;
-            window.set_cursor(CursorIcon::Default);
+            window.set_cursor(CursorIcon::Grabbing);
         } else {
             let delta = ndc_mouse_position - previous_ndc_mouse_position;
             if delta != glm::vec2(0.0, 0.0) {

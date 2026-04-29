@@ -27,6 +27,7 @@ impl<'a> Scene for MainScene<'a> {
                 self.render.receive_button_click(
                     *button_id,
                     context.ui,
+                    context.font,
                     self.logic.get_robots().iter()
                         .find(|robot| robot.button_id == *button_id),
                 );

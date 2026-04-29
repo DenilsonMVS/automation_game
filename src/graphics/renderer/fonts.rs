@@ -327,6 +327,21 @@ impl<'a> Font<'a> {
         vbo.reset_index();
     }
 
+    pub fn get_monospace_width(&self, line_height: f32) -> f32 {
+        let font_design_height = self.ascender - self.descender;
+        
+        if font_design_height <= 0.0 {
+            return 0.0;
+        }
+
+        let scale = line_height / font_design_height;
+        
+        let space_idx = map_char_to_index(' ').unwrap_or(0);
+        let advance_design = self.glyphs[space_idx].advance;
+
+        advance_design * scale
+    }
+
     pub fn bind_to_unit(&self, unit: u32) {
         self.texture.bind_to_unit(unit);
     }
