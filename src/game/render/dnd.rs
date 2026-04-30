@@ -263,8 +263,6 @@ impl Dnd {
 }
 
 
-
-
 #[cfg(test)]
 impl Dnd {
     /// Special constructor for unit testing. 

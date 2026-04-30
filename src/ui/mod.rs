@@ -191,7 +191,6 @@ impl Ui {
     }
 
     pub fn take_events(&mut self) -> Vec<EventType> {
-        self.events.push(EventType::FinalEvent);
         mem::take(&mut self.events)
     }
 }

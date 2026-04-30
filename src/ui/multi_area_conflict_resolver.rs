@@ -56,6 +56,9 @@ pub fn resolve_multi_area_conflict(
             }
         }
     } else {
+        if mouse_pressed {
+            events.push(EventType::ClickOutside);
+        }
         window.set_cursor(CursorIcon::Default);
     }
 

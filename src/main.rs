@@ -9,7 +9,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::{EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
+use crate::{game::{main_scene::MainScene, scene::{EventReceiver, EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -145,7 +145,7 @@ impl<'a> State<'a> {
             };
 
             for event in events.iter() {
-                self.scene.handle_event(event, &mut main_context);
+                self.scene.on_event(event, &mut main_context);
             }
 
             main_context.simple_shape_renderer.reset();

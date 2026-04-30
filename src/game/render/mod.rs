@@ -14,8 +14,6 @@ pub mod menu;
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
     robot_info: Option<RobotInfo>,
-    received_click: bool,
-    clicked_some_ui_area: bool,
 }
 
 impl<'a> RenderState<'a> {
@@ -23,17 +21,7 @@ impl<'a> RenderState<'a> {
         Self {
             world: ViewWorld::new(renderer, logic_world),
             robot_info: None,
-            received_click: false,
-            clicked_some_ui_area: false,
         }
-    }
-
-    pub fn receive_generic_click(&mut self) {
-        self.received_click = true;
-    }
-
-    pub fn receive_ui_click(&mut self) {
-        self.clicked_some_ui_area = true;
     }
 
     pub fn receive_move_event(&mut self, id: usize, offset: glm::Vec2) {
@@ -69,13 +57,8 @@ impl<'a> RenderState<'a> {
         }
     }
 
-    pub fn receive_finish_event(&mut self) {
-        if self.received_click && !self.clicked_some_ui_area {
-            self.robot_info = None;
-        }
-
-        self.received_click = false;
-        self.clicked_some_ui_area = false;
+    pub fn receive_click_outside(&mut self) {
+        self.robot_info = None;
     }
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
