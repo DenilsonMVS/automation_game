@@ -45,6 +45,12 @@ pub trait EventReceiver<T> {
     fn propagate_children(&mut self, _event: &EventType, _context: &mut T) {}
 }
 
+pub trait UiElement<UpdateContext, SendContext, GenerateOutputContext> {
+    fn update(&mut self, _position: glm::Vec2, _depth: u16, _context: &mut UpdateContext) {}
+    fn send(&mut self, _context: &mut SendContext) {}
+    fn generate_output(&mut self, _context: &mut GenerateOutputContext) {}
+}
+
 pub trait Scene {
     fn game_logic(&mut self, context: &mut MainContext);
     fn send(&mut self, context: &mut MainContext);

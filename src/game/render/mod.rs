@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::Ui};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::Ui};
 use nalgebra_glm as glm;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
@@ -10,6 +10,8 @@ pub mod robot_info;
 pub mod dnd;
 pub mod instruction_unit;
 pub mod menu;
+pub mod rendered_area;
+pub mod rendered_button;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -32,6 +34,7 @@ impl<'a> RenderState<'a> {
         self.world.send(logic_state.get_world());
 
         if let Some(robot_info) = &mut self.robot_info {            
+            robot_info.update(context.ui.get_ndc_render_box().get_top_left(), UI_BASE_DEPTH, context);
             robot_info.send(context);
         }
     }

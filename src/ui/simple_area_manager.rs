@@ -18,6 +18,10 @@ impl SimpleManager {
         }
     }
 
+    pub fn get_area(&self, id: usize) -> Option<&SimpleArea> {
+        self.simple_areas.get(id)
+    }
+
     pub fn push_simple_area(&mut self, simple_area: SimpleArea) -> usize {
         self.simple_areas.push(simple_area)
     }

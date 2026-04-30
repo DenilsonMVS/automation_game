@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}}, scene::{EventReceiver, EventType}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::RenderedArea, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -31,9 +31,9 @@ pub fn get_hovered_color() -> glm::U8Vec4 {
 pub struct RobotInfo {
     dnd: Dnd,
     instructions: Vec<InstructionUnit>,
-    add_instruction_button_id: usize,
+    add_instruction_button: RenderedButton,
     pub robot_button_id: usize,
-    pub info_area_id: usize,
+    container: RenderedArea,
 }
 
 impl RobotInfo {
@@ -60,15 +60,26 @@ impl RobotInfo {
             )).collect();
 
         Self {
-            add_instruction_button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
-               Self::get_add_instruction_button_box(top_left), UI_BASE_DEPTH - 1)),
+            add_instruction_button:
+                RenderedButton::new(
+                    Self::get_add_instruction_button_box(top_left),
+                    UI_BASE_DEPTH - 1,
+                    glm::vec4(0x5C, 0x6B, 0xC0, 255),
+                    ui,
+                )
+                .with_color(glm::vec4(255, 255, 255, 255))
+                .with_hover_bgcolor(glm::vec4(0x6C, 0x7B, 0xD0, 255))
+                .with_padding(BUTTON_PADDING)
+                .with_content("ADD"),
             dnd,
             instructions,
             robot_button_id,
-            info_area_id: ui.simple_area_manager.push_simple_area(SimpleArea::new(
+            container: RenderedArea::new(
                 Self::get_outer_area_render_box(top_left),
                 UI_BASE_DEPTH,
-            )),
+                get_background_color(),
+                ui,
+            ),
         }
     }
 
@@ -102,45 +113,36 @@ impl RobotInfo {
             glm::vec2(INFO_WIDTH + BUTTON_AREA_WIDTH, INFO_HEIGHT),
         )
     }
+}
 
-    pub fn send(&mut self, context: &mut MainContext) {
-        let top_left = context.ui.get_ndc_render_box().get_top_left();
+impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a, 'b>> for RobotInfo {
+    fn update(&mut self, top_left: glm::Vec2, depth: u16, context: &mut MainContext<'a, 'b>) {
         self.dnd.top_left_position = top_left + Self::get_idx_default_offset(0);
         self.dnd.update(context.ui);
-        context.ui.simple_area_manager.update_simple_area(self.info_area_id, SimpleArea::new(
-            Self::get_outer_area_render_box(top_left),
-            UI_BASE_DEPTH,
-        ));
-
-        let add_instruction_button_box = Self::get_add_instruction_button_box(top_left);
-        context.ui.simple_area_manager.update_simple_area(
-            self.add_instruction_button_id,
-            SimpleArea::new_button(add_instruction_button_box, UI_BASE_DEPTH - 1),
-        );
-        context.simple_shape_renderer.send_render_box(
-            &add_instruction_button_box,
-            glm::vec4(0x5C, 0x6B, 0xC0, 255),
-            UI_BASE_DEPTH - 1, 1,
-        );
-        context.font.add_text(
-            &TextRenderConfig::new(
-                &[("ADD", glm::vec4(255, 255, 255, 255))],
-                add_instruction_button_box.get_top_left() + glm::vec2(BUTTON_PADDING, -BUTTON_PADDING),
-                BUTTON_HEIGHT - BUTTON_PADDING * 2.0,
-            )
-            .set_align(TextAlign::Center)
-            .set_depth(UI_BASE_DEPTH - 2)
-            .set_max_line_width(BUTTON_WIDTH - BUTTON_PADDING * 2.0)
-            .set_mode(PositionMode::TopLeft)
+        self.container.update(
+            Self::get_outer_area_render_box(top_left).get_top_left(),
+            depth,
+            context.ui,
         );
 
-        for (i, (bbox, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
+        self.add_instruction_button.update(
+            Self::get_add_instruction_button_box(top_left).get_top_left(),
+            depth - 1,
+            context.ui,
+        );
+
+        for (i, (bbox, _)) in self.dnd.get_unit_positions().enumerate() {
             self.instructions[i].update(
                 bbox.get_top_left(),
                 context.ui,
                 context.font,
             );
+        }
+    }
 
+    fn send(&mut self, context: &mut MainContext<'a, 'b>) {
+        let top_left = context.ui.get_ndc_render_box().get_top_left();
+        for (i, (bbox, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
             self.instructions[i].send(context, is_grabbed, &bbox);
         }
 
@@ -153,11 +155,8 @@ impl RobotInfo {
             );
         }
 
-        context.simple_shape_renderer.send_render_box(
-            &Self::get_outer_area_render_box(top_left),
-            get_background_color(),
-            UI_BASE_DEPTH, 1,
-        );
+        self.add_instruction_button.send(context);
+        self.container.send(context);
     }
 }
 
@@ -173,7 +172,7 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
 
         let top_left = ui.get_ndc_render_box().get_top_left();
 
-        if id == self.add_instruction_button_id {
+        if id == self.add_instruction_button.get_id() {
             if self.instructions.len() < MEMORY_SIZE {
                 self.dnd.push(ui);
                 self.instructions.push(InstructionUnit::new_blank(
@@ -183,7 +182,9 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
                     self.dnd.get_drag_box_id(self.dnd.len() - 1),
                 ));
             }
-        } else if let Some(instruction_to_remove) = self.instructions
+        }
+        
+        if let Some(instruction_to_remove) = self.instructions
             .iter()
             .enumerate()
             .find(|(_, instruction)| instruction.delete_button_id == id)
@@ -200,5 +201,6 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
         }
 
         self.dnd.on_event(event, &mut ());
+        self.add_instruction_button.on_event(event,&mut ());
     }
 }
