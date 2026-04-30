@@ -28,25 +28,33 @@ impl<'a> Scene for MainScene<'a> {
 }
 
 impl<'a, 'b, 'c> EventReceiver<MainContext<'a, 'b>> for MainScene<'c> {
-    fn on_event(&mut self, event: &EventType, context: &mut MainContext<'a, 'b>) {
-        match event {
-            EventType::SimpleAreaPressed(button_id) =>
-                self.render.receive_button_click(
-                    *button_id,
-                    context.ui,
-                    context.font,
-                    self.logic.get_robots().iter()
-                        .find(|robot| robot.button_id == *button_id),
-                ),
-            EventType::Released(id) =>
-                self.render.receive_release_event(*id),
-            EventType::Moved(info) =>
-                self.render.receive_move_event(info.as_ref().0, info.as_ref().1),
-            EventType::HoverSimpleArea(_) | EventType::HoverDragArea(_) =>
-                self.render.receive_hover_event(event),
-            EventType::ClickOutside =>
-                self.render.receive_click_outside(),
-            _ => {},
-        }
+    fn on_simple_area_pressed(&mut self, id: usize, context: &mut MainContext<'a, 'b>) {
+        self.render.receive_button_click(
+            id,
+            context.ui,
+            context.font,
+            self.logic.get_robots().iter()
+                .find(|robot| robot.button_id == id),
+        );
+    }
+
+    fn on_released(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
+        self.render.receive_release_event(id);
+    }
+
+    fn on_moved(&mut self, id: usize, movement: nalgebra_glm::Vec2, _context: &mut MainContext<'a, 'b>) {
+        self.render.receive_move_event(id, movement);
+    }
+
+    fn on_hover_drag(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
+        self.render.receive_hover_event(&EventType::HoverDragArea(id));
+    }
+
+    fn on_hover_simple(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
+        self.render.receive_hover_event(&&EventType::HoverSimpleArea(id));
+    }
+
+    fn on_click_outside(&mut self, _context: &mut MainContext<'a, 'b>) {
+        self.render.receive_click_outside();
     }
 }
