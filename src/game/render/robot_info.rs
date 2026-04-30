@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}}, scene::EventType}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}}, scene::{EventReceiver, EventType}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -87,34 +87,6 @@ impl RobotInfo {
         )
     }
 
-    pub fn receive_button_click(&mut self, id: usize, ui: &mut Ui, font: &Font) {
-        let top_left = ui.get_ndc_render_box().get_top_left();
-
-        if id == self.add_instruction_button_id {
-            if self.instructions.len() < MEMORY_SIZE {
-                self.dnd.push(ui);
-                self.instructions.push(InstructionUnit::new_blank(
-                    ui,
-                    font,
-                    top_left + Self::get_idx_default_offset(self.instructions.len()),
-                    self.dnd.get_drag_box_id(self.dnd.len() - 1),
-                ));
-            }
-        } else if let Some(instruction_to_remove) = self.instructions
-            .iter()
-            .enumerate()
-            .find(|(_, instruction)| instruction.delete_button_id == id)
-            .map(|(i, _)| i)
-        {
-            self.dnd.remove_original(instruction_to_remove);
-            self.instructions.remove(instruction_to_remove);
-        } else {
-            for inst in self.instructions.iter_mut() {
-                inst.receive_simple_area_click(id, ui);
-            }
-        }
-    }
-
     fn get_idx_drag_area(idx: usize, top_left: glm::Vec2) -> SimpleArea {
         SimpleArea::new_button(RenderBox::new_simple(
             top_left + Self::get_idx_default_offset(idx),
@@ -123,26 +95,12 @@ impl RobotInfo {
         ), UI_BASE_DEPTH - 1)
     }
 
-    pub fn receive_move_event(&mut self, id: usize, movement: glm::Vec2) {
-        self.dnd.receive_move_event(id, movement);
-    }
-
-    pub fn receive_release_event(&mut self, id: usize) {
-        self.dnd.receive_release_event(id);
-    }
-
     fn get_outer_area_render_box(top_left: glm::Vec2) -> RenderBox {
         RenderBox::new_simple(
             top_left + glm::vec2(INFO_MARGIN, -INFO_MARGIN),
             PositionMode::TopLeft,
             glm::vec2(INFO_WIDTH + BUTTON_AREA_WIDTH, INFO_HEIGHT),
         )
-    }
-
-    pub fn receive_hover_event(&mut self, event: &EventType) {
-        for instruction in self.instructions.iter_mut() {
-            instruction.receive_hover_event(event);
-        }
     }
 
     pub fn send(&mut self, context: &mut MainContext) {
@@ -200,5 +158,47 @@ impl RobotInfo {
             get_background_color(),
             UI_BASE_DEPTH, 1,
         );
+    }
+}
+
+pub struct RobotInfoEventContext<'a, 'b> {
+    pub ui: &'a mut Ui,
+    pub font: &'a mut Font<'b>,
+}
+
+impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
+    fn on_simple_area_pressed(&mut self, id: usize, context: &mut RobotInfoEventContext<'a, 'b>) {
+        let ui = &mut context.ui;
+        let font = &mut context.font;
+
+        let top_left = ui.get_ndc_render_box().get_top_left();
+
+        if id == self.add_instruction_button_id {
+            if self.instructions.len() < MEMORY_SIZE {
+                self.dnd.push(ui);
+                self.instructions.push(InstructionUnit::new_blank(
+                    ui,
+                    font,
+                    top_left + Self::get_idx_default_offset(self.instructions.len()),
+                    self.dnd.get_drag_box_id(self.dnd.len() - 1),
+                ));
+            }
+        } else if let Some(instruction_to_remove) = self.instructions
+            .iter()
+            .enumerate()
+            .find(|(_, instruction)| instruction.delete_button_id == id)
+            .map(|(i, _)| i)
+        {
+            self.dnd.remove_original(instruction_to_remove);
+            self.instructions.remove(instruction_to_remove);
+        }
+    }
+
+    fn propagate_children(&mut self, event: &EventType, context: &mut RobotInfoEventContext<'a, 'b>) {
+        for instruction in self.instructions.iter_mut() {
+            instruction.on_event(event, context.ui);
+        }
+
+        self.dnd.on_event(event, &mut ());
     }
 }

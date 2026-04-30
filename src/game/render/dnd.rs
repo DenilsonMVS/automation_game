@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{game::render::UI_BASE_DEPTH, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{game::{render::UI_BASE_DEPTH, scene::EventReceiver}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, simple_area::SimpleArea}};
 
 /// Dnd (Drag and Drop) handles reordering logic for a vertical list of items.
 /// 
@@ -141,49 +141,6 @@ impl Dnd {
         self.order.push((new_render_pos, grab_id));
     }
 
-    /// Updates the drag state. Called by the UI system when a mouse move occurs over a DragArea.
-    pub fn receive_move_event(&mut self, id: usize, movement: glm::Vec2) {
-        if let Some((area_id, offset)) = &mut self.grabbed {
-            if *area_id != id {
-                // If a new ID is passed, reset offset to the new movement
-                *area_id = id;
-                *offset = movement.y;
-            } else {
-                // Accumulate vertical movement
-                *offset += movement.y;
-            }
-         } else {
-            self.grabbed = Some((id, movement.y));
-        }
-    }
-
-    /// Finalizes the reordering. Updates the internal 'order' mapping permanently.
-    pub fn receive_release_event(&mut self, id: usize) {
-        let Some((grab_id, offset)) = self.grabbed else { return };
-        if grab_id != id { return };
-
-        // Find the item currently being dragged
-        if let Some(orig_render_pos) = self.order.iter().find(|(_, aid)| *aid == id).map(|(p, _)| *p) {
-            let target_render_pos = self.calculate_target_pos(orig_render_pos, offset);
-            
-            // Re-map all items in the list to reflect the new order
-            for (pos, _) in self.order.iter_mut() {
-                if *pos == orig_render_pos {
-                    // The dragged item takes the target position
-                    *pos = target_render_pos;
-                } else if orig_render_pos < target_render_pos && *pos > orig_render_pos && *pos <= target_render_pos {
-                    // Shifting up: items between original and target move one slot up
-                    *pos -= 1;
-                } else if orig_render_pos > target_render_pos && *pos < orig_render_pos && *pos >= target_render_pos {
-                    // Shifting down: items between original and target move one slot down
-                    *pos += 1;
-                }
-            }
-        }
-
-        self.grabbed = None;
-    }
-
     /// Synchronizes the hitboxes (DragAreas) with their visual slots.
     /// This ensures that even after reordering, clicking a slot grabs the correct item.
     pub fn update(&self, ui: &mut Ui) {
@@ -262,6 +219,51 @@ impl Dnd {
     }
 }
 
+impl EventReceiver<()> for Dnd {
+    /// Finalizes the reordering. Updates the internal 'order' mapping permanently.
+    fn on_released(&mut self, id: usize, _context: &mut ()) {
+        let Some((grab_id, offset)) = self.grabbed else { return };
+        if grab_id != id { return };
+
+        // Find the item currently being dragged
+        if let Some(orig_render_pos) = self.order.iter().find(|(_, aid)| *aid == id).map(|(p, _)| *p) {
+            let target_render_pos = self.calculate_target_pos(orig_render_pos, offset);
+            
+            // Re-map all items in the list to reflect the new order
+            for (pos, _) in self.order.iter_mut() {
+                if *pos == orig_render_pos {
+                    // The dragged item takes the target position
+                    *pos = target_render_pos;
+                } else if orig_render_pos < target_render_pos && *pos > orig_render_pos && *pos <= target_render_pos {
+                    // Shifting up: items between original and target move one slot up
+                    *pos -= 1;
+                } else if orig_render_pos > target_render_pos && *pos < orig_render_pos && *pos >= target_render_pos {
+                    // Shifting down: items between original and target move one slot down
+                    *pos += 1;
+                }
+            }
+        }
+
+        self.grabbed = None;
+    }
+
+    /// Updates the drag state. Called by the UI system when a mouse move occurs over a DragArea.
+    fn on_moved(&mut self, id: usize, movement: glm::Vec2, _context: &mut ()) {
+        if let Some((area_id, offset)) = &mut self.grabbed {
+            if *area_id != id {
+                // If a new ID is passed, reset offset to the new movement
+                *area_id = id;
+                *offset = movement.y;
+            } else {
+                // Accumulate vertical movement
+                *offset += movement.y;
+            }
+         } else {
+            self.grabbed = Some((id, movement.y));
+        }
+    }
+}
+
 
 #[cfg(test)]
 impl Dnd {
@@ -306,8 +308,8 @@ mod tests {
         // Original 0 -> Pos 2
         // Original 1 -> Pos 0
         // Original 2 -> Pos 1
-        dnd.receive_move_event(0, glm::vec2(0.0, -60.0));
-        dnd.receive_release_event(0);
+        dnd.on_moved(0, glm::vec2(0.0, -60.0), &mut ());
+        dnd.on_released(0, &mut ());
 
         // 2. Remove o "Original 2" (que está visualmente na Pos 1)
         let removed_id = dnd.remove_original(2).unwrap();
@@ -328,7 +330,7 @@ mod tests {
 
         // Grab item 0 (ID 0) and move it down past the first slot threshold
         // Mouse moved -30.0 pixels (down in this coordinate system)
-        dnd.receive_move_event(0, glm::vec2(0.0, -30.0));
+        dnd.on_moved(0, glm::vec2(0.0, -30.0), &mut ());
 
         let positions: Vec<_> = dnd.get_unit_positions().collect();
 
@@ -352,10 +354,10 @@ mod tests {
         let mut dnd = Dnd::new_test(3);
 
         // Move item 0 down to the very bottom (slot 2)
-        dnd.receive_move_event(0, glm::vec2(0.0, -60.0));
+        dnd.on_moved(0, glm::vec2(0.0, -60.0), &mut ());
         
         // Release to finalize the order
-        dnd.receive_release_event(0);
+        dnd.on_released(0, &mut ());
 
         // Internal 'order' should now be updated permanently
         // Original 0 -> RenderPos 2
@@ -373,7 +375,7 @@ mod tests {
         let mut dnd = Dnd::new_test(3);
         
         // Move item 0 way beyond the list bottom
-        dnd.receive_move_event(0, glm::vec2(0.0, -5000.0));
+        dnd.on_moved(0, glm::vec2(0.0, -5000.0), &mut ());
         
         if let Some((_, offset)) = dnd.grabbed {
             let target = dnd.calculate_target_pos(0, offset);
@@ -381,8 +383,8 @@ mod tests {
         }
 
         // Move item 2 way beyond the list top
-        dnd.receive_release_event(0);
-        dnd.receive_move_event(2, glm::vec2(0.0, 5000.0));
+        dnd.on_released(0, &mut ());
+        dnd.on_moved(2, glm::vec2(0.0, 5000.0), &mut ());
         
         if let Some((_, offset)) = dnd.grabbed {
             // Item 2 is currently at RenderPos 1 (from previous test logic, 
@@ -419,8 +421,8 @@ mod tests {
         
         // 1. Swap item 0 and 1
         // Move item 0 (ID 0) down by one slot height
-        dnd.receive_move_event(0, glm::vec2(0.0, -25.0));
-        dnd.receive_release_event(0);
+        dnd.on_moved(0, glm::vec2(0.0, -25.0), &mut ());
+        dnd.on_released(0, &mut ());
         
         // Sanity check: Original 0 is now at Pos 1, Original 1 is at Pos 0
         assert_eq!(dnd.order[0].0, 1);
@@ -444,8 +446,8 @@ mod tests {
         
         // Move the newly pushed item (ID 1) to the top (Pos 0)
         // Movement is positive Y in our calculate_target_pos logic to go "up"
-        dnd.receive_move_event(1, glm::vec2(0.0, 25.0));
-        dnd.receive_release_event(1);
+        dnd.on_moved(1, glm::vec2(0.0, 25.0), &mut ());
+        dnd.on_released(1, &mut ());
 
         // Original 1 should now be at Render Pos 0
         // Original 0 should have been pushed down to Render Pos 1
@@ -480,7 +482,7 @@ mod tests {
     fn test_clamping_logic() {
         let mut dnd = Dnd::new_test(2);
         // Grab item 0 and try to drag it "to the moon" (upwards)
-        dnd.receive_move_event(0, glm::vec2(0.0, 1000.0));
+        dnd.on_moved(0, glm::vec2(0.0, 1000.0), &mut ());
         
         let positions: Vec<_> = dnd.get_unit_positions().collect();
         let y_pos = positions[0].0.get_top_left().y;

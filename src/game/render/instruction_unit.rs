@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{UI_BASE_DEPTH, menu::Menu, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::EventType}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{UI_BASE_DEPTH, menu::Menu, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 pub const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - 2.0 * INFO_PADDING;
@@ -163,8 +163,6 @@ impl UnfinishedInstruction {
         }
     }
 
-    // --- Delegação de Eventos ---
-
     pub fn send(&mut self, context: &mut MainContext) {
         self.opcode.send(context);
         match &mut self.operands {
@@ -176,31 +174,39 @@ impl UnfinishedInstruction {
             None => {}
         }
     }
+}
 
-    pub fn receive_hover_event(&mut self, id: usize) {
-        self.opcode.receive_hover_event(id);
+impl EventReceiver<Ui> for UnfinishedInstruction {
+    fn propagate_children(&mut self, event: &EventType, ui: &mut Ui) {
+        self.opcode.on_event(event, ui);
         match &mut self.operands {
-            Some(OperandState::RdImm8 { rd, imm }) => { rd.receive_hover_event(id); imm.receive_hover_event(id); }
-            Some(OperandState::RsRdImm4 { rd, rs, imm }) => { rd.receive_hover_event(id); rs.receive_hover_event(id); imm.receive_hover_event(id); }
-            Some(OperandState::R1R2Rd { rd, r1, r2 }) => { rd.receive_hover_event(id); r1.receive_hover_event(id); r2.receive_hover_event(id); }
-            Some(OperandState::R1R2Imm4 { r1, r2, imm }) => { r1.receive_hover_event(id); r2.receive_hover_event(id); imm.receive_hover_event(id); }
-            Some(OperandState::Sys { sys }) => { sys.receive_hover_event(id); }
-            None => {}
-        }
-    }
-
-    pub fn receive_simple_area_click(&mut self, id: usize, ui: &mut Ui) {
-        self.opcode.receive_simple_area_click(id, ui);
-        match &mut self.operands {
-            Some(OperandState::RdImm8 { rd, imm }) => { rd.receive_simple_area_click(id, ui); imm.receive_simple_area_click(id, ui); }
-            Some(OperandState::RsRdImm4 { rd, rs, imm }) => { rd.receive_simple_area_click(id, ui); rs.receive_simple_area_click(id, ui); imm.receive_simple_area_click(id, ui); }
-            Some(OperandState::R1R2Rd { rd, r1, r2 }) => { rd.receive_simple_area_click(id, ui); r1.receive_simple_area_click(id, ui); r2.receive_simple_area_click(id, ui); }
-            Some(OperandState::R1R2Imm4 { r1, r2, imm }) => { r1.receive_simple_area_click(id, ui); r2.receive_simple_area_click(id, ui); imm.receive_simple_area_click(id, ui); }
-            Some(OperandState::Sys { sys }) => { sys.receive_simple_area_click(id, ui); }
+            Some(OperandState::RdImm8 { rd, imm }) => {
+                rd.on_event(event, ui);
+                imm.on_event(event, ui);
+            },
+            Some(OperandState::RsRdImm4 { rd, rs, imm }) => {
+                rd.on_event(event, ui);
+                rs.on_event(event, ui);
+                imm.on_event(event, ui);
+            },
+            Some(OperandState::R1R2Rd { rd, r1, r2 }) => {
+                rd.on_event(event, ui);
+                r1.on_event(event, ui);
+                r2.on_event(event, ui);
+            },
+            Some(OperandState::R1R2Imm4 { r1, r2, imm }) => {
+                r1.on_event(event, ui);
+                r2.on_event(event, ui);
+                imm.on_event(event, ui);
+            }
+            Some(OperandState::Sys { sys }) => {
+                sys.on_event(event, ui);
+            },
             None => {}
         }
     }
 }
+
 
 #[derive(Debug)]
 pub enum InstructionConfig {
@@ -245,24 +251,6 @@ impl InstructionUnit {
             hovering_delete_button: false,
             hovering_instruction: false,
             drag_area_id,
-        }
-    }
-
-    pub fn receive_hover_event(&mut self, event: &EventType) {
-        match event {
-            EventType::HoverDragArea(id) => {
-                if *id == self.drag_area_id {
-                    self.hovering_instruction = true;
-                }
-            },
-            EventType::HoverSimpleArea(id) => {
-                if *id == self.delete_button_id {
-                    self.hovering_delete_button = true;
-                } else if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
-                    inst.receive_hover_event(*id);
-                }
-            },
-            _ => {}
         }
     }
 
@@ -354,10 +342,24 @@ impl InstructionUnit {
             glm::vec2(DELETE_BUTTON_SIZE, DELETE_BUTTON_SIZE),
         )
     }
+}
 
-    pub fn receive_simple_area_click(&mut self, id: usize, ui: &mut Ui) {
+impl EventReceiver<Ui> for InstructionUnit {
+    fn on_hover_drag(&mut self, id: usize, _context: &mut Ui) {
+        if id == self.drag_area_id {
+            self.hovering_instruction = true;
+        }
+    }
+
+    fn on_hover_simple(&mut self, id: usize, _context: &mut Ui) {
+        if id == self.delete_button_id {
+            self.hovering_delete_button = true;
+        }
+    }
+
+    fn propagate_children(&mut self, event: &EventType, ui: &mut Ui) {
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
-            inst.receive_simple_area_click(id, ui);
+            inst.on_event(event, ui);
         }
     }
 }

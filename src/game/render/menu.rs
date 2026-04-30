@@ -1,4 +1,4 @@
-use crate::{MainContext, game::render::{UI_BASE_DEPTH, robot_info::{get_background_color, get_hovered_color, get_secondary_background_color}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{render::{UI_BASE_DEPTH, robot_info::{get_background_color, get_hovered_color, get_secondary_background_color}}, scene::EventReceiver}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const MENU_BASE_DEPTH: u16 = UI_BASE_DEPTH - 30;
@@ -55,32 +55,6 @@ impl<T: std::fmt::Display + Clone> Menu<T> {
                 (self.entry_size.y + self.padding) * (self.entries_button_ids.len() as f32) + self.padding,
             ),
         )
-    }
-
-    pub fn receive_hover_event(&mut self, id: usize) {
-        if id == self.open_button_id {
-            self.hovered = true;
-        }
-    }
-
-    pub fn receive_simple_area_click(&mut self, id: usize, ui: &mut Ui) {
-        if id == self.open_button_id {
-            self.entries_button_ids.clear();
-            for i in 0..self.options.len() {
-                self.entries_button_ids.push(ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
-                    self.get_menu_idx_bbox(i),
-                    MENU_BASE_DEPTH - 2,
-                )));
-            }
-        } else {
-            for (i, button_id) in self.entries_button_ids.iter().enumerate() {
-                if *button_id == id {
-                    self.selected_entry = Some(i);
-                    self.entries_button_ids.clear();
-                    break;
-                }
-            }
-        }
     }
 
     pub fn update(&mut self, top_left_position: glm::Vec2, ui: &mut Ui) {
@@ -155,6 +129,34 @@ impl<T: std::fmt::Display + Clone> Menu<T> {
                     self.open_button_bbox.get_size().y
                 ).set_align(TextAlign::Left).set_mode(PositionMode::TopLeft).set_depth(UI_BASE_DEPTH - 4),
             );
+        }
+    }
+}
+
+impl<T: std::fmt::Display + Clone> EventReceiver<Ui> for Menu<T> {
+    fn on_hover_simple(&mut self, id: usize, _context: &mut Ui) {
+        if id == self.open_button_id {
+            self.hovered = true;
+        }
+    }
+
+    fn on_simple_area_pressed(&mut self, id: usize, ui: &mut Ui) {
+        if id == self.open_button_id {
+            self.entries_button_ids.clear();
+            for i in 0..self.options.len() {
+                self.entries_button_ids.push(ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+                    self.get_menu_idx_bbox(i),
+                    MENU_BASE_DEPTH - 2,
+                )));
+            }
+        } else {
+            for (i, button_id) in self.entries_button_ids.iter().enumerate() {
+                if *button_id == id {
+                    self.selected_entry = Some(i);
+                    self.entries_button_ids.clear();
+                    break;
+                }
+            }
         }
     }
 }

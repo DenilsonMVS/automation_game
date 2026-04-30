@@ -13,9 +13,9 @@ use crate::{game::{main_scene::MainScene, scene::{EventReceiver, EventType, Scen
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
-    simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
-    font: &'a mut Font<'b>,
-    ui: &'a mut Ui,
+    pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
+    pub font: &'a mut Font<'b>,
+    pub ui: &'a mut Ui,
 }
 
 pub struct State<'a> {

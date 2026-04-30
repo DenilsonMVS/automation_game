@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::GameState, render::RenderState, scene::{EventReceiver, EventType, Scene}}, graphics::renderer::Renderer, ui::Ui};
+use crate::{MainContext, game::{logic::GameState, render::{RenderEventContext, RenderState}, scene::{EventReceiver, EventType, Scene}}, graphics::renderer::Renderer, ui::Ui};
 
 pub struct MainScene<'a> {
     pub logic: GameState,
@@ -28,33 +28,19 @@ impl<'a> Scene for MainScene<'a> {
 }
 
 impl<'a, 'b, 'c> EventReceiver<MainContext<'a, 'b>> for MainScene<'c> {
-    fn on_simple_area_pressed(&mut self, id: usize, context: &mut MainContext<'a, 'b>) {
-        self.render.receive_button_click(
-            id,
-            context.ui,
-            context.font,
-            self.logic.get_robots().iter()
-                .find(|robot| robot.button_id == id),
-        );
-    }
+    fn propagate_children(&mut self, event: &EventType, context: &mut MainContext<'a, 'b>) {
+        let mut context = RenderEventContext {
+            ui: context.ui,
+            simple_shape_renderer: context.simple_shape_renderer,
+            font: context.font,
+            robot: if let EventType::SimpleAreaPressed(id) = event {
+                self.logic.get_robots().iter()
+                    .find(|robot| robot.button_id == *id)
+            } else {
+                None
+            }
+        };
 
-    fn on_released(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
-        self.render.receive_release_event(id);
-    }
-
-    fn on_moved(&mut self, id: usize, movement: nalgebra_glm::Vec2, _context: &mut MainContext<'a, 'b>) {
-        self.render.receive_move_event(id, movement);
-    }
-
-    fn on_hover_drag(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
-        self.render.receive_hover_event(&EventType::HoverDragArea(id));
-    }
-
-    fn on_hover_simple(&mut self, id: usize, _context: &mut MainContext<'a, 'b>) {
-        self.render.receive_hover_event(&&EventType::HoverSimpleArea(id));
-    }
-
-    fn on_click_outside(&mut self, _context: &mut MainContext<'a, 'b>) {
-        self.render.receive_click_outside();
+        self.render.on_event(event, &mut context);
     }
 }
