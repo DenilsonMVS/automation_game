@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::Ui};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::{Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
@@ -16,6 +16,7 @@ pub mod rendered_button;
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
     robot_info: Option<RobotInfo>,
+    robot_buttons: Vec<usize>,
 }
 
 impl<'a> RenderState<'a> {
@@ -23,6 +24,24 @@ impl<'a> RenderState<'a> {
         Self {
             world: ViewWorld::new(renderer, logic_world),
             robot_info: None,
+            robot_buttons: vec![],
+        }
+    }
+
+    pub fn update(&mut self, logic_state: &GameState, context: &mut MainContext) {
+        for (i, robot) in logic_state.get_robots().iter().enumerate() {
+            let updated_simple_area = SimpleArea::new_button(
+                Robot::get_render_box(robot.get_position()).world_to_ndc_pos(&context.ui.camera),
+                ROBOT_DEPTH
+            );
+            if i >= self.robot_buttons.len() {
+                self.robot_buttons.push(context.ui.simple_area_manager.push_simple_area(updated_simple_area));
+            } else {
+                context.ui.simple_area_manager.update_simple_area(
+                    self.robot_buttons[i],
+                    updated_simple_area,
+                );
+            }
         }
     }
 
@@ -48,7 +67,7 @@ pub struct RenderEventContext<'a, 'b> {
     pub ui: &'a mut Ui,
     pub font: &'a mut Font<'b>,
     pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
-    pub robot: Option<&'a Robot>,
+    pub robots: &'a [Robot],
 }
 
 impl<'a, 'b, 'c> EventReceiver<RenderEventContext<'a, 'b>> for RenderState<'c> {
@@ -62,7 +81,13 @@ impl<'a, 'b, 'c> EventReceiver<RenderEventContext<'a, 'b>> for RenderState<'c> {
             return;
         }
 
-        if let Some(robot) = context.robot {
+        let idx = self.robot_buttons
+            .iter()
+            .enumerate()
+            .find(|(_, button_id)| **button_id == id)
+            .map(|(i, _)| i);
+
+        if let Some(idx) = idx && let Some(robot) = context.robots.get(idx) {
             self.robot_info = Some(RobotInfo::new(context.ui, id, robot));
         }
     }

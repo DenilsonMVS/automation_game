@@ -46,8 +46,8 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
-        let mut ui = Ui::new(Self::get_window_size());
-        let scene = MainScene::new(&renderer, &mut ui);
+        let ui = Ui::new(Self::get_window_size());
+        let scene = MainScene::new(&renderer);
 
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();

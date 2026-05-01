@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::{logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}, render::{UI_BASE_DEPTH, robot::ROBOT_DEPTH}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}}};
 
 const EPS: f32 = 0.0001;
 
@@ -16,11 +16,10 @@ pub struct Robot {
     pub computer: Computer,
     color: glm::U8Vec3,
     context: ComputeContext,
-    pub button_id: usize,
 }
 
 impl Robot {
-    pub fn new(position: glm::Vec2, instructions: [Instruction; MEMORY_SIZE], ui: &mut Ui) -> Self {
+    pub fn new(position: glm::Vec2, instructions: [Instruction; MEMORY_SIZE]) -> Self {
         Self {
             computer: Computer::new(instructions),
             movement_module: MovementModule::new(position),
@@ -28,8 +27,6 @@ impl Robot {
             color: glm::vec3(120, 200, 190),
             context: ComputeContext::Computer,
             display_module: DisplayModule::new(),
-            button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new(
-                Self::get_render_box(position).world_to_ndc_pos(&ui.camera), UI_BASE_DEPTH - 1)),
         }
     }
 
@@ -95,12 +92,6 @@ impl Robot {
         };
 
         self.movement_logic(delta, self.movement_module.calculate_accelleration());
-
-        let render_box = Self::get_render_box(self.get_position()).world_to_ndc_pos(&ui.camera);
-        ui.simple_area_manager.update_simple_area(
-            self.button_id,
-            SimpleArea::new_button(render_box, ROBOT_DEPTH),
-        );
     }
 
     pub fn get_computer(&self) -> &Computer {
