@@ -1,6 +1,7 @@
 use crate::{stable_index_vector::StableIndexVector, ui::{AreaManager, multi_area_conflict_resolver::Area, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
+#[derive(Debug)]
 pub struct SimpleManager {
     simple_areas: StableIndexVector<SimpleArea>,
 }

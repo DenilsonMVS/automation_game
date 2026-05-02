@@ -116,4 +116,8 @@ impl Computer {
     pub fn read_reg(&mut self, address: RegisterAddress) -> u8 {
         self.registers.read(address)
     }
+
+    pub fn get(&self) -> &[Instruction] {
+        self.instructions.get()
+    }
 }

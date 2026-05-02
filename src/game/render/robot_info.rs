@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::{self, RenderedArea}, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui, drag_area_manager::DragAreaManager, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::{self, RenderedArea}, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area_manager::SimpleManager}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -29,36 +29,33 @@ pub fn get_hovered_color() -> glm::U8Vec4 {
 
 #[derive(Debug)]
 pub struct RobotInfo {
-    dnd: Dnd,
-    instructions: Vec<InstructionUnit>,
+    dnd: Dnd<InstructionUnit>,
     add_instruction_button: RenderedButton,
     pub robot_button_id: usize,
-    container: RenderedArea<DragAreaManager>,
+    container: RenderedArea<SimpleManager>,
 }
 
 impl RobotInfo {
     pub fn new(ui: &mut Ui, robot_button_id: usize, robot: &Robot, depth: u16) -> Self {
         let top_left = ui.get_ndc_render_box().get_top_left();
-        let considered_instructions = robot.computer.instructions
+        let amount_instructions = robot.computer.instructions
             .iter()
-            .filter(|instruction| instruction.unpack() != UnpackedInstruction::Sys(Syscall::Nop));
+            .filter(|instruction| instruction.unpack() != UnpackedInstruction::Sys(Syscall::Nop))
+            .count();
 
         let dnd = Dnd::new(
             top_left + Self::get_idx_default_offset(0),
             glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
             INFO_PADDING,
-            considered_instructions.count(), ui);
-
-        let instructions = robot.computer.instructions
-            .iter()
-            .filter(|instruction| instruction.unpack() != UnpackedInstruction::Sys(Syscall::Nop))
-            .enumerate()
-            .map(|(idx, instruction)| InstructionUnit::new(
-                *instruction, ui,
-                top_left + Self::get_idx_default_offset(idx),
-                dnd.get_drag_box_id(idx),
-                depth - 2,
-            )).collect();
+            depth + 1,
+            amount_instructions,
+            ui,
+            |i, bbox, depth, id, ui|
+                InstructionUnit::new(
+                    robot.computer.instructions.get()[i],
+                    ui, bbox, id, depth
+                ),
+        );
 
         Self {
             add_instruction_button:
@@ -73,13 +70,12 @@ impl RobotInfo {
                 .with_padding(BUTTON_PADDING)
                 .with_content("ADD"),
             dnd,
-            instructions,
             robot_button_id,
             container: RenderedArea::new(
                 Self::get_outer_area_render_box(top_left),
                 depth,
                 get_background_color(),
-                &mut ui.drag_area_manager,
+                &mut ui.simple_area_manager,
             ),
         }
     }
@@ -118,12 +114,15 @@ impl RobotInfo {
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a, 'b>> for RobotInfo {
     fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext<'a, 'b>) {
-        self.dnd.top_left_position = bbox.get_top_left() + Self::get_idx_default_offset(0);
-        self.dnd.update(context.ui);
+        self.dnd.update(
+            &bbox.apply_offset(Self::get_idx_default_offset(0)),
+            depth - 1,
+            context,
+        );
         self.container.update(
             &Self::get_outer_area_render_box(bbox.get_top_left()),
             depth,
-            &mut context.ui.drag_area_manager,
+            &mut context.ui.simple_area_manager,
         );
 
         self.add_instruction_button.update(
@@ -131,29 +130,13 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
             depth - 1,
             context.ui,
         );
-
-        for (i, (bbox, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
-            let depth = if is_grabbed { depth - 12 } else { depth - 2 };
-            context.ui.drag_area_manager.update(
-                self.instructions[i].get_id(),
-                SimpleArea::new(bbox, depth)
-            );
-
-            self.instructions[i].update(
-                &bbox,
-                depth,
-                context,
-            );
-        }
     }
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
-        let top_left = context.ui.get_ndc_render_box().get_top_left();
-        for instruction in self.instructions.iter_mut() {
-            instruction.send(context);
-        }
+        self.dnd.send(context);
 
-        if let Some(container) = self.container.get_area(&context.ui.drag_area_manager) {
+        let top_left = context.ui.get_ndc_render_box().get_top_left();
+        if let Some(container) = self.container.get_area(&context.ui.simple_area_manager) {
             for i in 0..MEMORY_SIZE {
                 let slot_box = Self::get_idx_drag_area(i, top_left);
                 context.simple_shape_renderer.send_render_box(
@@ -167,7 +150,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
         self.add_instruction_button.send(context);
 
         let mut context = rendered_area::SendContext {
-            manager: &context.ui.drag_area_manager,
+            manager: &context.ui.simple_area_manager,
             simple_shape_renderer: context.simple_shape_renderer,
         };
         self.container.send(&mut context);
@@ -184,40 +167,27 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
         let ui = &mut context.ui;
         let font = &mut context.font;
 
-        let top_left = ui.get_ndc_render_box().get_top_left();
-
         if
             id == self.add_instruction_button.get_id() &&
-            self.instructions.len() < MEMORY_SIZE &&
-            let Some(depth) = self.container.get_area(&ui.drag_area_manager).map(|area| area.depth)
+            self.dnd.len() < MEMORY_SIZE
         {
-            self.dnd.push(ui);
-            self.instructions.push(InstructionUnit::new_blank(
-                ui,
-                font,
-                top_left + Self::get_idx_default_offset(self.instructions.len()),
-                self.dnd.get_drag_box_id(self.dnd.len() - 1),
-                depth - 2
-            ));
+            self.dnd.push(ui, |_, bbox, depth, id, ui|
+                InstructionUnit::new_blank(ui, font, bbox.get_top_left(), id, depth));
         }
         
-        if let Some(instruction_to_remove) = self.instructions
+        let instruction_to_remove = self.dnd
             .iter()
             .enumerate()
             .find(|(_, instruction)| instruction.delete_button.get_id() == id)
-            .map(|(i, _)| i)
-        {
-            self.dnd.remove_original(instruction_to_remove);
-            self.instructions.remove(instruction_to_remove);
+            .map(|(i, _)| i);
+
+        if let Some(idx) = instruction_to_remove {
+            self.dnd.remove(idx);
         }
     }
 
     fn propagate_children(&mut self, event: &EventType, context: &mut RobotInfoEventContext<'a, 'b>) {
-        for instruction in self.instructions.iter_mut() {
-            instruction.on_event(event, context.ui);
-        }
-
-        self.dnd.on_event(event, &mut ());
+        self.dnd.on_event(event, context.ui);
         self.add_instruction_button.on_event(event,&mut ());
     }
 }

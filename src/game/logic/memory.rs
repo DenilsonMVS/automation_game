@@ -81,6 +81,10 @@ impl<const SIZE: usize> InstructionMemory<SIZE> {
     pub fn iter(&self) -> impl Iterator<Item = &Instruction> {
         self.memory.iter()
     }
+
+    pub fn get(&self) -> &[Instruction] {
+        &self.memory
+    }
 }
 
 impl<const SIZE: usize> GenericMemory<Instruction, SIZE> for InstructionMemory<SIZE> {

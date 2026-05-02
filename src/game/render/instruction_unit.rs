@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{menu::Menu, rendered_button::RenderedButton, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{dnd::{HasId, HasUi}, menu::Menu, rendered_button::RenderedButton, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui}};
 use nalgebra_glm as glm;
 
 pub const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - 2.0 * INFO_PADDING;
@@ -218,26 +218,32 @@ pub enum InstructionConfig {
 pub struct InstructionUnit {
     config: InstructionConfig,
     pub delete_button: RenderedButton,
-    drag_area_id: usize,
     hovering_instruction: bool,
+    id: usize,
+}
+
+impl HasId for InstructionUnit {
+    fn get_id(&self) -> usize {
+        self.get_id()
+    }
 }
 
 impl InstructionUnit {
-    pub fn new(instruction: Instruction, ui: &mut Ui, unit_top_left_position: glm::Vec2, drag_area_id: usize, depth: u16) -> Self {
+    pub fn new(instruction: Instruction, ui: &mut Ui, bbox: &RenderBox, id: usize, depth: u16) -> Self {
         Self {
             config: InstructionConfig::FinishedInstruction(instruction),
             delete_button: RenderedButton::new(
-                Self::get_delete_button_box(unit_top_left_position),
+                Self::get_delete_button_box(bbox.get_top_left()),
                 depth - 1,
                 glm::vec4(5, 8, 19, 255),
                 ui,
             ).with_hover_bgcolor(glm::vec4(230, 80, 80, 255)),
             hovering_instruction: false,
-            drag_area_id,
+            id,
         }
     }
 
-    pub fn new_blank(ui: &mut Ui, font: &Font, unit_top_left_position: glm::Vec2, drag_area_id: usize, depth: u16) -> Self {
+    pub fn new_blank(ui: &mut Ui, font: &Font, unit_top_left_position: glm::Vec2, id: usize, depth: u16) -> Self {
         Self {
             config: InstructionConfig::UnfinishedInstruction(UnfinishedInstruction::new(
                 ui,
@@ -251,7 +257,7 @@ impl InstructionUnit {
                 ui,
             ).with_hover_bgcolor(glm::vec4(230, 80, 80, 255)),
             hovering_instruction: false,
-            drag_area_id,
+            id,
         }
     }
 
@@ -272,7 +278,13 @@ impl InstructionUnit {
     }
 
     pub fn get_id(&self) -> usize {
-        self.drag_area_id
+        self.id
+    }
+}
+
+impl<'a, 'b> HasUi for MainContext<'a, 'b> {
+    fn get_ui(&mut self) -> &mut Ui {
+        self.ui
     }
 }
 
@@ -308,7 +320,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
 
         self.delete_button.send(context);
 
-        let Some(container) = context.ui.drag_area_manager.get(self.drag_area_id) else { return };
+        let Some(container) = context.ui.drag_area_manager.get(self.id) else { return };
         context.simple_shape_renderer.send_render_box(
             &container.bounding_box,
             get_secondary_background_color(),
@@ -338,7 +350,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
 
 impl EventReceiver<Ui> for InstructionUnit {
     fn on_hover_drag(&mut self, id: usize, _context: &mut Ui) {
-        if id == self.drag_area_id {
+        if id == self.id {
             self.hovering_instruction = true;
         }
     }
