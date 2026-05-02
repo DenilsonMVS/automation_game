@@ -1,6 +1,6 @@
 use std::{mem, time::Instant};
 
-use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{drag_area_manager::DragAreaManager, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area_manager::SimpleManager}};
+use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{drag_area_manager::DragAreaManager, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::SimpleManager}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::Window};
 
@@ -11,6 +11,13 @@ pub mod multi_area_conflict_resolver;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
+
+pub trait AreaManager {
+    fn keep_alive(&mut self, id: usize);
+    fn get(&self, id: usize) -> Option<&SimpleArea>;
+    fn push(&mut self, simple_area: SimpleArea) -> usize;
+    fn update(&mut self, id: usize, simple_area: SimpleArea);
+}
 
 pub struct UiContext<'a, 'b> {
     pub window: &'a Window,

@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::RenderedArea, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::Ui};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::{self, RenderedArea}, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui, drag_area_manager::DragAreaManager, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -33,7 +33,7 @@ pub struct RobotInfo {
     instructions: Vec<InstructionUnit>,
     add_instruction_button: RenderedButton,
     pub robot_button_id: usize,
-    container: RenderedArea,
+    container: RenderedArea<DragAreaManager>,
 }
 
 impl RobotInfo {
@@ -79,7 +79,7 @@ impl RobotInfo {
                 Self::get_outer_area_render_box(top_left),
                 depth,
                 get_background_color(),
-                ui,
+                &mut ui.drag_area_manager,
             ),
         }
     }
@@ -123,7 +123,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
         self.container.update(
             Self::get_outer_area_render_box(top_left).get_top_left(),
             depth,
-            context.ui,
+            &mut context.ui.drag_area_manager,
         );
 
         self.add_instruction_button.update(
@@ -132,23 +132,28 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
             context.ui,
         );
 
-        for (i, (bbox, _)) in self.dnd.get_unit_positions().enumerate() {
+        for (i, (bbox, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
+            let depth = if is_grabbed { depth - 12 } else { depth - 2 };
+            context.ui.drag_area_manager.update(
+                self.instructions[i].get_id(),
+                SimpleArea::new(bbox, depth)
+            );
+
             self.instructions[i].update(
                 bbox.get_top_left(),
-                context.ui,
-                context.font,
-                depth - 2,
+                depth,
+                context,
             );
         }
     }
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         let top_left = context.ui.get_ndc_render_box().get_top_left();
-        for (i, (bbox, is_grabbed)) in self.dnd.get_unit_positions().enumerate() {
-            self.instructions[i].send(context, is_grabbed, &bbox);
+        for instruction in self.instructions.iter_mut() {
+            instruction.send(context);
         }
 
-        if let Some(container) = self.container.get_area(context.ui) {
+        if let Some(container) = self.container.get_area(&context.ui.drag_area_manager) {
             for i in 0..MEMORY_SIZE {
                 let slot_box = Self::get_idx_drag_area(i, top_left);
                 context.simple_shape_renderer.send_render_box(
@@ -160,7 +165,12 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
         }
 
         self.add_instruction_button.send(context);
-        self.container.send(context);
+
+        let mut context = rendered_area::SendContext {
+            manager: &context.ui.drag_area_manager,
+            simple_shape_renderer: context.simple_shape_renderer,
+        };
+        self.container.send(&mut context);
     }
 }
 
@@ -179,7 +189,7 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
         if
             id == self.add_instruction_button.get_id() &&
             self.instructions.len() < MEMORY_SIZE &&
-            let Some(depth) = self.container.get_area(ui).map(|area| area.depth)
+            let Some(depth) = self.container.get_area(&ui.drag_area_manager).map(|area| area.depth)
         {
             self.dnd.push(ui);
             self.instructions.push(InstructionUnit::new_blank(

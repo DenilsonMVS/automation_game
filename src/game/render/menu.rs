@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{render::{UI_BASE_DEPTH, robot_info::{get_background_color, get_hovered_color, get_secondary_background_color}}, scene::EventReceiver}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{render::{UI_BASE_DEPTH, robot_info::{get_background_color, get_hovered_color, get_secondary_background_color}}, scene::EventReceiver}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 const MENU_BASE_DEPTH: u16 = UI_BASE_DEPTH - 30;
@@ -20,7 +20,7 @@ impl<T: std::fmt::Display + Clone> Menu<T> {
         Self {
             open_button_bbox,
             entry_size,
-            open_button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+            open_button_id: ui.simple_area_manager.push(SimpleArea::new_button(
                 open_button_bbox,
                 MENU_BASE_DEPTH,
             )),
@@ -60,13 +60,13 @@ impl<T: std::fmt::Display + Clone> Menu<T> {
     pub fn update(&mut self, top_left_position: glm::Vec2, ui: &mut Ui) {
         let diff = top_left_position - self.open_button_bbox.get_top_left();
         self.open_button_bbox = self.open_button_bbox.apply_offset(diff);
-        ui.simple_area_manager.update_simple_area(self.open_button_id, SimpleArea::new_button(
+        ui.simple_area_manager.update(self.open_button_id, SimpleArea::new_button(
             self.open_button_bbox,
             MENU_BASE_DEPTH,
         ));
 
         for (i, entry_button_id) in self.entries_button_ids.iter().enumerate() {
-            ui.simple_area_manager.update_simple_area(
+            ui.simple_area_manager.update(
                 *entry_button_id,
                 SimpleArea::new_button(
                     self.get_menu_idx_bbox(i),
@@ -144,7 +144,7 @@ impl<T: std::fmt::Display + Clone> EventReceiver<Ui> for Menu<T> {
         if id == self.open_button_id {
             self.entries_button_ids.clear();
             for i in 0..self.options.len() {
-                self.entries_button_ids.push(ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+                self.entries_button_ids.push(ui.simple_area_manager.push(SimpleArea::new_button(
                     self.get_menu_idx_bbox(i),
                     MENU_BASE_DEPTH - 2,
                 )));

@@ -1,5 +1,6 @@
 use crate::graphics::renderer::positioning::RenderBox;
 
+#[derive(Debug, Clone, Copy)]
 pub struct SimpleArea {
     pub bounding_box: RenderBox,
     pub depth: u16,

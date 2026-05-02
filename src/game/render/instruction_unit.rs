@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{UI_BASE_DEPTH, menu::Menu, rendered_button::RenderedButton, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::Ui};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{menu::Menu, rendered_button::RenderedButton, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui}};
 use nalgebra_glm as glm;
 
 pub const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - 2.0 * INFO_PADDING;
@@ -255,30 +255,45 @@ impl InstructionUnit {
         }
     }
 
-    pub fn update(&mut self, unit_top_left_position: glm::Vec2, ui: &mut Ui, font: &Font, depth: u16) {
+    fn get_delete_button_box(unit_top_left_position: glm::Vec2) -> RenderBox {
+        RenderBox::new_simple(
+            unit_top_left_position + glm::vec2(INSTRUCTION_PADDING, -INSTRUCTION_PADDING),
+            PositionMode::TopLeft,
+            glm::vec2(DELETE_BUTTON_SIZE, DELETE_BUTTON_SIZE),
+        )
+    }
+
+    fn get_menu_button_box(delete_button_top_left: glm::Vec2) -> RenderBox {
+        RenderBox::new_simple(
+            delete_button_top_left + glm::vec2(3.0 * INSTRUCTION_PADDING + DELETE_BUTTON_SIZE, -INSTRUCTION_PADDING),
+            PositionMode::TopLeft,
+            glm::vec2(DELETE_BUTTON_SIZE, DELETE_BUTTON_SIZE),
+        )
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.drag_area_id
+    }
+}
+
+impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for InstructionUnit {
+    fn update(&mut self, position: glm::Vec2, depth: u16, context: &mut MainContext<'a, 'b>) {
         self.delete_button.update(
-            Self::get_delete_button_box(unit_top_left_position).get_top_left(),
+            Self::get_delete_button_box(position).get_top_left(),
             depth - 1,
-            ui,
+            context.ui,
         );
 
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
             inst.update(
-                ui,
-                &Self::get_delete_button_box(unit_top_left_position),
-                font,
+                context.ui,
+                &Self::get_delete_button_box(position),
+                context.font,
             );
         }
     }
 
-    pub fn send(
-        &mut self,
-        context: &mut MainContext,
-        is_grabbed: bool,
-        bbox: &RenderBox,
-    ) {
-        let extra_depth = if is_grabbed { 10 } else { 0 };
-
+    fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         let delete_button_bgcolor = if self.hovering_instruction {
             glm::vec4(200, 50, 50, 255)
         } else {
@@ -293,10 +308,11 @@ impl InstructionUnit {
 
         self.delete_button.send(context);
 
+        let Some(container) = context.ui.drag_area_manager.get(self.drag_area_id) else { return };
         context.simple_shape_renderer.send_render_box(
-            &bbox,
+            &container.bounding_box,
             get_secondary_background_color(),
-            UI_BASE_DEPTH - 2 - extra_depth, 1,
+            container.depth, 1,
         );
 
         if
@@ -314,25 +330,9 @@ impl InstructionUnit {
                 text_box.get_size().y)
                 .set_mode(PositionMode::TopLeft)
                 .set_align(TextAlign::Left)
-                .set_depth(UI_BASE_DEPTH - 3 - extra_depth),
+                .set_depth(container.depth - 1),
             );
         }
-    }
-
-    fn get_delete_button_box(unit_top_left_position: glm::Vec2) -> RenderBox {
-        RenderBox::new_simple(
-            unit_top_left_position + glm::vec2(INSTRUCTION_PADDING, -INSTRUCTION_PADDING),
-            PositionMode::TopLeft,
-            glm::vec2(DELETE_BUTTON_SIZE, DELETE_BUTTON_SIZE),
-        )
-    }
-
-    fn get_menu_button_box(delete_button_top_left: glm::Vec2) -> RenderBox {
-        RenderBox::new_simple(
-            delete_button_top_left + glm::vec2(3.0 * INSTRUCTION_PADDING + DELETE_BUTTON_SIZE, -INSTRUCTION_PADDING),
-            PositionMode::TopLeft,
-            glm::vec2(DELETE_BUTTON_SIZE, DELETE_BUTTON_SIZE),
-        )
     }
 }
 

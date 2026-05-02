@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::{RobotInfo, RobotInfoEventContext}, world::ViewWorld}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{Renderer, fonts::Font, simple_shape_renderer::SimpleShapeRenderer}, ui::{AreaManager, Ui, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
@@ -35,9 +35,9 @@ impl<'a> RenderState<'a> {
                 ROBOT_DEPTH
             );
             if i >= self.robot_buttons.len() {
-                self.robot_buttons.push(context.ui.simple_area_manager.push_simple_area(updated_simple_area));
+                self.robot_buttons.push(context.ui.simple_area_manager.push(updated_simple_area));
             } else {
-                context.ui.simple_area_manager.update_simple_area(
+                context.ui.simple_area_manager.update(
                     self.robot_buttons[i],
                     updated_simple_area,
                 );

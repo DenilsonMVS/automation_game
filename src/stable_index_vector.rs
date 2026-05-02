@@ -1,6 +1,7 @@
 use std::{alloc::{self, Layout}, ops::{Index, IndexMut}, ptr};
 use std::marker::PhantomData;
 
+#[derive(Debug)]
 pub struct StableIndexVector<T: Unpin> {
     ptr: *mut u8,
     len: usize,

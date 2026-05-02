@@ -1,4 +1,4 @@
-use crate::{stable_index_vector::StableIndexVector, ui::{multi_area_conflict_resolver::Area, simple_area::SimpleArea}};
+use crate::{stable_index_vector::StableIndexVector, ui::{AreaManager, multi_area_conflict_resolver::Area, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 pub struct SimpleManager {
@@ -9,26 +9,6 @@ impl SimpleManager {
     pub fn new() -> Self {
         Self {
             simple_areas: StableIndexVector::new(),
-        }
-    }
-
-    pub fn keep_alive(&mut self, id: usize) {
-        if let Some(simple_area) = self.simple_areas.get_mut(id) {
-            simple_area.alive = true;
-        }
-    }
-
-    pub fn get_area(&self, id: usize) -> Option<&SimpleArea> {
-        self.simple_areas.get(id)
-    }
-
-    pub fn push_simple_area(&mut self, simple_area: SimpleArea) -> usize {
-        self.simple_areas.push(simple_area)
-    }
-
-    pub fn update_simple_area(&mut self, id: usize, simple_area: SimpleArea) {
-        if let Some(area) = self.simple_areas.get_mut(id) {
-            *area = simple_area;
         }
     }
 
@@ -54,6 +34,28 @@ impl SimpleManager {
         
         for dead_id in dead_ids.iter() {
             self.simple_areas.remove(*dead_id);
+        }
+    }
+}
+
+impl AreaManager for SimpleManager {
+    fn keep_alive(&mut self, id: usize) {
+        if let Some(simple_area) = self.simple_areas.get_mut(id) {
+            simple_area.alive = true;
+        }
+    }
+
+    fn get(&self, id: usize) -> Option<&SimpleArea> {
+        self.simple_areas.get(id)
+    }
+
+    fn push(&mut self, simple_area: SimpleArea) -> usize {
+        self.simple_areas.push(simple_area)
+    }
+
+    fn update(&mut self, id: usize, simple_area: SimpleArea) {
+        if let Some(area) = self.simple_areas.get_mut(id) {
+            *area = simple_area;
         }
     }
 }

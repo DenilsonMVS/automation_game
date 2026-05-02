@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::{MainContext, game::scene::{EventReceiver, UiElement}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::scene::{EventReceiver, UiElement}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{AreaManager, Ui, simple_area::SimpleArea}};
 
 #[derive(Debug)]
 pub struct RenderedButton {
@@ -18,7 +18,7 @@ pub struct RenderedButton {
 impl RenderedButton {
     pub fn new(bbox: RenderBox, depth: u16, bgcolor: glm::U8Vec4, ui: &mut Ui) -> Self {
         Self {
-            id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(bbox, depth)),
+            id: ui.simple_area_manager.push(SimpleArea::new_button(bbox, depth)),
             bgcolor,
             color: Default::default(),
             content: "",
@@ -60,17 +60,17 @@ impl RenderedButton {
     }
 
     pub fn get_area<'a>(&self, ui: &'a Ui) -> Option<&'a SimpleArea> {
-        ui.simple_area_manager.get_area(self.id)
+        ui.simple_area_manager.get(self.id)
     }
 }
 
 impl<'a, 'b> UiElement<Ui, MainContext<'a, 'b>, ()> for RenderedButton {
     fn update(&mut self, position: nalgebra_glm::Vec2, depth: u16, ui: &mut Ui) {
         let areas = &mut ui.simple_area_manager;
-        if let Some(area) = areas.get_area(self.id) {
+        if let Some(area) = areas.get(self.id) {
             let bbox = area.bounding_box;
             let diff = position - bbox.get_top_left();            
-            areas.update_simple_area(self.id, SimpleArea::new_button(bbox.apply_offset(diff), depth));            
+            areas.update(self.id, SimpleArea::new_button(bbox.apply_offset(diff), depth));            
         }
     }
 
@@ -78,7 +78,7 @@ impl<'a, 'b> UiElement<Ui, MainContext<'a, 'b>, ()> for RenderedButton {
         let areas = &mut context.ui.simple_area_manager;
         let simple_shape_renderer = &mut context.simple_shape_renderer;
         let font = &mut context.font;
-        if let Some(area) = areas.get_area(self.id) {
+        if let Some(area) = areas.get(self.id) {
             let (bgcolor, color) = if self.hovered {
                 (self.hover_bgcolor, self.hover_color)
             } else {
