@@ -6,10 +6,10 @@ use crate::{MainContext, game::scene::{EventReceiver, UiElement}, graphics::rend
 #[derive(Debug)]
 pub struct RenderedButton {
     id: usize,
-    bgcolor: glm::U8Vec4,
-    color: glm::U8Vec4,
-    hover_bgcolor: glm::U8Vec4,
-    hover_color: glm::U8Vec4,
+    pub bgcolor: glm::U8Vec4,
+    pub color: glm::U8Vec4,
+    pub hover_bgcolor: glm::U8Vec4,
+    pub hover_color: glm::U8Vec4,
     content: &'static str,
     padding: f32,
     hovered: bool,
@@ -57,6 +57,10 @@ impl RenderedButton {
     pub fn with_padding(mut self, padding: f32) -> Self {
         self.padding = padding;
         self
+    }
+
+    pub fn get_area<'a>(&self, ui: &'a Ui) -> Option<&'a SimpleArea> {
+        ui.simple_area_manager.get_area(self.id)
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{UI_BASE_DEPTH, menu::Menu, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{UI_BASE_DEPTH, menu::Menu, rendered_button::RenderedButton, robot_info::{INFO_HEIGHT, INFO_PADDING, INFO_WIDTH, get_secondary_background_color}}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::Ui};
 use nalgebra_glm as glm;
 
 pub const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - 2.0 * INFO_PADDING;
@@ -217,50 +217,49 @@ pub enum InstructionConfig {
 #[derive(Debug)]
 pub struct InstructionUnit {
     config: InstructionConfig,
-    pub delete_button_id: usize,
+    pub delete_button: RenderedButton,
     drag_area_id: usize,
     hovering_instruction: bool,
-    hovering_delete_button: bool,
 }
 
 impl InstructionUnit {
-    pub fn new(instruction: Instruction, ui: &mut Ui, unit_top_left_position: glm::Vec2, drag_area_id: usize) -> Self {
+    pub fn new(instruction: Instruction, ui: &mut Ui, unit_top_left_position: glm::Vec2, drag_area_id: usize, depth: u16) -> Self {
         Self {
             config: InstructionConfig::FinishedInstruction(instruction),
-            delete_button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+            delete_button: RenderedButton::new(
                 Self::get_delete_button_box(unit_top_left_position),
-                UI_BASE_DEPTH - 2,
-            )),
-            hovering_delete_button: false,
+                depth - 1,
+                glm::vec4(5, 8, 19, 255),
+                ui,
+            ).with_hover_bgcolor(glm::vec4(230, 80, 80, 255)),
             hovering_instruction: false,
             drag_area_id,
         }
     }
 
-    pub fn new_blank(ui: &mut Ui, font: &Font, unit_top_left_position: glm::Vec2, drag_area_id: usize) -> Self {
+    pub fn new_blank(ui: &mut Ui, font: &Font, unit_top_left_position: glm::Vec2, drag_area_id: usize, depth: u16) -> Self {
         Self {
             config: InstructionConfig::UnfinishedInstruction(UnfinishedInstruction::new(
                 ui,
                 &Self::get_menu_button_box(Self::get_delete_button_box(unit_top_left_position).get_top_left()),
                 font,
             )),
-            delete_button_id: ui.simple_area_manager.push_simple_area(SimpleArea::new_button(
+            delete_button: RenderedButton::new(
                 Self::get_delete_button_box(unit_top_left_position),
-                UI_BASE_DEPTH - 2,
-            )),
-            hovering_delete_button: false,
+                depth - 1,
+                glm::vec4(5, 8, 19, 255),
+                ui,
+            ).with_hover_bgcolor(glm::vec4(230, 80, 80, 255)),
             hovering_instruction: false,
             drag_area_id,
         }
     }
 
-    pub fn update(&mut self, unit_top_left_position: glm::Vec2, ui: &mut Ui, font: &Font) {
-        ui.simple_area_manager.update_simple_area(
-            self.delete_button_id,
-            SimpleArea::new_button(
-                Self::get_delete_button_box(unit_top_left_position),
-                UI_BASE_DEPTH - 2,
-            ),
+    pub fn update(&mut self, unit_top_left_position: glm::Vec2, ui: &mut Ui, font: &Font, depth: u16) {
+        self.delete_button.update(
+            Self::get_delete_button_box(unit_top_left_position).get_top_left(),
+            depth - 1,
+            ui,
         );
 
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
@@ -279,30 +278,20 @@ impl InstructionUnit {
         bbox: &RenderBox,
     ) {
         let extra_depth = if is_grabbed { 10 } else { 0 };
-        let unit_top_left_position = bbox.get_top_left();
 
-        let delete_button_color = if self.hovering_delete_button {
-            glm::vec4(230, 80, 80, 255)
-        } else if self.hovering_instruction {
+        let delete_button_bgcolor = if self.hovering_instruction {
             glm::vec4(200, 50, 50, 255)
         } else {
             glm::vec4(5, 8, 19, 255)
         };
-
-        self.hovering_delete_button = false;
+        self.delete_button.bgcolor = delete_button_bgcolor;
         self.hovering_instruction = false;
 
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
             inst.send(context);
         }
 
-        let delete_button_bbox = Self::get_delete_button_box(unit_top_left_position);
-        context.simple_shape_renderer.send_render_box(
-            &delete_button_bbox,
-            delete_button_color,
-            UI_BASE_DEPTH - 5 - extra_depth,
-            1,
-        );
+        self.delete_button.send(context);
 
         context.simple_shape_renderer.send_render_box(
             &bbox,
@@ -310,7 +299,10 @@ impl InstructionUnit {
             UI_BASE_DEPTH - 2 - extra_depth, 1,
         );
 
-        if let InstructionConfig::FinishedInstruction(inst) = self.config {
+        if
+            let InstructionConfig::FinishedInstruction(inst) = self.config &&
+            let Some(delete_button_bbox) = self.delete_button.get_area(context.ui).map(|area| area.bounding_box)
+        {
             let inst = inst.unpack();
             let text_box = delete_button_bbox.apply_offset(glm::vec2(DELETE_BUTTON_SIZE + INSTRUCTION_PADDING * 2.0, 0.0));
             let formatted_text = inst.format_assembly();
@@ -351,15 +343,11 @@ impl EventReceiver<Ui> for InstructionUnit {
         }
     }
 
-    fn on_hover_simple(&mut self, id: usize, _context: &mut Ui) {
-        if id == self.delete_button_id {
-            self.hovering_delete_button = true;
-        }
-    }
-
     fn propagate_children(&mut self, event: &EventType, ui: &mut Ui) {
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
             inst.on_event(event, ui);
         }
+    
+        self.delete_button.on_event(event, &mut ());
     }
 }

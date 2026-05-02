@@ -57,6 +57,7 @@ impl RobotInfo {
                 *instruction, ui,
                 top_left + Self::get_idx_default_offset(idx),
                 dnd.get_drag_box_id(idx),
+                depth - 2,
             )).collect();
 
         Self {
@@ -136,6 +137,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
                 bbox.get_top_left(),
                 context.ui,
                 context.font,
+                depth - 2,
             );
         }
     }
@@ -174,22 +176,25 @@ impl<'a, 'b> EventReceiver<RobotInfoEventContext<'a, 'b>> for RobotInfo {
 
         let top_left = ui.get_ndc_render_box().get_top_left();
 
-        if id == self.add_instruction_button.get_id() {
-            if self.instructions.len() < MEMORY_SIZE {
-                self.dnd.push(ui);
-                self.instructions.push(InstructionUnit::new_blank(
-                    ui,
-                    font,
-                    top_left + Self::get_idx_default_offset(self.instructions.len()),
-                    self.dnd.get_drag_box_id(self.dnd.len() - 1),
-                ));
-            }
+        if
+            id == self.add_instruction_button.get_id() &&
+            self.instructions.len() < MEMORY_SIZE &&
+            let Some(depth) = self.container.get_area(ui).map(|area| area.depth)
+        {
+            self.dnd.push(ui);
+            self.instructions.push(InstructionUnit::new_blank(
+                ui,
+                font,
+                top_left + Self::get_idx_default_offset(self.instructions.len()),
+                self.dnd.get_drag_box_id(self.dnd.len() - 1),
+                depth - 2
+            ));
         }
         
         if let Some(instruction_to_remove) = self.instructions
             .iter()
             .enumerate()
-            .find(|(_, instruction)| instruction.delete_button_id == id)
+            .find(|(_, instruction)| instruction.delete_button.get_id() == id)
             .map(|(i, _)| i)
         {
             self.dnd.remove_original(instruction_to_remove);
