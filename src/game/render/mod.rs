@@ -88,7 +88,7 @@ impl<'a, 'b, 'c> EventReceiver<RenderEventContext<'a, 'b>> for RenderState<'c> {
             .map(|(i, _)| i);
 
         if let Some(idx) = idx && let Some(robot) = context.robots.get(idx) {
-            self.robot_info = Some(RobotInfo::new(context.ui, id, robot));
+            self.robot_info = Some(RobotInfo::new(context.ui, id, robot, UI_BASE_DEPTH));
         }
     }
 

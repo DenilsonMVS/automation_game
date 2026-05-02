@@ -14,6 +14,10 @@ impl RenderedArea {
             color,
         }
     }
+
+    pub fn get_area<'a>(&self, ui: &'a Ui) -> Option<&'a SimpleArea> {
+        ui.simple_area_manager.get_area(self.id)
+    }
 }
 
 impl<'a, 'b> UiElement<Ui, MainContext<'a, 'b>, ()> for RenderedArea {

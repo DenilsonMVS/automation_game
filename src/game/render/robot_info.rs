@@ -1,5 +1,5 @@
 
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{UI_BASE_DEPTH, dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::RenderedArea, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, simple_area::SimpleArea}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Syscall, UnpackedInstruction}, robot::Robot}, render::{dnd::Dnd, instruction_unit::{INSTRUCTION_HEIGHT, INSTRUCTION_WIDTH, InstructionUnit}, rendered_area::RenderedArea, rendered_button::RenderedButton}, scene::{EventReceiver, EventType, UiElement}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::Ui};
 use nalgebra_glm as glm;
 
 const BUTTON_AREA_WIDTH: f32 = 0.4;
@@ -37,7 +37,7 @@ pub struct RobotInfo {
 }
 
 impl RobotInfo {
-    pub fn new(ui: &mut Ui, robot_button_id: usize, robot: &Robot) -> Self {
+    pub fn new(ui: &mut Ui, robot_button_id: usize, robot: &Robot, depth: u16) -> Self {
         let top_left = ui.get_ndc_render_box().get_top_left();
         let considered_instructions = robot.computer.instructions
             .iter()
@@ -63,7 +63,7 @@ impl RobotInfo {
             add_instruction_button:
                 RenderedButton::new(
                     Self::get_add_instruction_button_box(top_left),
-                    UI_BASE_DEPTH - 1,
+                    depth - 1,
                     glm::vec4(0x5C, 0x6B, 0xC0, 255),
                     ui,
                 )
@@ -76,7 +76,7 @@ impl RobotInfo {
             robot_button_id,
             container: RenderedArea::new(
                 Self::get_outer_area_render_box(top_left),
-                UI_BASE_DEPTH,
+                depth,
                 get_background_color(),
                 ui,
             ),
@@ -98,12 +98,12 @@ impl RobotInfo {
         )
     }
 
-    fn get_idx_drag_area(idx: usize, top_left: glm::Vec2) -> SimpleArea {
-        SimpleArea::new_button(RenderBox::new_simple(
+    fn get_idx_drag_area(idx: usize, top_left: glm::Vec2) -> RenderBox {
+        RenderBox::new_simple(
             top_left + Self::get_idx_default_offset(idx),
             PositionMode::TopLeft,
             glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
-        ), UI_BASE_DEPTH - 1)
+        )
     }
 
     fn get_outer_area_render_box(top_left: glm::Vec2) -> RenderBox {
@@ -146,13 +146,15 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
             self.instructions[i].send(context, is_grabbed, &bbox);
         }
 
-        for i in 0..MEMORY_SIZE {
-            let slot_box = Self::get_idx_drag_area(i, top_left).bounding_box;
-            context.simple_shape_renderer.send_render_box(
-                &slot_box,
-                get_empty_color(),
-                UI_BASE_DEPTH - 1, 1,
-            );
+        if let Some(container) = self.container.get_area(context.ui) {
+            for i in 0..MEMORY_SIZE {
+                let slot_box = Self::get_idx_drag_area(i, top_left);
+                context.simple_shape_renderer.send_render_box(
+                    &slot_box,
+                    get_empty_color(),
+                    container.depth - 1, 1,
+                );
+            }
         }
 
         self.add_instruction_button.send(context);
