@@ -277,9 +277,9 @@ impl InstructionUnit {
 }
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for InstructionUnit {
-    fn update(&mut self, position: glm::Vec2, depth: u16, context: &mut MainContext<'a, 'b>) {
+    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext<'a, 'b>) {
         self.delete_button.update(
-            Self::get_delete_button_box(position).get_top_left(),
+            &Self::get_delete_button_box(bbox.get_top_left()),
             depth - 1,
             context.ui,
         );
@@ -287,7 +287,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
         if let InstructionConfig::UnfinishedInstruction(inst) = &mut self.config {
             inst.update(
                 context.ui,
-                &Self::get_delete_button_box(position),
+                &Self::get_delete_button_box(bbox.get_top_left()),
                 context.font,
             );
         }

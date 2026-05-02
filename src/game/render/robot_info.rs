@@ -117,17 +117,17 @@ impl RobotInfo {
 }
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a, 'b>> for RobotInfo {
-    fn update(&mut self, top_left: glm::Vec2, depth: u16, context: &mut MainContext<'a, 'b>) {
-        self.dnd.top_left_position = top_left + Self::get_idx_default_offset(0);
+    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext<'a, 'b>) {
+        self.dnd.top_left_position = bbox.get_top_left() + Self::get_idx_default_offset(0);
         self.dnd.update(context.ui);
         self.container.update(
-            Self::get_outer_area_render_box(top_left).get_top_left(),
+            &Self::get_outer_area_render_box(bbox.get_top_left()),
             depth,
             &mut context.ui.drag_area_manager,
         );
 
         self.add_instruction_button.update(
-            Self::get_add_instruction_button_box(top_left).get_top_left(),
+            &Self::get_add_instruction_button_box(bbox.get_top_left()),
             depth - 1,
             context.ui,
         );
@@ -140,7 +140,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, MainContext<'a,
             );
 
             self.instructions[i].update(
-                bbox.get_top_left(),
+                &bbox,
                 depth,
                 context,
             );

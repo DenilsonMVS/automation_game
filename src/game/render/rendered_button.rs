@@ -65,13 +65,8 @@ impl RenderedButton {
 }
 
 impl<'a, 'b> UiElement<Ui, MainContext<'a, 'b>, ()> for RenderedButton {
-    fn update(&mut self, position: nalgebra_glm::Vec2, depth: u16, ui: &mut Ui) {
-        let areas = &mut ui.simple_area_manager;
-        if let Some(area) = areas.get(self.id) {
-            let bbox = area.bounding_box;
-            let diff = position - bbox.get_top_left();            
-            areas.update(self.id, SimpleArea::new_button(bbox.apply_offset(diff), depth));            
-        }
+    fn update(&mut self, bbox: &RenderBox, depth: u16, ui: &mut Ui) {       
+        ui.simple_area_manager.update(self.id, SimpleArea::new_button(*bbox, depth));
     }
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {

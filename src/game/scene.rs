@@ -1,6 +1,6 @@
 use winit::event::WindowEvent;
 use nalgebra_glm as glm;
-use crate::MainContext;
+use crate::{MainContext, graphics::renderer::positioning::RenderBox};
 
 #[derive(Debug)]
 pub enum EventType {
@@ -46,7 +46,7 @@ pub trait EventReceiver<T> {
 }
 
 pub trait UiElement<UpdateContext, SendContext, GenerateOutputContext> {
-    fn update(&mut self, _position: glm::Vec2, _depth: u16, _context: &mut UpdateContext) {}
+    fn update(&mut self, _bbox: &RenderBox, _depth: u16, _context: &mut UpdateContext) {}
     fn send(&mut self, _context: &mut SendContext) {}
     fn generate_output(&mut self, _context: &mut GenerateOutputContext) {}
 }

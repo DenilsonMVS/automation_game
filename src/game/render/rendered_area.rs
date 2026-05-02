@@ -29,12 +29,8 @@ pub struct SendContext<'a, 'b, T: AreaManager> {
 }
 
 impl<'a, 'b, T: AreaManager> UiElement<T, SendContext<'a, 'b, T>, ()> for RenderedArea<T> {
-    fn update(&mut self, position: glm::Vec2, depth: u16, manager: &mut T) {
-        if let Some(area) = manager.get(self.id) {
-            let bbox = area.bounding_box;
-            let diff = position - bbox.get_top_left();            
-            manager.update(self.id, SimpleArea::new(bbox.apply_offset(diff), depth));            
-        }
+    fn update(&mut self, bbox: &RenderBox, depth: u16, manager: &mut T) {
+        manager.update(self.id, SimpleArea::new(*bbox, depth));            
     }
 
     fn send(&mut self, context: &mut SendContext<'a, 'b, T>) {

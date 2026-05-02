@@ -53,7 +53,7 @@ impl<'a> RenderState<'a> {
         self.world.send(logic_state.get_world());
 
         if let Some(robot_info) = &mut self.robot_info {            
-            robot_info.update(context.ui.get_ndc_render_box().get_top_left(), UI_BASE_DEPTH, context);
+            robot_info.update(&context.ui.get_ndc_render_box(), UI_BASE_DEPTH, context);
             robot_info.send(context);
         }
     }
