@@ -1,159 +1,146 @@
-use std::{alloc::{self, Layout}, ops::{Index, IndexMut}, ptr};
+use std::{alloc::{self, Layout}, ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign}, ptr};
 use std::marker::PhantomData;
 
+use num_traits::{FromPrimitive, PrimInt, Unsigned, Zero};
+
+pub trait StableId: PrimInt + Unsigned + Add + AddAssign + Sub + SubAssign + FromPrimitive {}
+impl<T: PrimInt + Unsigned + Add + AddAssign + Sub + SubAssign + FromPrimitive> StableId for T {}
+
 #[derive(Debug)]
-pub struct StableIndexVector<T: Unpin> {
+pub struct StableIndexVector<T: Unpin, I: StableId = usize> {
     ptr: *mut u8,
-    len: usize,
-    capacity: usize,
+    len: I,
+    capacity: I,
     _marker: PhantomData<T>,
 }
 
-impl<T: Unpin> StableIndexVector<T> {
+impl<T: Unpin, I: StableId> StableIndexVector<T, I> {
     pub fn new() -> Self {
         Self {
             ptr: ptr::null_mut(),
-            len: 0,
-            capacity: 0,
+            len: Zero::zero(),
+            capacity: Zero::zero(),
             _marker: PhantomData,
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
     unsafe fn get_layout(capacity: usize) -> (Layout, usize, usize, usize) {
+        if capacity == 0 {
+            return (Layout::from_size_align(0, 8).unwrap(), 0, 0, 0);
+        }
         let data_layout = Layout::array::<T>(capacity).unwrap();
-        let index_layout = Layout::array::<usize>(capacity).unwrap();
-        let rev_layout = Layout::array::<usize>(capacity).unwrap();
+        let index_layout = Layout::array::<I>(capacity).unwrap();
+        let rev_layout = Layout::array::<I>(capacity).unwrap();
 
         let (layout, index_offset) = data_layout.extend(index_layout).unwrap();
         let (layout, rev_offset) = layout.extend(rev_layout).unwrap();
         
-        (layout, 0, index_offset, rev_offset)
+        (layout.pad_to_align(), 0, index_offset, rev_offset)
     }
 
-    #[inline]
-    unsafe fn data_ptr(&self) -> *mut T {
+    #[inline] unsafe fn data_ptr(&self) -> *mut T {
         self.ptr as *mut T
     }
 
     #[inline]
-    unsafe fn index_ptr(&self) -> *mut usize {
+    unsafe fn index_ptr(&self) -> *mut I {
         unsafe {
-            let (_, _, index_off, _) = Self::get_layout(self.capacity);
-            self.ptr.add(index_off) as *mut usize
+            let (_, _, index_off, _) = Self::get_layout(self.capacity.to_usize().unwrap());
+            self.ptr.add(index_off) as *mut I
         }
     }
 
     #[inline]
-    unsafe fn rev_ptr(&self) -> *mut usize {
+    unsafe fn rev_ptr(&self) -> *mut I {
         unsafe {
-            let (_, _, _, rev_off) = Self::get_layout(self.capacity);
-            self.ptr.add(rev_off) as *mut usize
+            let (_, _, _, rev_off) = Self::get_layout(self.capacity.to_usize().unwrap());
+            self.ptr.add(rev_off) as *mut I
         }
     }
 
-    pub fn is_valid(&self, id: usize) -> bool {
+    pub fn is_valid(&self, id: I) -> bool {
+        let id_u = id.to_usize().unwrap();
         if id >= self.capacity { return false; }
         unsafe {
-            let pos = *self.index_ptr().add(id);
+            let pos = *self.index_ptr().add(id_u);
             pos < self.len
         }
     }
 
-    pub fn push(&mut self, value: T) -> usize {
+    pub fn push(&mut self, value: T) -> I {
         if self.len == self.capacity {
             self.grow();
         }
 
         unsafe {
-            let id = *self.rev_ptr().add(self.len);
-            ptr::write(self.data_ptr().add(self.len), value);
+            let pos = self.len.to_usize().unwrap();
+            let id = *self.rev_ptr().add(pos);
+            ptr::write(self.data_ptr().add(pos), value);
             
-            self.len += 1;
+            self.len += I::one();
             id
         }
     }
 
-    pub fn remove(&mut self, id: usize) -> Option<T> {
+    pub fn remove(&mut self, id: I) -> Option<T> {
         if !self.is_valid(id) { return None; }
 
         unsafe {
-            let pos = *self.index_ptr().add(id);
-            let last_pos = self.len - 1;
+            let id_u = id.to_usize().unwrap();
+            let pos_u = (*self.index_ptr().add(id_u)).to_usize().unwrap();
+            let last_pos_i = self.len - I::one();
+            let last_pos_u = last_pos_i.to_usize().unwrap();
             
-            let result = ptr::read(self.data_ptr().add(pos));
+            let result = ptr::read(self.data_ptr().add(pos_u));
 
-            if pos != last_pos {
-                ptr::copy_nonoverlapping(self.data_ptr().add(last_pos), self.data_ptr().add(pos), 1);
+            if pos_u != last_pos_u {
+                ptr::copy_nonoverlapping(self.data_ptr().add(last_pos_u), self.data_ptr().add(pos_u), 1);
             }
 
-            let last_id = *self.rev_ptr().add(last_pos);
-            *self.rev_ptr().add(pos) = last_id;
-            *self.rev_ptr().add(last_pos) = id;
+            let last_id = *self.rev_ptr().add(last_pos_u);
+            let last_id_u = last_id.to_usize().unwrap();
 
-            *self.index_ptr().add(last_id) = pos;
-            *self.index_ptr().add(id) = last_pos;
+            *self.rev_ptr().add(pos_u) = last_id;
+            *self.rev_ptr().add(last_pos_u) = id;
 
-            self.len -= 1;
+            *self.index_ptr().add(last_id_u) = I::from_usize(pos_u).unwrap();
+            *self.index_ptr().add(id_u) = I::from_usize(last_pos_u).unwrap();
+
+            self.len = last_pos_i;
             Some(result)
         }
     }
 
-    fn get_offsets(capacity: usize) -> (Layout, usize, usize, usize) {
-        let data_layout = Layout::array::<T>(capacity).unwrap();
-        let index_layout = Layout::array::<usize>(capacity).unwrap();
-        let rev_layout = Layout::array::<usize>(capacity).unwrap();
-
-        let (layout, index_offset) = data_layout.extend(index_layout).unwrap();
-        let (layout, rev_offset) = layout.extend(rev_layout).unwrap();
-        
-        (layout.pad_to_align(), 0, index_offset, rev_offset)
-    }
-
-    fn calculate_layout(capacity: usize) -> (Layout, usize, usize, usize) {
-        if capacity == 0 {
-            return (Layout::from_size_align(0, 8).unwrap(), 0, 0, 0);
-        }
-        let data_layout = Layout::array::<T>(capacity).unwrap();
-        let index_layout = Layout::array::<usize>(capacity).unwrap();
-        let rev_layout = Layout::array::<usize>(capacity).unwrap();
-
-        let (layout, index_offset) = data_layout.extend(index_layout).unwrap();
-        let (layout, rev_offset) = layout.extend(rev_layout).unwrap();
-        
-        (layout.pad_to_align(), 0, index_offset, rev_offset)
-    }
-
     fn grow(&mut self) {
-        let old_cap = self.capacity;
-        let new_cap = if old_cap == 0 { 1 } else { old_cap * 2 };
+        let old_cap_u = self.capacity.to_usize().unwrap();
+        let new_cap_u = if old_cap_u == 0 { 1 } else { old_cap_u * 2 };
+        let new_cap = I::from_usize(new_cap_u).unwrap();
         
         unsafe {
-            let (new_layout, _, new_idx_off, new_rev_off) = Self::get_offsets(new_cap);
+            let (new_layout, _, new_idx_off, new_rev_off) = Self::get_layout(new_cap_u);
             let new_ptr = alloc::alloc(new_layout);
             if new_ptr.is_null() { alloc::handle_alloc_error(new_layout); }
 
-            let new_idx_ptr = new_ptr.add(new_idx_off) as *mut usize;
-            let new_rev_ptr = new_ptr.add(new_rev_off) as *mut usize;
+            let new_idx_ptr = new_ptr.add(new_idx_off) as *mut I;
+            let new_rev_ptr = new_ptr.add(new_rev_off) as *mut I;
 
-
-            ptr::copy_nonoverlapping(self.data_ptr(), new_ptr as *mut T, self.len);
-
-            ptr::copy_nonoverlapping(self.index_ptr(), new_idx_ptr, old_cap);
-            for i in old_cap..new_cap {
-                *new_idx_ptr.add(i) = i;
-            }
+            ptr::copy_nonoverlapping(self.data_ptr(), new_ptr as *mut T, self.len.to_usize().unwrap());
             
-            ptr::copy_nonoverlapping(self.rev_ptr(), new_rev_ptr, old_cap);
-            for i in old_cap..new_cap {
-                *new_rev_ptr.add(i) = i;
+            ptr::copy_nonoverlapping(self.index_ptr(), new_idx_ptr, old_cap_u);
+            for i in old_cap_u..new_cap_u {
+                let val = I::from_usize(i).unwrap();
+                *new_idx_ptr.add(i) = val;
             }
 
-            let (old_layout, _, _, _) = Self::calculate_layout(old_cap);
+            ptr::copy_nonoverlapping(self.rev_ptr(), new_rev_ptr, old_cap_u);
+            for i in old_cap_u..new_cap_u {
+                let val = I::from_usize(i).unwrap();
+                *new_rev_ptr.add(i) = val;
+            }
+
+            let (old_layout, _, _, _) = Self::get_layout(old_cap_u);
             alloc::dealloc(self.ptr, old_layout);
+
             
 
             self.ptr = new_ptr;
@@ -161,20 +148,20 @@ impl<T: Unpin> StableIndexVector<T> {
         }
     }
 
-    pub fn iter_enumerate_unordered(&self) -> impl Iterator<Item = (usize, &T)> {
+    pub fn iter_enumerate_unordered(&self) -> impl Iterator<Item = (I, &T)> {
         let rev_base = unsafe { self.rev_ptr() };
         let data_base = unsafe { self.data_ptr() };
         
-        (0..self.len).map(move |pos| unsafe {
+        (0..self.len.to_usize().unwrap()).map(move |pos| unsafe {
             (*rev_base.add(pos), &*data_base.add(pos))
         })
     }
 
-    pub fn iter_enumerate_unordered_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
+    pub fn iter_enumerate_unordered_mut(&mut self) -> impl Iterator<Item = (I, &mut T)> {
         let rev_base = unsafe { self.rev_ptr() };
         let data_base = unsafe { self.data_ptr() };
         
-        (0..self.len).map(move |pos| unsafe {
+        (0..self.len.to_usize().unwrap()).map(move |pos| unsafe {
             (*rev_base.add(pos), &mut *data_base.add(pos))
         })
     }
@@ -182,7 +169,7 @@ impl<T: Unpin> StableIndexVector<T> {
     pub fn iter_unordered(&self) -> impl Iterator<Item = &T> {
         let data_base = unsafe { self.data_ptr() };
         
-        (0..self.len).map(move |pos| unsafe {
+        (0..self.len.to_usize().unwrap()).map(move |pos| unsafe {
             &*data_base.add(pos)
         })
     }
@@ -190,27 +177,27 @@ impl<T: Unpin> StableIndexVector<T> {
     pub fn iter_unordered_mut(&mut self) -> impl Iterator<Item = &mut T> {
         let data_base = unsafe { self.data_ptr() };
         
-        (0..self.len).map(move |pos| unsafe {
+        (0..self.len.to_usize().unwrap()).map(move |pos| unsafe {
             &mut *data_base.add(pos)
         })
     }
 
-    pub fn get(&self, id: usize) -> Option<&T> {
+    pub fn get(&self, id: I) -> Option<&T> {
         if !self.is_valid(id) {
             None
         } else {
             unsafe {
-                Some(&*self.data_ptr().add(*self.index_ptr().add(id)))
+                Some(&*self.data_ptr().add((*self.index_ptr().add(id.to_usize().unwrap())).to_usize().unwrap()))
             }
         }
     }
 
-    pub fn get_mut(&mut self, id: usize) -> Option<&mut T> {
+    pub fn get_mut(&mut self, id: I) -> Option<&mut T> {
         if !self.is_valid(id) {
             None
         } else {
             unsafe {
-                Some(&mut *self.data_ptr().add(*self.index_ptr().add(id)))
+                Some(&mut *self.data_ptr().add((*self.index_ptr().add(id.to_usize().unwrap())).to_usize().unwrap()))
             }
         }
     }
@@ -229,14 +216,14 @@ impl<T: Unpin> IndexMut<usize> for StableIndexVector<T> {
     }
 }
 
-impl<T: Unpin> Drop for StableIndexVector<T> {
+impl<T: Unpin, I: StableId> Drop for StableIndexVector<T, I> {
     fn drop(&mut self) {
-        if self.capacity > 0 {
+        if !self.capacity.is_zero() {
             unsafe {
-                for i in 0..self.len {
+                for i in 0..self.len.to_usize().unwrap() {
                     ptr::drop_in_place(self.data_ptr().add(i));
                 }
-                let (layout, _, _, _) = Self::get_layout(self.capacity);
+                let (layout, _, _, _) = Self::get_layout(self.capacity.to_usize().unwrap());
                 alloc::dealloc(self.ptr, layout);
             }
         }
@@ -357,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_reciclagem_lifo_profunda() {
-        let mut v = StableIndexVector::new();
+        let mut v = StableIndexVector::<_, u8>::new();
         
         // Pushes iniciais
         let id0 = v.push(0); // 0
@@ -382,7 +369,7 @@ mod tests {
         let drop_count = Arc::new(AtomicUsize::new(0));
         
         {
-            let mut v = StableIndexVector::new();
+            let mut v = StableIndexVector::<_, usize>::new();
             
             for _ in 0..100 {
                 v.push(DropTracker(drop_count.clone()));
