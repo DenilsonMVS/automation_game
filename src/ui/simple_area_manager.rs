@@ -18,6 +18,14 @@ impl AreaId {
     const fn new(id: u32) -> Self {
         Self { id }
     }
+
+    pub const fn is_some(&self) -> bool {
+        self.id != EMPTY_ID
+    }
+
+    pub const fn is_none(&self) -> bool {
+        self.id == EMPTY_ID
+    }
 }
 
 impl Default for AreaId {
@@ -39,8 +47,8 @@ impl SimpleManager {
     ) -> Vec<AreaConflict> {
         let conflicts = self.simple_areas
             .iter()
-            .filter(|area| area.bounding_box.is_point_inside(ndc_mouse_position))
             .enumerate()
+            .filter(|(_, area)| area.bounding_box.is_point_inside(ndc_mouse_position))
             .map(|(i, simple_area)| AreaConflict {
                 id: AreaId::new(i as u32),
                 depth: simple_area.depth,

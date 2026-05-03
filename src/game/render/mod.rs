@@ -4,10 +4,14 @@ use winit::window::CursorIcon;
 
 pub const UI_BASE_DEPTH: u16 = 1000;
 
+pub const INFO_WIDTH: f32 = 1.2;
+pub const INFO_HEIGHT: f32 = 1.6;
+
 pub mod display_module;
 pub mod robot;
 pub mod world;
 pub mod robot_info;
+pub mod instruction_editor;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -26,12 +30,10 @@ impl<'a> RenderState<'a> {
 
     fn get_robot_info_bbox(ndc_bbox: &RenderBox) -> RenderBox {
         const MARGIN: f32 = 0.03;
-        const WIDTH: f32 = 1.2;
-        const HEIGHT: f32 = 1.6;
         RenderBox::new_simple(
             ndc_bbox.get_top_left() + glm::vec2(MARGIN, -MARGIN),
             PositionMode::TopLeft,
-            glm::vec2(WIDTH, HEIGHT),
+            glm::vec2(INFO_WIDTH, INFO_HEIGHT),
         )
     }
 

@@ -11,6 +11,7 @@ pub mod events;
 pub mod ui_element;
 pub mod rendered_area;
 pub mod rendered_button;
+pub mod dnd;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -37,7 +38,7 @@ fn map_key_to_index(key: KeyCode) -> Option<usize> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseAction {
     Pressed,
     Released,
@@ -136,6 +137,7 @@ impl Ui {
             self.mouse_action,
             &areas_containing_mouse,
             context.window,
+            &self.events,
         );
     }
 

@@ -9,6 +9,7 @@ pub enum ActionType {
     AreaPress(AreaId),
     NoneRelease,
     AreaRelease(AreaId),
+    Grabbing(AreaId),
 }
 
 #[derive(Debug)]
