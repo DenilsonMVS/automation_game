@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::RobotInfo, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::RobotInfo, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, rendered_button::RenderedButtonContext, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
@@ -67,7 +67,7 @@ impl<'a> RenderState<'a> {
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
         if let Some(robot_info) = &mut self.robot_info {
-            robot_info.send(context.simple_shape_renderer);
+            robot_info.send(&mut RenderedButtonContext { font: context.font, simple_shape_renderer: context.simple_shape_renderer });
         }
 
         for robot in logic_state.get_robots().iter() {
