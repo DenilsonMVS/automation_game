@@ -2,7 +2,6 @@ pub mod graphics;
 pub mod game;
 pub mod open_simplex;
 pub mod ui;
-pub mod stable_index_vector;
 
 use std::num::{NonZeroU32};
 
@@ -132,8 +131,6 @@ impl<'a> State<'a> {
             scene: &mut self.scene,
         };
         self.ui.on_render_start(&mut context);
-
-        // let events = self.ui.take_events();
 
         {
             let mut main_context = MainContext {
