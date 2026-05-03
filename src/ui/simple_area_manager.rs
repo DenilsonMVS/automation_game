@@ -6,6 +6,26 @@ pub struct SimpleManager {
     simple_areas: Vec<SimpleArea>,
 }
 
+const EMPTY_ID: u32 = 0xffffffff;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AreaId {
+    id: u32,
+}
+
+impl AreaId {
+    const NONE: AreaId = Self::new(EMPTY_ID);
+    const fn new(id: u32) -> Self {
+        Self { id }
+    }
+}
+
+impl Default for AreaId {
+    fn default() -> Self {
+        Self::NONE
+    }
+}
+
 impl SimpleManager {
     pub fn new() -> Self {
         Self {
@@ -22,7 +42,7 @@ impl SimpleManager {
             .filter(|area| area.bounding_box.is_point_inside(ndc_mouse_position))
             .enumerate()
             .map(|(i, simple_area)| AreaConflict {
-                id: i as u32,
+                id: AreaId::new(i as u32),
                 depth: simple_area.depth,
                 cursor: simple_area.cursor,
             })
@@ -32,13 +52,13 @@ impl SimpleManager {
         conflicts
     }
 
-    pub fn get(&self, id: u32) -> Option<&SimpleArea> {
-        self.simple_areas.get(id as usize)
+    pub fn get(&self, id: AreaId) -> Option<&SimpleArea> {
+        self.simple_areas.get(id.id as usize)
     }
 
-    pub fn push(&mut self, simple_area: SimpleArea) -> u32 {
+    pub fn push(&mut self, simple_area: SimpleArea) -> AreaId {
         let id = self.simple_areas.len() as u32;
         self.simple_areas.push(simple_area);
-        id
+        AreaId::new(id)
     }
 }

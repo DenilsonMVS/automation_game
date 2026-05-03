@@ -8,6 +8,8 @@ pub mod simple_area;
 pub mod simple_area_manager;
 pub mod multi_area_conflict_resolver;
 pub mod events;
+pub mod ui_element;
+pub mod rendered_area;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;

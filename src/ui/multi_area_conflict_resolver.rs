@@ -1,8 +1,8 @@
-use crate::ui::{MouseAction, events::{ActionType, Events}};
+use crate::ui::{MouseAction, events::{ActionType, Events}, simple_area_manager::AreaId};
 use winit::window::{CursorIcon, Window};
 
 pub struct AreaConflict {
-    pub id: u32,
+    pub id: AreaId,
     pub depth: u16,
     pub cursor: CursorIcon,
 }
