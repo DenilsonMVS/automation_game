@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::GameState, render::{RenderEventContext, RenderState}, scene::{EventReceiver, EventType, Scene}}, graphics::renderer::Renderer};
+use crate::{game::{logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
 
 pub struct MainScene<'a> {
     pub logic: GameState,
@@ -25,18 +25,5 @@ impl<'a> Scene for MainScene<'a> {
 
     fn generate_output(&mut self, context: &mut crate::MainContext) {
         self.render.draw(&context.ui.get_camera().get_vp_matrix(&context.ui.get_projection_matrix()));
-    }
-}
-
-impl<'a, 'b, 'c> EventReceiver<MainContext<'a, 'b>> for MainScene<'c> {
-    fn propagate_children(&mut self, event: &EventType, context: &mut MainContext<'a, 'b>) {
-        let mut context = RenderEventContext {
-            ui: context.ui,
-            simple_shape_renderer: context.simple_shape_renderer,
-            font: context.font,
-            robots: self.logic.get_robots()
-        };
-
-        self.render.on_event(event, &mut context);
     }
 }

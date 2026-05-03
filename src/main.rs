@@ -9,7 +9,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::{EventReceiver, EventType, Scene}}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -114,8 +114,6 @@ impl<'a> ApplicationState<'a> for State<'a> {
             },
             _ => (),
         }
-
-        self.ui.events.push(EventType::Winit(Box::new(event)));
     }
 
     fn get_window_title() -> &'static str {
@@ -135,7 +133,7 @@ impl<'a> State<'a> {
         };
         self.ui.on_render_start(&mut context);
 
-        let events = self.ui.take_events();
+        // let events = self.ui.take_events();
 
         {
             let mut main_context = MainContext {
@@ -143,10 +141,6 @@ impl<'a> State<'a> {
                 font: &mut self.font,
                 ui: &mut self.ui,
             };
-
-            for event in events.iter() {
-                self.scene.on_event(event, &mut main_context);
-            }
 
             main_context.simple_shape_renderer.reset();
             main_context.font.reset();

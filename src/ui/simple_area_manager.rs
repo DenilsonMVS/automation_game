@@ -1,62 +1,44 @@
-use crate::{stable_index_vector::StableIndexVector, ui::{AreaManager, multi_area_conflict_resolver::Area, simple_area::SimpleArea}};
+use crate::{ui::{multi_area_conflict_resolver::AreaConflict, simple_area::SimpleArea}};
 use nalgebra_glm as glm;
 
 #[derive(Debug)]
 pub struct SimpleManager {
-    simple_areas: StableIndexVector<SimpleArea>,
+    simple_areas: Vec<SimpleArea>,
 }
 
 impl SimpleManager {
     pub fn new() -> Self {
         Self {
-            simple_areas: StableIndexVector::new(),
+            simple_areas: vec![],
         }
     }
 
     pub(super) fn on_frame_start(
         &mut self,
-        areas_containing_mouse: &mut Vec<Area>,
         ndc_mouse_position: glm::Vec2,
-    ) {
-        for (id, simple_area) in self.simple_areas.iter_enumerate_unordered_mut() {
-            simple_area.alive = false;
-            if simple_area.bounding_box.is_point_inside(ndc_mouse_position) {
-                areas_containing_mouse.push(Area::SimpleArea(id, simple_area.depth, simple_area.is_button));
-            }
-        }
+    ) -> Vec<AreaConflict> {
+        let conflicts = self.simple_areas
+            .iter()
+            .filter(|area| area.bounding_box.is_point_inside(ndc_mouse_position))
+            .enumerate()
+            .map(|(i, simple_area)| AreaConflict {
+                id: i as u32,
+                depth: simple_area.depth,
+                cursor: simple_area.cursor,
+            })
+            .collect();
+
+        self.simple_areas.clear();
+        conflicts
     }
 
-    pub(super) fn on_frame_end(&mut self) {
-        let dead_ids: Vec<usize> = self.simple_areas
-            .iter_enumerate_unordered()
-            .filter_map(|(id, area)|
-                if !area.alive { Some(id) } else { None }
-            ).collect();
-        
-        for dead_id in dead_ids.iter() {
-            self.simple_areas.remove(*dead_id);
-        }
-    }
-}
-
-impl AreaManager for SimpleManager {
-    fn keep_alive(&mut self, id: usize) {
-        if let Some(simple_area) = self.simple_areas.get_mut(id) {
-            simple_area.alive = true;
-        }
+    pub fn get(&self, id: u32) -> Option<&SimpleArea> {
+        self.simple_areas.get(id as usize)
     }
 
-    fn get(&self, id: usize) -> Option<&SimpleArea> {
-        self.simple_areas.get(id)
-    }
-
-    fn push(&mut self, simple_area: SimpleArea) -> usize {
-        self.simple_areas.push(simple_area)
-    }
-
-    fn update(&mut self, id: usize, simple_area: SimpleArea) {
-        if let Some(area) = self.simple_areas.get_mut(id) {
-            *area = simple_area;
-        }
+    pub fn push(&mut self, simple_area: SimpleArea) -> u32 {
+        let id = self.simple_areas.len() as u32;
+        self.simple_areas.push(simple_area);
+        id
     }
 }

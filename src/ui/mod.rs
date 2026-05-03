@@ -1,13 +1,13 @@
-use std::{mem, time::Instant};
+use std::time::Instant;
 
-use crate::{game::{main_scene::MainScene, scene::EventType}, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{drag_area_manager::DragAreaManager, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::SimpleManager}};
+use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::SimpleManager}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::Window};
 
 pub mod simple_area;
 pub mod simple_area_manager;
-pub mod drag_area_manager;
 pub mod multi_area_conflict_resolver;
+pub mod events;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -34,21 +34,24 @@ fn map_key_to_index(key: KeyCode) -> Option<usize> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum MouseAction {
+    Pressed,
+    Released,
+}
+
 pub struct Ui {
     ndc_mouse_position: glm::Vec2,
     previous_ndc_mouse_position: glm::Vec2,
     window_size: glm::Vec2,
     current_time: Instant,
     previous_frame_time: Instant,
-    mouse_pressed: bool,
-    mouse_released: bool,
+    mouse_action: Option<MouseAction>,
     pub camera: Camera,
     pressed_keys: [bool; 4],
 
     pub simple_area_manager: SimpleManager,
-    pub drag_area_manager: DragAreaManager,
-
-    pub events: Vec<EventType>,
+    pub events: Events,
 }
 
 impl Ui {
@@ -61,16 +64,14 @@ impl Ui {
             current_time,
             previous_frame_time: current_time,
             
-            mouse_pressed: false,
-            mouse_released: false,
+            mouse_action: None,
 
             camera: Camera::new(glm::vec2(0.0, 0.0), 1.0),
             pressed_keys: [false; 4],
 
             simple_area_manager: SimpleManager::new(),
-            drag_area_manager: DragAreaManager::new(),
 
-            events: vec![],
+            events: Events::default(),
         }
     }
 
@@ -126,43 +127,26 @@ impl Ui {
             }
         }
 
-        let mut areas_containing_mouse = Vec::new();
-        self.drag_area_manager.on_frame_start(
-            &mut areas_containing_mouse,
-            self.ndc_mouse_position,
-        );
-        self.simple_area_manager.on_frame_start(
-            &mut areas_containing_mouse,
-            self.ndc_mouse_position,
-        );
+        let areas_containing_mouse = self.simple_area_manager.on_frame_start(self.ndc_mouse_position);
 
-        resolve_multi_area_conflict(
-            self.mouse_pressed,
-            self.mouse_released,
-            self.ndc_mouse_position,
-            self.previous_ndc_mouse_position,
+        self.events = resolve_multi_area_conflict(
+            self.mouse_action,
             &areas_containing_mouse,
-            &mut self.events,
-            &mut self.drag_area_manager,
             context.window,
         );
     }
 
     pub fn mouse_pressed(&mut self) {
-        self.mouse_pressed = true;
+        self.mouse_action = Some(MouseAction::Pressed);
     }
 
     pub fn mouse_released(&mut self) {
-        self.mouse_released = true;
+        self.mouse_action = Some(MouseAction::Released);
     }
 
     pub fn on_render_end(&mut self) {
-        self.drag_area_manager.on_frame_end();
-        self.simple_area_manager.on_frame_end();
-
         self.previous_ndc_mouse_position = self.ndc_mouse_position;
-        self.mouse_pressed = false;
-        self.mouse_released = false;
+        self.mouse_action = None;
     }
 
     pub fn update_window_size(&mut self, window_size: glm::Vec2) {
@@ -197,7 +181,7 @@ impl Ui {
         }
     }
 
-    pub fn take_events(&mut self) -> Vec<EventType> {
-        mem::take(&mut self.events)
+    pub fn get_events(&self) -> &Events {
+        &self.events
     }
 }
