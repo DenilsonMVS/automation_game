@@ -1,4 +1,4 @@
-use crate::{graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{HasUi, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
@@ -56,10 +56,6 @@ pub trait HasId {
     fn get_id(&self) -> AreaId;
 }
 
-pub trait HasUi {
-    fn get_ui(&mut self) -> &mut Ui;
-}
-
 #[derive(Debug, Default)]
 pub struct Dnd<T> {
     elements: Vec<T>,
@@ -86,6 +82,22 @@ impl<T> Dnd<T> {
     pub fn push(&mut self, element: T) {
         self.elements.push(element);
     }
+
+    pub fn len(&self) -> usize {
+        self.elements.len()
+    }
+
+    pub fn get_elements(&self) -> &[T] {
+        &self.elements
+    }
+
+    pub fn remove(&mut self, idx: usize) -> Option<T> {
+        if idx < self.elements.len() {
+            Some(self.elements.remove(idx))
+        } else {
+            None
+        }
+    }
 }
 
 impl<T: HasId + UiElement<UC, SC, GOC>, UC: HasUi, SC, GOC> UiElement<UC, SC, GOC> for Dnd<T> {
@@ -94,14 +106,14 @@ impl<T: HasId + UiElement<UC, SC, GOC>, UC: HasUi, SC, GOC> UiElement<UC, SC, GO
         let ui = context.get_ui();
 
         if
-            let ActionType::Grabbing(id) = ui.events.mouse_actions &&
+            let ActionType::Grabbing(id, _) = ui.events.mouse_actions &&
             !self.grab.is_grabbing() &&
             let Some(index) = self.elements.iter().position(|e| e.get_id() == id)
         {
             self.grab.grab(index as u32);
         }
 
-        let mut target_index = self.grab.get_grabbed().unwrap_or(0);
+        let mut target_index = self.grab.get_grabbed().unwrap_or(0) as usize;
         
         if let Some(grabbed_idx) = self.grab.get_grabbed() {
             let delta = ui.ndc_mouse_position.y - ui.previous_ndc_mouse_position.y;
@@ -109,10 +121,10 @@ impl<T: HasId + UiElement<UC, SC, GOC>, UC: HasUi, SC, GOC> UiElement<UC, SC, GO
 
             let current_offset = self.grab.get_offset().unwrap_or(0.0);
             let current_y_relative = -(grabbed_idx as f32 * height_per_element) + current_offset;
-            let hover_idx = (-current_y_relative / height_per_element).round() as i32;
-            target_index = hover_idx.clamp(0, (self.elements.len() - 1) as i32) as u32;
+            let hover_idx = (-current_y_relative / height_per_element).round() as isize;
+            target_index = hover_idx.clamp(0, (self.elements.len() - 1) as isize) as usize;
 
-            if matches!(ui.events.mouse_actions, ActionType::AreaRelease(_) | ActionType::NoneRelease) {
+            if matches!(ui.events.mouse_actions, ActionType::AreaRelease(_, _) | ActionType::NoneRelease) {
                 let from = grabbed_idx as usize;
                 let to = target_index as usize;
 
@@ -126,20 +138,23 @@ impl<T: HasId + UiElement<UC, SC, GOC>, UC: HasUi, SC, GOC> UiElement<UC, SC, GO
         }
 
         let is_grabbing = self.grab.is_grabbing();
-        let grabbed_idx = self.grab.get_grabbed().unwrap_or(0);
+        let grabbed_idx = self.grab.get_grabbed().unwrap_or(0) as usize;
         let current_offset = self.grab.get_offset().unwrap_or(0.0);
+        let total_elements = self.elements.len() as f32;
 
         for (i, element) in self.elements.iter_mut().enumerate() {
-            let i_u32 = i as u32;
             let mut visual_offset = 0.0;
 
             if is_grabbing {
-                if i_u32 == grabbed_idx {
-                    visual_offset = current_offset;
+                if i == grabbed_idx {
+                    let max_up = i as f32 * height_per_element;
+                    let max_down = (i as f32 - (total_elements - 1.0)) * height_per_element;
+            
+                    visual_offset = current_offset.clamp(max_down, max_up);
                 } else {
-                    if i_u32 > grabbed_idx && i_u32 <= target_index {
+                    if i > grabbed_idx && i <= target_index {
                         visual_offset = height_per_element; 
-                    } else if i_u32 < grabbed_idx && i_u32 >= target_index {
+                    } else if i < grabbed_idx && i >= target_index {
                         visual_offset = -height_per_element;
                     }
                 }
@@ -151,7 +166,7 @@ impl<T: HasId + UiElement<UC, SC, GOC>, UC: HasUi, SC, GOC> UiElement<UC, SC, GO
                 self.element_size,
             );
 
-            let is_this_grabbed = is_grabbing && i_u32 == grabbed_idx;
+            let is_this_grabbed = is_grabbing && i == grabbed_idx;
             let effective_depth = if is_this_grabbed { depth.saturating_sub(50) } else { depth };
 
             element.update_id(context.get_ui().simple_area_manager.push(

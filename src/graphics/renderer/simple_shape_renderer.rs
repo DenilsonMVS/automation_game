@@ -1,7 +1,7 @@
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 
-use crate::graphics::{renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
+use crate::{graphics::renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
 const FORMS_PER_RENDER: usize = 1 << 20;
 
@@ -77,6 +77,16 @@ pub struct SimpleShapeRenderer<'a> {
 
     ell_program: SimpleEllipseProgram<'a>,
     ell_buffs: [(DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>); 2],
+}
+
+pub trait HasSimpleShapeRenderer<'a> {
+    fn get_simple_shape_renderer(&mut self) -> &mut SimpleShapeRenderer<'a>;
+}
+
+impl<'a> HasSimpleShapeRenderer<'a> for SimpleShapeRenderer<'a> {
+    fn get_simple_shape_renderer(&mut self) -> &mut SimpleShapeRenderer<'a> {
+        self
+    }
 }
 
 impl<'a> SimpleShapeRenderer<'a> {

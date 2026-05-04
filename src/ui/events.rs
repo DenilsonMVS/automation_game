@@ -1,15 +1,15 @@
 use crate::ui::simple_area_manager::AreaId;
 
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ActionType {
     NoneHover,
-    AreaHover(AreaId),
+    AreaHover(AreaId, u16),
     NonePress,
-    AreaPress(AreaId),
+    AreaPress(AreaId, u16),
     NoneRelease,
-    AreaRelease(AreaId),
-    Grabbing(AreaId),
+    AreaRelease(AreaId, u16),
+    Grabbing(AreaId, u16),
 }
 
 #[derive(Debug)]

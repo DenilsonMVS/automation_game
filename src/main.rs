@@ -8,13 +8,34 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::SimpleShapeRenderer}}, ui::{Ui, UiContext}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, UiContext, rendered_button::RenderedButtonContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
     pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
     pub font: &'a mut Font<'b>,
     pub ui: &'a mut Ui,
+}
+
+impl<'a, 'b> MainContext<'a, 'b> {
+    pub fn get_button_context<'s>(&'s mut self) -> RenderedButtonContext<'s, 'b> {
+        RenderedButtonContext { 
+            font: self.font, 
+            simple_shape_renderer: self.simple_shape_renderer 
+        }
+    }
+}
+
+impl<'a, 'b> HasUi for MainContext<'a, 'b> {
+    fn get_ui(&mut self) -> &mut Ui {
+        self.ui
+    }
+}
+
+impl<'a, 'b> HasSimpleShapeRenderer<'b> for MainContext<'a, 'b> {
+    fn get_simple_shape_renderer(&mut self) -> &mut SimpleShapeRenderer<'b> {
+        self.simple_shape_renderer
+    }
 }
 
 pub struct State<'a> {

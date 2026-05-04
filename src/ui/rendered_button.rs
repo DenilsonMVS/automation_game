@@ -55,7 +55,7 @@ pub struct RenderedButtonContext<'a, 'b> {
 
 impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton {
     fn update(&mut self, bbox: &RenderBox, depth: u16, ui: &mut Ui) {
-        self.hovered = ui.events.mouse_actions == ActionType::AreaHover(self.id);
+        self.hovered = matches!(ui.events.mouse_actions, ActionType::AreaHover(id, _) if id == self.id);
         self.bbox = *bbox;
         self.depth = depth;
 

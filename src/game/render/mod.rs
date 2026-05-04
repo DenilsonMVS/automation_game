@@ -12,6 +12,7 @@ pub mod robot;
 pub mod world;
 pub mod robot_info;
 pub mod instruction_editor;
+pub mod colored_text;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -40,7 +41,7 @@ impl<'a> RenderState<'a> {
     pub fn update(&mut self, logic_state: &GameState, context: &mut MainContext) {
         match context.ui.events.mouse_actions {
             ActionType::NonePress => self.robot_info = None,
-            ActionType::AreaPress(id) => {
+            ActionType::AreaPress(id, _) => {
                 for (i, button) in self.robot_buttons.iter().enumerate() {
                     if
                         id == *button &&
@@ -55,7 +56,7 @@ impl<'a> RenderState<'a> {
 
         let ndc_bbox = context.ui.get_ndc_render_box();
         if let Some(robot_info) = &mut self.robot_info {
-            robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context.ui);
+            robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
         }
 
         self.robot_buttons.clear();
@@ -69,7 +70,7 @@ impl<'a> RenderState<'a> {
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
         if let Some(robot_info) = &mut self.robot_info {
-            robot_info.send(&mut RenderedButtonContext { font: context.font, simple_shape_renderer: context.simple_shape_renderer });
+            robot_info.send(context);
         }
 
         for robot in logic_state.get_robots().iter() {

@@ -1,6 +1,6 @@
 use winit::window::CursorIcon;
 use nalgebra_glm as glm;
-use crate::{game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::InstructionEditor}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{Ui, dnd::Dnd, rendered_area::RenderedArea, rendered_button::{RenderedButton, RenderedButtonContext}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::{InstructionEditor}}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::{RenderedButton, RenderedButtonContext}, ui_element::UiElement}};
 
 pub fn get_background_color() -> glm::U8Vec4 {
     glm::vec4(8, 17, 25, 255)
@@ -35,11 +35,8 @@ pub struct RobotInfo {
 
 impl RobotInfo {
     pub fn new(robot_idx: usize) -> Self {
-        let mut dnd = Dnd::new(glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT))
+        let dnd = Dnd::new(glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT))
             .with_gap(CONTAINER_PADDING);
-        for _ in 0..8 {
-            dnd.push(InstructionEditor::new());
-        }
 
         Self {
             robot_idx,
@@ -67,19 +64,33 @@ impl RobotInfo {
     }
 }
 
-impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RobotInfo {
-    fn update(&mut self, bbox: &RenderBox, depth: u16, ui: &mut Ui) {
-        self.outer_container.update(bbox, depth, ui);
+impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotInfo {
+    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext) {
+        if let ActionType::AreaPress(id, _) = context.ui.events.mouse_actions {
+            if id == self.add_instruction_button.id && self.instructions.len() < MEMORY_SIZE {
+                self.instructions.push(InstructionEditor::new());
+            } else if let Some(idx) = self.instructions
+                .get_elements()
+                .iter()
+                .enumerate()
+                .find(|(_, el)| el.get_delete_button_id() == id)
+                .map(|(idx, _)| idx)
+            {
+                self.instructions.remove(idx);
+            }
+        }
+
+        self.outer_container.update(bbox, depth, context.ui);
         self.add_instruction_button.update(
             &Self::get_add_instruction_button_container(bbox),
-            depth - 1, ui,
+            depth - 1, context.ui,
         );
-        self.instructions.update(&Self::get_dnd_bbox(bbox), depth - 1, ui);
+        self.instructions.update(&Self::get_dnd_bbox(bbox), depth - 1, context);
     }
 
-    fn send(&mut self, context: &mut RenderedButtonContext<'a, 'b>) {
-        self.instructions.send(context.simple_shape_renderer);
-        self.add_instruction_button.send(context);
+    fn send(&mut self, context: &mut MainContext<'a, 'b>) {
+        self.instructions.send(context);
+        self.add_instruction_button.send(&mut context.get_button_context());
         self.outer_container.send(context.simple_shape_renderer);
     }
 }

@@ -34,7 +34,7 @@ impl<'a> UiElement<Ui, SimpleShapeRenderer<'a>, ()> for RenderedArea {
     fn update(&mut self, bbox: &RenderBox, depth: u16, ui: &mut Ui) {
         self.bbox = *bbox;
         self.depth = depth;
-        self.hovered = ActionType::AreaHover(self.id) == ui.events.mouse_actions;
+        self.hovered = matches!(ui.events.mouse_actions, ActionType::AreaHover(id, _) if id == self.id);
         self.id = ui.simple_area_manager.push(SimpleArea::new(self.bbox, self.depth).with_cursor(self.cursor));
     }
 

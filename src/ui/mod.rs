@@ -12,6 +12,7 @@ pub mod ui_element;
 pub mod rendered_area;
 pub mod rendered_button;
 pub mod dnd;
+pub mod menu;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -56,6 +57,16 @@ pub struct Ui {
 
     pub simple_area_manager: SimpleManager,
     pub events: Events,
+}
+
+pub trait HasUi {
+    fn get_ui(&mut self) -> &mut Ui;
+}
+
+impl HasUi for Ui {
+    fn get_ui(&mut self) -> &mut Ui {
+        self
+    }
 }
 
 impl Ui {
