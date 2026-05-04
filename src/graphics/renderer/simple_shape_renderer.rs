@@ -73,12 +73,15 @@ struct EllipseVertex {
 pub struct SimpleShapeRenderer<'a> {
     rec_program: SimpleRectangleProgram<'a>,
     rec_buff: (DynamicBuffer<'a, RectangleVertex>, VertexArrayObject<'a>),
+    rec_buff_trans: (DynamicBuffer<'a, RectangleVertex>, VertexArrayObject<'a>),
 
     tri_program: SimpleTriangleProgram<'a>,
     tri_buff: (DynamicBuffer<'a, TriangleVertex>, VertexArrayObject<'a>),
+    tri_buff_trans: (DynamicBuffer<'a, TriangleVertex>, VertexArrayObject<'a>),
 
     ell_program: SimpleEllipseProgram<'a>,
     ell_buff: (DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>),
+    ell_buff_trans: (DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>),
 }
 
 pub trait HasSimpleShapeRenderer<'a> {
@@ -93,32 +96,28 @@ impl<'a> HasSimpleShapeRenderer<'a> for SimpleShapeRenderer<'a> {
 
 impl<'a> SimpleShapeRenderer<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
-        let rec_program = SimpleRectangleProgram::init(renderer).unwrap();
-        let rec_buff = {
-            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-            let vao = VertexArrayObject::new(renderer, &[&vbo]);
+        fn create_buff<'b, V>(res: &'b Renderer) -> (DynamicBuffer<'b, V>, VertexArrayObject<'b>) 
+        where 
+            V: StaticVertexLayout + 'static
+        {
+            let vbo = DynamicBuffer::new(res, FORMS_PER_RENDER);
+            let vao = VertexArrayObject::new(res, &[&vbo]);
             (vbo, vao)
-        };
+        }
 
-        let tri_program = SimpleTriangleProgram::init(renderer).unwrap();
-        let tri_buff = {
-            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-            let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            (vbo, vao)
-        };
+        Self {
+            rec_program: SimpleRectangleProgram::init(renderer).unwrap(),
+            rec_buff: create_buff(renderer),
+            rec_buff_trans: create_buff(renderer),
 
-        let ell_program = SimpleEllipseProgram::init(renderer).unwrap();
-        let ell_buff = {
-            let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-            let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            (vbo, vao)
-        };
-        
-        return Self {
-            rec_program, rec_buff,
-            tri_program, tri_buff,
-            ell_program, ell_buff,
-        };
+            tri_program: SimpleTriangleProgram::init(renderer).unwrap(),
+            tri_buff: create_buff(renderer),
+            tri_buff_trans: create_buff(renderer),
+
+            ell_program: SimpleEllipseProgram::init(renderer).unwrap(),
+            ell_buff: create_buff(renderer),
+            ell_buff_trans: create_buff(renderer),
+        }
     }
 
     pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
@@ -140,16 +139,55 @@ impl<'a> SimpleShapeRenderer<'a> {
         renderer.depth_mask(true);
     }
 
+    pub fn draw_transparent(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
+        renderer.depth_mask(false);
+
+        self.rec_program.bind();
+        self.rec_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.rec_buff_trans;
+        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+
+        self.tri_program.bind();
+        self.tri_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.tri_buff_trans;
+        vao.draw_instanced(3, vbo.get_len() as i32, DrawMode::Triangles);
+
+        self.ell_program.bind();
+        self.ell_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.ell_buff_trans;
+        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+        
+        renderer.depth_mask(true);
+    }
+
+    fn get_rec_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, RectangleVertex> {
+        if alpha == 255 { &mut self.rec_buff.0 } else { &mut self.rec_buff_trans.0 }
+    }
+
+    fn get_tri_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, TriangleVertex> {
+        if alpha == 255 { &mut self.tri_buff.0 } else { &mut self.tri_buff_trans.0 }
+    }
+
+    fn get_ell_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, EllipseVertex> {
+        if alpha == 255 { &mut self.ell_buff.0 } else { &mut self.ell_buff_trans.0 }
+    }
+
     pub fn reset(&mut self) {
         self.rec_buff.0.reset_index();
+        self.rec_buff_trans.0.reset_index();
         self.tri_buff.0.reset_index();
+        self.tri_buff_trans.0.reset_index();
         self.ell_buff.0.reset_index();
+        self.ell_buff_trans.0.reset_index();
     }
 
     pub fn finish(&self) {
         self.rec_buff.0.flush();
+        self.rec_buff_trans.0.flush();
         self.tri_buff.0.flush();
+        self.tri_buff_trans.0.flush();
         self.ell_buff.0.flush();
+        self.ell_buff_trans.0.flush();
     }
 
     pub fn send_rotated_rectangle(
@@ -168,7 +206,8 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             oriented_box
         };
-        self.rec_buff.0.write(&RectangleVertex {
+        let buffer = self.get_rec_buffer(color.w);
+        buffer.write(&RectangleVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -196,7 +235,8 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             *simple_box
         };
-        self.rec_buff.0.write(&RectangleVertex {
+        let buffer = self.get_rec_buffer(color.w);
+        buffer.write(&RectangleVertex {
             top_left: bbox.get_top_left(),
             top_right: bbox.get_top_right(),
             bottom_right: bbox.get_bottom_right(),
@@ -248,7 +288,8 @@ impl<'a> SimpleShapeRenderer<'a> {
             (apex, vertex_b, vertex_c)
         };
 
-        self.tri_buff.0.write(&TriangleVertex {
+        let buffer = self.get_tri_buffer(color.w);
+        buffer.write(&TriangleVertex {
             v1: apex,
             v2: vertex_b,
             v3: vertex_c,
@@ -269,7 +310,9 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             vertices[i]
         });
-        self.tri_buff.0.write(&TriangleVertex {
+
+        let buffer = self.get_tri_buffer(color.w);
+        buffer.write(&TriangleVertex {
             v1: vertices[0],
             v2: vertices[1],
             v3: vertices[2],
@@ -294,7 +337,9 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             oriented_box
         };
-        self.ell_buff.0.write(&EllipseVertex {
+
+        let buffer = self.get_ell_buffer(color.w);
+        buffer.write(&EllipseVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -317,7 +362,9 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             simple_box
         };
-        self.ell_buff.0.write(&EllipseVertex {
+
+        let buffer = self.get_ell_buffer(color.w);
+        buffer.write(&EllipseVertex {
             top_left: simple_box.get_top_left(),
             top_right: simple_box.get_top_right(),
             bottom_right: simple_box.get_bottom_right(),

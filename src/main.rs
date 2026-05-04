@@ -186,6 +186,8 @@ impl<'a> State<'a> {
         self.fonts.draw(&mut self.font, &proj_matrix);
         self.renderer.depth_mask(true);
 
+        self.simple_shape_renderer.draw_transparent(self.renderer, &proj_matrix);
+
         self.fence = Some(self.renderer.new_fence());
 
         self.gl_surface.swap_buffers(&self.gl_context).unwrap();
