@@ -1,6 +1,11 @@
 use crate::{graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::HasSimpleShapeRenderer}, ui::{HasUi, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
-use winit::window::CursorIcon;
+use winit::{keyboard::Key, window::CursorIcon};
+
+pub trait HasKey {
+    type Key;
+    fn get_key(&self) -> Key;
+}
 
 // T and D MUST BE DIFFERENT
 #[derive(Debug)]
@@ -60,6 +65,12 @@ impl<T, D> Menu<T, D> {
     pub fn with_open_bgcolor(mut self, color: glm::U8Vec4) -> Self {
         self.open_bgcolor = color;
         self
+    }
+}
+
+impl<T: HasKey, D: HasKey> Menu<T, D> {
+    pub fn get_selected_key(&self) -> Option<Key> {
+        self.displayed_value.as_ref().map(|v| v.get_key())
     }
 }
 

@@ -12,7 +12,7 @@ pub struct InstructionEditor {
     id: AreaId,
     bbox: RenderBox,
     depth: u16,
-    opcode_menu: Menu<ColoredTextButton, ColoredTextView>,
+    opcode_menu: Menu<ColoredTextButton<InstructionId>, ColoredTextView<InstructionId>>,
     delete_button: RenderedButton,
 }
 
@@ -20,9 +20,8 @@ impl InstructionEditor {
     pub fn new() -> Self {
         let opcodes = (0..16)
             .map(InstructionId::from_u16)
-            .map(|inst| format!("{}", inst))
-            .map(|opcode_str| ColoredTextButton::new(
-                opcode_str,
+            .map(|opcode| ColoredTextButton::new(
+                opcode,
                 UnpackedInstruction::get_mnemonic_color(),
                 get_secondary_background_color(),
             ))
@@ -48,7 +47,7 @@ impl InstructionEditor {
     fn get_opcode_bbox(bbox: &RenderBox, font: &Font) -> RenderBox {
         let delete_button_bbox = Self::get_delete_button_bbox(bbox);
         let height = delete_button_bbox.get_size().y;
-        let amount_chars = 4.0;
+        let amount_chars = InstructionId::get_label_max_len() as f32;
         let char_width = font.get_monospace_width(height);
         RenderBox::new_simple(
             delete_button_bbox.get_top_right() + glm::vec2(PADDING * 2.0, 0.0),

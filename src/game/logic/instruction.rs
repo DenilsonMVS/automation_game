@@ -71,6 +71,10 @@ impl InstructionId {
             Self::Sys  => InstructionFormat::Syscall,
         }
     }
+
+    pub fn get_label_max_len() -> usize {
+        4
+    }
 }
 
 impl fmt::Display for InstructionId {

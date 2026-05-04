@@ -5,9 +5,9 @@ use winit::window::CursorIcon;
 use crate::{MainContext, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{HasUi, Ui, events::ActionType, menu::MenuContext, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 
 #[derive(Debug)]
-pub struct ColoredTextView {
+pub struct ColoredTextView<Key> {
     pub area_id: AreaId,
-    content: String,
+    key: Key,
     color: glm::U8Vec4,
     bbox: RenderBox,
     depth: u16,
@@ -16,10 +16,10 @@ pub struct ColoredTextView {
     hovered: bool,
 }
 
-impl ColoredTextView {
-    pub fn new(content: String, color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Self {
+impl<Key: Clone> ColoredTextView<Key> {
+    pub fn new(key: Key, color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Self {
         Self {
-            content,
+            key,
             color,
             bbox: Default::default(),
             depth: 0,
@@ -30,13 +30,9 @@ impl ColoredTextView {
         }
     }
 
-    pub fn get_len(&self) -> usize {
-        self.content.len()
-    }
-
     pub fn create_display_clone(&self) -> Self {
         Self {
-            content: self.content.clone(),
+            key: self.key.clone(),
             color: self.color,
             bbox: Default::default(),
             depth: 0,
@@ -48,7 +44,7 @@ impl ColoredTextView {
     }
 }
 
-impl<'a, 'b, 'c> UiElement<Ui, MainContext<'a, 'b>, ()> for ColoredTextView {
+impl<'a, 'b, 'c, Key: std::fmt::Display> UiElement<Ui, MainContext<'a, 'b>, ()> for ColoredTextView<Key> {
     fn update(&mut self, bbox: &RenderBox, depth: u16, ui: &mut Ui) {
         self.bbox = *bbox;
         self.depth = depth;
@@ -62,9 +58,10 @@ impl<'a, 'b, 'c> UiElement<Ui, MainContext<'a, 'b>, ()> for ColoredTextView {
         let bbox_size = self.bbox.get_size();
         let color = if self.hovered { self.hover_bgcolor } else { self.bgcolor };
         context.simple_shape_renderer.send_render_box(&self.bbox, color, self.depth, None);
+        let label = format!("{}", self.key);
         context.font.add_text(
             &TextRenderConfig::new(
-                &[(&self.content, self.color)],
+                &[(&label, self.color)],
                 self.bbox.get_top_left(),
                 bbox_size.y,
             )
@@ -77,18 +74,18 @@ impl<'a, 'b, 'c> UiElement<Ui, MainContext<'a, 'b>, ()> for ColoredTextView {
 }
 
 #[derive(Debug)]
-pub struct ColoredTextButton {
-    view: ColoredTextView,
+pub struct ColoredTextButton<Key> {
+    view: ColoredTextView<Key>,
 }
 
-impl ColoredTextButton {
-    pub fn new(content: String, color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Self {
-        Self { view: ColoredTextView::new(content, color, bgcolor) }
+impl<Key: Clone> ColoredTextButton<Key> {
+    pub fn new(key: Key, color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Self {
+        Self { view: ColoredTextView::new(key, color, bgcolor) }
     }
 }
 
-impl<'a, 'b, 'c> UiElement<MenuContext<'c, Ui, ColoredTextView>, MainContext<'a, 'b>, ()> for ColoredTextButton {
-    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MenuContext<'c, Ui, ColoredTextView>) {
+impl<'a, 'b, 'c, Key: std::fmt::Display + Clone> UiElement<MenuContext<'c, Ui, ColoredTextView<Key>>, MainContext<'a, 'b>, ()> for ColoredTextButton<Key> {
+    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MenuContext<'c, Ui, ColoredTextView<Key>>) {
         self.view.update(bbox, depth, context.base_context);
 
         let ui = context.base_context.get_ui();
