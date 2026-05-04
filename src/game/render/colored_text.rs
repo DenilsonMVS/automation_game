@@ -2,7 +2,7 @@
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
-use crate::{MainContext, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{HasUi, Ui, events::ActionType, menu::MenuContext, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{HasUi, Ui, events::ActionType, menu::{HasKey, MenuContext}, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 
 #[derive(Debug)]
 pub struct ColoredTextView<Key> {
@@ -73,6 +73,13 @@ impl<'a, 'b, 'c, Key: std::fmt::Display> UiElement<Ui, MainContext<'a, 'b>, ()> 
     }
 }
 
+impl<Key: Copy> HasKey for ColoredTextView<Key> {
+    type Key = Key;
+    fn get_key(&self) -> Self::Key {
+        self.key
+    }
+}
+
 #[derive(Debug)]
 pub struct ColoredTextButton<Key> {
     view: ColoredTextView<Key>,
@@ -81,6 +88,13 @@ pub struct ColoredTextButton<Key> {
 impl<Key: Clone> ColoredTextButton<Key> {
     pub fn new(key: Key, color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Self {
         Self { view: ColoredTextView::new(key, color, bgcolor) }
+    }
+}
+
+impl<Key: Copy> HasKey for ColoredTextButton<Key> {
+    type Key = Key;
+    fn get_key(&self) -> Self::Key {
+        self.view.get_key()
     }
 }
 

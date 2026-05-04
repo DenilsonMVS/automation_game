@@ -10,8 +10,8 @@ pub struct RenderedArea {
     depth: u16,
     hovered: bool,
     bbox: RenderBox,
-    color: glm::U8Vec4,
-    hover_color: glm::U8Vec4,
+    pub color: glm::U8Vec4,
+    pub hover_color: glm::U8Vec4,
 }
 
 impl RenderedArea {

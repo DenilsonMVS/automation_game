@@ -1,10 +1,10 @@
-use crate::{graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::HasSimpleShapeRenderer}, ui::{HasUi, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::HasSimpleShapeRenderer}, ui::{HasUi, events::ActionType, rendered_area::RenderedArea, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
-use winit::{keyboard::Key, window::CursorIcon};
+use winit::{window::CursorIcon};
 
 pub trait HasKey {
     type Key;
-    fn get_key(&self) -> Key;
+    fn get_key(&self) -> Self::Key;
 }
 
 // T and D MUST BE DIFFERENT
@@ -18,7 +18,7 @@ pub struct Menu<T, D> {
     opened: bool,
     hovered: bool,
     gap: f32,
-    open_bgcolor: glm::U8Vec4,
+    opened_container: RenderedArea,
 }
 
 impl<T, D> Menu<T, D> {
@@ -29,7 +29,7 @@ impl<T, D> Menu<T, D> {
             bbox: Default::default(),
             depth: Default::default(),
             gap: Default::default(),
-            open_bgcolor: Default::default(),
+            opened_container: RenderedArea::new(CursorIcon::Default, glm::vec4(0, 0, 0, 0)),
             opened: false,
             displayed_value: None,
             hovered: false,
@@ -63,13 +63,14 @@ impl<T, D> Menu<T, D> {
     }
 
     pub fn with_open_bgcolor(mut self, color: glm::U8Vec4) -> Self {
-        self.open_bgcolor = color;
+        self.opened_container.color = color;
+        self.opened_container.hover_color = color;
         self
     }
 }
 
 impl<T: HasKey, D: HasKey> Menu<T, D> {
-    pub fn get_selected_key(&self) -> Option<Key> {
+    pub fn get_selected_key(&self) -> Option<D::Key> {
         self.displayed_value.as_ref().map(|v| v.get_key())
     }
 }
@@ -94,6 +95,19 @@ where
         self.depth = depth;
 
         let mouse_actions = context.get_ui().events.mouse_actions;
+        match mouse_actions {
+            ActionType::AreaPress(id, depth) => {
+                if id == self.open_button_id {
+                    self.opened = true;
+                } else if depth > self.depth {
+                    self.opened = false;
+                }
+            },
+            ActionType::NonePress => {
+                self.opened = false;
+            },
+            _ => {},
+        };
         if matches!(mouse_actions, ActionType::AreaPress(id, _) if id == self.open_button_id) {
             self.opened = true;
         } else if mouse_actions == ActionType::NonePress {
@@ -111,11 +125,11 @@ where
                     displayed_value: &mut self.displayed_value,
                     opened: &mut self.opened,
                 };
-                item.update(&item_bbox, depth - 1, &mut item_context);
+                item.update(&item_bbox, depth - 100, &mut item_context);
             }
 
             let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
-            context.get_ui().simple_area_manager.push(SimpleArea::new(outer_box, depth));
+            self.opened_container.update(&outer_box, depth - 100, context.get_ui());
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
@@ -129,9 +143,7 @@ where
                 item.send(context);
             }
 
-            let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
-            context.get_simple_shape_renderer()
-                .send_render_box(&outer_box, self.open_bgcolor, self.depth, None);
+            self.opened_container.send(context.get_simple_shape_renderer());
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
