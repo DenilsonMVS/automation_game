@@ -38,7 +38,7 @@ impl<T, D> Menu<T, D> {
             PositionMode::TopLeft,
             glm::vec2(
                 unit_size.x + gap * 2.0,
-                (unit_size.y + gap) * (amount + 1) as f32,
+                (unit_size.y + gap) * amount as f32 + gap,
             ),
         )
     }
@@ -46,10 +46,20 @@ impl<T, D> Menu<T, D> {
     fn get_item_bounding_box(open_bbox: &RenderBox, gap: f32, index: usize) -> RenderBox {
         let unit_size = open_bbox.get_size();
         RenderBox::new_simple(
-            open_bbox.get_top_right() + glm::vec2(gap, (unit_size.y + gap) * index as f32),
+            open_bbox.get_top_right() + glm::vec2(gap, -(unit_size.y + gap) * index as f32),
             PositionMode::TopLeft,
             unit_size,
         )
+    }
+
+    pub fn with_gap(mut self, gap: f32) -> Self {
+        self.gap = gap;
+        self
+    }
+
+    pub fn with_open_bgcolor(mut self, color: glm::U8Vec4) -> Self {
+        self.open_bgcolor = color;
+        self
     }
 }
 
@@ -79,7 +89,7 @@ where
             self.opened = false;
         }
 
-        self.open_button_id = context.get_ui().simple_area_manager.push(SimpleArea::new(*bbox, depth).with_cursor(CursorIcon::Pointer));
+        self.open_button_id = context.get_ui().simple_area_manager.push(SimpleArea::new(*bbox, depth - 20).with_cursor(CursorIcon::Pointer));
         self.hovered = matches!(mouse_actions, ActionType::AreaHover(id, _) if id == self.open_button_id);
 
         if self.opened {
@@ -92,6 +102,9 @@ where
                 };
                 item.update(&item_bbox, depth - 1, &mut item_context);
             }
+
+            let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
+            context.get_ui().simple_area_manager.push(SimpleArea::new(outer_box, depth));
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
@@ -107,15 +120,18 @@ where
 
             let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
             context.get_simple_shape_renderer()
-                .send_render_box(&outer_box, self.open_bgcolor, self.depth, 1);
+                .send_render_box(&outer_box, self.open_bgcolor, self.depth, None);
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
             displayed_value.send(context);
         }
 
-        let color = if self.hovered { glm::vec4(255, 255, 255, 20) } else {  glm::vec4(255, 255, 255, 40) };
-        context.get_simple_shape_renderer().send_render_box(&self.bbox, color, self.depth, 1);
+        if self.hovered {
+            context.get_simple_shape_renderer().send_render_box(&self.bbox, glm::vec4(255, 255, 255, 40), self.depth - 20, None);
+        } else if self.displayed_value.is_none() {
+            context.get_simple_shape_renderer().send_render_box(&self.bbox, glm::vec4(255, 255, 255, 20), self.depth - 20, None);
+        }
     }
 
     fn generate_output(&mut self, context: &mut GOC) {

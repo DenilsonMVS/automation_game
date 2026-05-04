@@ -41,7 +41,7 @@ impl<'a> UiElement<Ui, SimpleShapeRenderer<'a>, ()> for RenderedArea {
     fn send(&mut self, simple_shape_renderer: &mut SimpleShapeRenderer) {
         let color = if self.hovered { self.hover_color } else { self.color };
         if color.w != 0 {
-            simple_shape_renderer.send_render_box(&self.bbox, color, self.depth, 1);
+            simple_shape_renderer.send_render_box(&self.bbox, color, self.depth, None);
         }
     }
 }

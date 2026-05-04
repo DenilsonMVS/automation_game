@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::robot::Robot, graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}};
+use crate::{MainContext, game::logic::robot::Robot, graphics::{camera::Camera, renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}}};
 
 const ROBOT_SIZE: f32 = 0.8;
 const WEEL_DIAMETER: f32 = 0.26;
@@ -9,20 +9,20 @@ const WEELS_DEPTH: u16 = ROBOT_DEPTH + 1;
 const WEEL_COLOR: [u8; 3] = [45, 40, 40];
 
 impl Robot {
-    pub fn draw_vec(&self, simple_shape_renderer: &mut SimpleShapeRenderer, vec: glm::Vec2, color: glm::U8Vec4) {
+    pub fn draw_vec(&self, simple_shape_renderer: &mut SimpleShapeRenderer, vec: glm::Vec2, color: glm::U8Vec4, camera: &Camera) {
         let size = glm::length(&vec);
         simple_shape_renderer.send_rotated_rectangle(
             self.get_position(),
             glm::vec2(0.5, 0.04) * size,
             PositionMode::CenterLeft,
             glm::vec2(-vec.y, vec.x),
-            color, 2000, 0);
+            color, 2000, Some(camera));
         
         simple_shape_renderer.send_symmetrical_triangle(
             self.get_position() + vec * 0.6,
             self.get_position() + vec * 0.5,
             size * 0.1,
-            color, 2000, 0);
+            color, 2000, Some(camera));
     }
 
     pub fn get_render_box(position: glm::Vec2) -> RenderBox {
@@ -50,7 +50,7 @@ impl Robot {
                 glm::vec2(WEEL_DIAMETER, WEEL_DIAMETER),
                 PositionMode::Center,
                 glm::vec4(WEEL_COLOR[0], WEEL_COLOR[1], WEEL_COLOR[2], 255),
-                WEELS_DEPTH, 0,
+                WEELS_DEPTH, Some(&context.ui.camera),
             );
         }
 
@@ -58,7 +58,7 @@ impl Robot {
         context.simple_shape_renderer.send_render_box(
             &render_box,
             self.get_color(),
-            ROBOT_DEPTH, 0
+            ROBOT_DEPTH, Some(&context.ui.camera),
         );
 
         self.get_display_module().send(context.font, self.get_position(), context.ui.get_camera());

@@ -1,7 +1,9 @@
+use std::array;
+
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 
-use crate::{graphics::renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
+use crate::graphics::{camera::Camera, renderer::{Renderer, buffer::DynamicBuffer, drawable::DrawMode, positioning::{self, OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
 const FORMS_PER_RENDER: usize = 1 << 20;
 
@@ -70,13 +72,13 @@ struct EllipseVertex {
 
 pub struct SimpleShapeRenderer<'a> {
     rec_program: SimpleRectangleProgram<'a>,
-    rec_buffs: [(DynamicBuffer<'a, RectangleVertex>, VertexArrayObject<'a>); 2],
+    rec_buff: (DynamicBuffer<'a, RectangleVertex>, VertexArrayObject<'a>),
 
     tri_program: SimpleTriangleProgram<'a>,
-    tri_buffs: [(DynamicBuffer<'a, TriangleVertex>, VertexArrayObject<'a>); 2],
+    tri_buff: (DynamicBuffer<'a, TriangleVertex>, VertexArrayObject<'a>),
 
     ell_program: SimpleEllipseProgram<'a>,
-    ell_buffs: [(DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>); 2],
+    ell_buff: (DynamicBuffer<'a, EllipseVertex>, VertexArrayObject<'a>),
 }
 
 pub trait HasSimpleShapeRenderer<'a> {
@@ -92,92 +94,62 @@ impl<'a> HasSimpleShapeRenderer<'a> for SimpleShapeRenderer<'a> {
 impl<'a> SimpleShapeRenderer<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let rec_program = SimpleRectangleProgram::init(renderer).unwrap();
-        let rec_buffs = std::array::from_fn(|_| {
+        let rec_buff = {
             let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
             let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            return (vbo, vao);
-        });
+            (vbo, vao)
+        };
 
         let tri_program = SimpleTriangleProgram::init(renderer).unwrap();
-        let tri_buffs = std::array::from_fn(|_| {
+        let tri_buff = {
             let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
             let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            return (vbo, vao);
-        });
+            (vbo, vao)
+        };
 
         let ell_program = SimpleEllipseProgram::init(renderer).unwrap();
-        let ell_buffs = std::array::from_fn(|_| {
+        let ell_buff = {
             let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
             let vao = VertexArrayObject::new(renderer, &[&vbo]);
-            return (vbo, vao);
-        });
+            (vbo, vao)
+        };
         
         return Self {
-            rec_program, rec_buffs,
-            tri_program, tri_buffs,
-            ell_program, ell_buffs,
+            rec_program, rec_buff,
+            tri_program, tri_buff,
+            ell_program, ell_buff,
         };
     }
 
-    pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4, vp_matrix: &glm::Mat4) {
+    pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
         self.rec_program.bind();
-        for (i, (vbo, vao)) in self.rec_buffs.iter_mut().enumerate() {
-            if i == 0 {
-                self.rec_program.set_u_vp(vp_matrix);
-            } else {
-                self.rec_program.set_u_vp(proj_matrix);
-            }
-
-            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-        }
+        self.rec_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.rec_buff;
+        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
 
         self.tri_program.bind();
-        for (i, (vbo, vao)) in self.tri_buffs.iter_mut().enumerate() {
-            if i == 0 {
-                self.tri_program.set_u_vp(vp_matrix);
-            } else {
-                self.tri_program.set_u_vp(proj_matrix);
-            }
-
-            vao.draw_instanced(3, vbo.get_len() as i32, DrawMode::Triangles);
-        }
+        self.tri_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.tri_buff;
+        vao.draw_instanced(3, vbo.get_len() as i32, DrawMode::Triangles);
 
         renderer.depth_mask(false);
         self.ell_program.bind();
-        for (i, (vbo, vao)) in self.ell_buffs.iter_mut().enumerate() {
-            if i == 0 {
-                self.ell_program.set_u_vp(vp_matrix);
-            } else {
-                self.ell_program.set_u_vp(proj_matrix);
-            }
-
-            vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
-        }
+        self.ell_program.set_u_vp(proj_matrix);
+        let (vbo, vao) = &mut self.ell_buff;
+        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
         renderer.depth_mask(true);
     }
 
     pub fn reset(&mut self) {
-        for (vbo, _) in self.rec_buffs.iter_mut() {
-            vbo.reset_index();
-        }
-        for (vbo, _) in self.tri_buffs.iter_mut() {
-            vbo.reset_index();
-        }
-        for (vbo, _) in self.ell_buffs.iter_mut() {
-            vbo.reset_index();
-        }
+        self.rec_buff.0.reset_index();
+        self.tri_buff.0.reset_index();
+        self.ell_buff.0.reset_index();
     }
 
     pub fn finish(&self) {
-        for (vbo, _) in self.rec_buffs.iter() {
-            vbo.flush();
-        }
-        for (vbo, _) in self.tri_buffs.iter() {
-            vbo.flush();
-        }
-        for (vbo, _) in self.ell_buffs.iter() {
-            vbo.flush();
-        }
+        self.rec_buff.0.flush();
+        self.tri_buff.0.flush();
+        self.ell_buff.0.flush();
     }
 
     pub fn send_rotated_rectangle(
@@ -188,10 +160,15 @@ impl<'a> SimpleShapeRenderer<'a> {
         up_vector: glm::Vec2,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
         let oriented_box = OrientedBox::new_rotated(position, position_mode, size, up_vector);
-        self.rec_buffs[group].0.write(&RectangleVertex {
+        let oriented_box = if let Some(camera) = recenter {
+            oriented_box.recenter(camera)
+        } else {
+            oriented_box
+        };
+        self.rec_buff.0.write(&RectangleVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -212,12 +189,17 @@ impl<'a> SimpleShapeRenderer<'a> {
         simple_box: &RenderBox,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
-        self.rec_buffs[group].0.write(&RectangleVertex {
-            top_left: simple_box.get_top_left(),
-            top_right: simple_box.get_top_right(),
-            bottom_right: simple_box.get_bottom_right(),
+        let bbox = if let Some(camera) = recenter {
+            simple_box.recenter(camera)
+        } else {
+            *simple_box
+        };
+        self.rec_buff.0.write(&RectangleVertex {
+            top_left: bbox.get_top_left(),
+            top_right: bbox.get_top_right(),
+            bottom_right: bbox.get_bottom_right(),
             color, depth,
         });
     }
@@ -229,10 +211,10 @@ impl<'a> SimpleShapeRenderer<'a> {
         position_mode: PositionMode,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) -> RenderBox {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
-        self.send_render_box(&simple_box, color, depth, group);
+        self.send_render_box(&simple_box, color, depth, recenter);
         return simple_box;
     }
 
@@ -243,7 +225,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         width: f32,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
         let to_centroid = centroid - apex;
         let dist_r = glm::length(&to_centroid);
@@ -256,7 +238,17 @@ impl<'a> SimpleShapeRenderer<'a> {
         let vertex_b = base_midpoint + (unit_w * half_width);
         let vertex_c = base_midpoint - (unit_w * half_width);
 
-        self.tri_buffs[group].0.write(&TriangleVertex {
+        let (apex, vertex_b, vertex_c) = if let Some(camera) = recenter {
+            (
+                positioning::recenter(apex, camera),
+                positioning::recenter(vertex_b, camera),
+                positioning::recenter(vertex_c, camera),
+            )
+        } else {
+            (apex, vertex_b, vertex_c)
+        };
+
+        self.tri_buff.0.write(&TriangleVertex {
             v1: apex,
             v2: vertex_b,
             v3: vertex_c,
@@ -270,9 +262,14 @@ impl<'a> SimpleShapeRenderer<'a> {
         vertices: &[glm::Vec2; 3],
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
-        self.tri_buffs[group].0.write(&TriangleVertex {
+        let vertices: [_; 3] = array::from_fn(|i| if let Some(camera) = recenter {
+            positioning::recenter(vertices[i], camera)
+        } else {
+            vertices[i]
+        });
+        self.tri_buff.0.write(&TriangleVertex {
             v1: vertices[0],
             v2: vertices[1],
             v3: vertices[2],
@@ -289,10 +286,15 @@ impl<'a> SimpleShapeRenderer<'a> {
         up_vector: glm::Vec2,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
         let oriented_box = OrientedBox::new_rotated(position, position_mode, size, up_vector);
-        self.ell_buffs[group].0.write(&EllipseVertex {
+        let oriented_box = if let Some(camera) = recenter {
+            oriented_box.recenter(camera)
+        } else {
+            oriented_box
+        };
+        self.ell_buff.0.write(&EllipseVertex {
             top_left: oriented_box.top_left,
             top_right: oriented_box.top_right,
             bottom_right: oriented_box.bot_right,
@@ -307,10 +309,15 @@ impl<'a> SimpleShapeRenderer<'a> {
         position_mode: PositionMode,
         color: glm::U8Vec4,
         depth: u16,
-        group: usize,
+        recenter: Option<&Camera>,
     ) {
         let simple_box = RenderBox::new_simple(position, position_mode, size);
-        self.ell_buffs[group].0.write(&EllipseVertex {
+        let simple_box = if let Some(camera) = recenter {
+            simple_box.recenter(camera)
+        } else {
+            simple_box
+        };
+        self.ell_buff.0.write(&EllipseVertex {
             top_left: simple_box.get_top_left(),
             top_right: simple_box.get_top_right(),
             bottom_right: simple_box.get_bottom_right(),

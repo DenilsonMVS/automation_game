@@ -18,6 +18,10 @@ pub fn vec_to_short_recenter(v: glm::Vec2, camera: &Camera) -> glm::I16Vec2 {
     vec_to_short(&((v - camera.get_position()) * camera.get_zoom()))
 }
 
+pub fn recenter(v: glm::Vec2, camera: &Camera) -> glm::Vec2 {
+    (v - camera.get_position()) * camera.get_zoom()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PositionMode {
 	TopLeft,    TopCenter,    TopRight,
@@ -69,6 +73,13 @@ impl RenderBox {
         let max = min + size;
 
         return Self { min, max };
+    }
+
+    pub fn recenter(&self, camera: &Camera) -> Self {
+        Self {
+            min: recenter(self.min, camera),
+            max: recenter(self.max, camera),
+        }
     }
 
     pub fn cut(&self, amount: f32) -> Self {
@@ -197,6 +208,15 @@ impl OrientedBox {
             bot_left:  center - half_up - half_right,
             bot_right: center - half_up + half_right,
         };
+    }
+
+    pub fn recenter(&self, camera: &Camera) -> OrientedBox {
+        Self {
+            top_left: recenter(self.top_left, camera),
+            top_right: recenter(self.top_right, camera),
+            bot_left: recenter(self.bot_left, camera),
+            bot_right: recenter(self.bot_right, camera)
+        }
     }
 
     pub fn new_rotated(

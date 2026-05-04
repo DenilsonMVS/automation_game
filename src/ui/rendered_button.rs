@@ -71,7 +71,7 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
         };
 
         if bgcolor.w != 0 {
-            simple_shape_renderer.send_render_box(&self.bbox, bgcolor, self.depth, 1);
+            simple_shape_renderer.send_render_box(&self.bbox, bgcolor, self.depth, None);
         }
 
         if color.w != 0 {

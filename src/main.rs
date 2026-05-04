@@ -180,8 +180,7 @@ impl<'a> State<'a> {
         self.font.finish();
 
         let proj_matrix = self.ui.get_projection_matrix();
-        let vp_matrix = self.ui.get_camera().get_vp_matrix(&proj_matrix);
-        self.simple_shape_renderer.draw(self.renderer, &proj_matrix, &vp_matrix);
+        self.simple_shape_renderer.draw(self.renderer, &proj_matrix);
 
         self.renderer.depth_mask(false);
         self.fonts.draw(&mut self.font, &proj_matrix);

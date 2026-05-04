@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::instruction::{InstructionId, UnpackedInstruction}, render::{colored_text::{ColoredTextButton, ColoredTextView}, robot_info::get_secondary_background_color}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{dnd::HasId, menu::Menu, rendered_button::{RenderedButton, RenderedButtonContext}, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::instruction::{InstructionId, UnpackedInstruction}, render::{colored_text::{ColoredTextButton, ColoredTextView}, robot_info::{get_list_bgcolor, get_secondary_background_color}}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{dnd::HasId, menu::Menu, rendered_button::{RenderedButton, RenderedButtonContext}, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 
 const PADDING: f32 = 0.01;
@@ -31,7 +31,7 @@ impl InstructionEditor {
             id: AreaId::default(),
             bbox: Default::default(),
             depth: 0,
-            opcode_menu: Menu::new(opcodes),
+            opcode_menu: Menu::new(opcodes).with_gap(PADDING).with_open_bgcolor(get_list_bgcolor()),
             delete_button: RenderedButton::new(get_delete_button_color()),
         }
     }
@@ -87,8 +87,8 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
             simple_shape_renderer: context.simple_shape_renderer,
         };
         self.delete_button.send(&mut button_context);
-        
-        context.simple_shape_renderer.send_render_box(&self.bbox, get_secondary_background_color(), self.depth, 1);
+
+        context.simple_shape_renderer.send_render_box(&self.bbox, get_secondary_background_color(), self.depth, None);
         self.opcode_menu.send(context);
     }
 }

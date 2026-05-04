@@ -1,6 +1,6 @@
 use winit::window::CursorIcon;
 use nalgebra_glm as glm;
-use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::{InstructionEditor}}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::{RenderedButton, RenderedButtonContext}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::{InstructionEditor}}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::RenderedButton, ui_element::UiElement}};
 
 pub fn get_background_color() -> glm::U8Vec4 {
     glm::vec4(8, 17, 25, 255)
@@ -16,6 +16,10 @@ pub fn get_add_instruction_button_bgcolor() -> glm::U8Vec4 {
 
 pub fn get_add_instruction_button_color() -> glm::U8Vec4 {
     glm::vec4(255, 255, 255, 255)
+}
+
+pub fn get_list_bgcolor() -> glm::U8Vec4 {
+    glm::vec4(68, 77, 85, 255)
 }
 
 const CONTAINER_PADDING: f32 = 0.02;
