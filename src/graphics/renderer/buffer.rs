@@ -68,7 +68,7 @@ impl<'a, T> StaticBuffer<'a, T> {
 pub struct DynamicBuffer<'a, T> {
     id: u32,
     ptr: *mut T,
-    index: usize,
+    index: u32,
     _marker: PhantomData<&'a Renderer>,
 }
 
@@ -130,7 +130,7 @@ impl<'a, T> DynamicBuffer<'a, T> {
 
     pub fn write(&mut self, value: &T) {
         unsafe {
-            let dst = self.ptr.add(self.index);
+            let dst = self.ptr.add(self.index as usize);
             std::ptr::copy_nonoverlapping(value as *const T, dst, 1);
             self.index += 1;
         }
@@ -141,12 +141,12 @@ impl<'a, T> DynamicBuffer<'a, T> {
     }
 
     pub fn get_len(&self) -> usize {
-        self.index
+        self.index as usize
     }
 
     pub fn flush(&self) {
         unsafe {
-            let length = (self.index * std::mem::size_of::<T>()) as isize;
+            let length = (self.index as usize * std::mem::size_of::<T>()) as isize;
             gl::FlushMappedNamedBufferRange(self.id, 0, length);
         }
     }
