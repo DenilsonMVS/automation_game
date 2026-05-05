@@ -6,21 +6,13 @@ use nalgebra_glm as glm;
 use crate::graphics::{camera::Camera, renderer::{Renderer, buffer::{DynamicBuffer, DynamicUnitBuffer, GenericBuffer}, drawable::DrawMode, positioning::{self, OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
 const MAX_FORMS_CAPACITY: usize = 1 << 20;
-const BLOCK_SIZE: u16 = 1 << 12;
+const BLOCK_SIZE: usize = 1 << 12;
 
 #[program_interface(
-	vert = "../../../res/shaders/rectangle.vert",
+	vert = "../../../res/shaders/filled.vert",
 	frag = "../../../res/shaders/simple_color.frag"
 )]
-struct SimpleRectangleProgram {
-    u_vp: glm::Mat4,
-}
-
-#[program_interface(
-	vert = "../../../res/shaders/triangle.vert",
-	frag = "../../../res/shaders/simple_color.frag"
-)]
-struct SimpleTriangleProgram {
+struct SimpleFilledProgram {
     u_vp: glm::Mat4,
 }
 
@@ -68,14 +60,14 @@ impl RenderGroup {
         vbo: &mut DynamicUnitBuffer<'a, ShapeVertex>,
         allocated_blocks: &mut u32,
     ) {
-        if self.block_amount == 0 || self.current_block_pos == BLOCK_SIZE {
-            self.blocks[self.block_amount as usize] = *allocated_blocks as u8;
+        if self.block_amount == 0 || self.current_block_pos as usize == BLOCK_SIZE {
+            self.blocks[self.block_amount as usize] = *allocated_blocks as u8; 
             self.block_amount += 1;
             *allocated_blocks += 1;
             self.current_block_pos = 0;
         }
 
-        let position = self.blocks[(self.block_amount - 1) as usize] as usize * BLOCK_SIZE as usize + self.current_block_pos as usize;
+        let position = (self.blocks[(self.block_amount - 1) as usize] as usize * BLOCK_SIZE) + self.current_block_pos as usize;
         self.current_block_pos += 1;
         vbo.write(position, shape);
     }
@@ -90,9 +82,9 @@ impl RenderGroup {
             let instance_count = if i + 1 == self.block_amount { self.current_block_pos as u32 } else { BLOCK_SIZE as u32 };
             command_buffer.write(&DrawArraysIndirectCommand {
                 count,
-                instance_count: instance_count,
-                first: pos,
-                base_instance: 0,
+                instance_count,
+                first: 0,
+                base_instance: pos,
             });
         }
     }
@@ -109,8 +101,7 @@ pub struct DrawArraysIndirectCommand {
 pub struct SimpleShapeRenderer<'a> {
     command_buffer: DynamicBuffer<'a, DrawArraysIndirectCommand>,
     
-    rec_program: SimpleRectangleProgram<'a>,
-    tri_program: SimpleTriangleProgram<'a>,
+    filled_program: SimpleFilledProgram<'a>,
     ell_program: SimpleEllipseProgram<'a>,
 
     vbo: DynamicUnitBuffer<'a, ShapeVertex>,
@@ -143,8 +134,7 @@ impl<'a> SimpleShapeRenderer<'a> {
         let vao = VertexArrayObject::new(renderer, &[&vbo]);
 
         Self {
-            rec_program: SimpleRectangleProgram::init(renderer).unwrap(),
-            tri_program: SimpleTriangleProgram::init(renderer).unwrap(),
+            filled_program: SimpleFilledProgram::init(renderer).unwrap(),
             ell_program: SimpleEllipseProgram::init(renderer).unwrap(),
             command_buffer: DynamicBuffer::new(renderer, 1 << 8),
             vbo, vao,
@@ -158,7 +148,52 @@ impl<'a> SimpleShapeRenderer<'a> {
         }
     }
 
-    pub fn setup_command_buffer(&mut self) {
+    pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
+        self.filled_program.bind();
+        self.filled_program.set_u_vp(proj_matrix);
+        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len + tri_len, DrawMode::TriangleStrip);
+
+        renderer.depth_mask(false);
+        self.ell_program.bind();
+        self.ell_program.set_u_vp(proj_matrix);
+        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
+        renderer.depth_mask(true);
+    }
+
+    pub fn draw_transparent(&mut self, renderer: &'a Renderer) {
+        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
+        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
+
+        renderer.depth_mask(false);
+
+        self.filled_program.bind();
+        let (rec_start, rec_len) = (ell_start + ell_len, self.transparent_rectangles.block_amount as u32);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.transparent_triangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len + tri_len, DrawMode::TriangleStrip);
+        
+        self.ell_program.bind();
+        let (ell_start, ell_len) = (tri_start + tri_len, self.transparent_ellipses.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
+        
+        renderer.depth_mask(true);
+    }
+
+    pub fn reset(&mut self) {
+        self.allocated_blocks = 0;
+
+        self.rectangles.reset();
+        self.transparent_rectangles.reset();
+        self.triangles.reset();
+        self.transparent_triangles.reset();
+        self.ellipses.reset();
+        self.transparent_ellipses.reset();
+    }
+
+    pub fn finish(&mut self) {
         self.command_buffer.reset_index();
 
         self.rectangles.write_command_buffer(&mut self.command_buffer, 4);
@@ -169,67 +204,8 @@ impl<'a> SimpleShapeRenderer<'a> {
         self.transparent_triangles.write_command_buffer(&mut self.command_buffer, 3);
         self.transparent_ellipses.write_command_buffer(&mut self.command_buffer, 4);
 
+        self.vbo.flush_range(0, self.allocated_blocks as usize * BLOCK_SIZE);
         self.command_buffer.flush();
-    }
-
-    pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
-        self.rec_program.bind();
-        self.rec_program.set_u_vp(proj_matrix);
-        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len, DrawMode::TriangleStrip);
-
-        self.tri_program.bind();
-        self.tri_program.set_u_vp(proj_matrix);
-        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), tri_start, tri_len, DrawMode::TriangleStrip);
-        
-        renderer.depth_mask(false);
-        self.ell_program.bind();
-        self.ell_program.set_u_vp(proj_matrix);
-        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
-        renderer.depth_mask(true);
-    }
-
-    pub fn draw_transparent(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
-        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
-        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
-        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
-
-        renderer.depth_mask(false);
-
-        self.rec_program.bind();
-        self.rec_program.set_u_vp(proj_matrix);
-        let (rec_start, rec_len) = (ell_start + ell_len, self.transparent_rectangles.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len, DrawMode::TriangleStrip);
-
-        self.tri_program.bind();
-        self.tri_program.set_u_vp(proj_matrix);
-        let (tri_start, tri_len) = (rec_start + rec_len, self.transparent_triangles.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), tri_start, tri_len, DrawMode::TriangleStrip);
-        
-        self.ell_program.bind();
-        self.ell_program.set_u_vp(proj_matrix);
-        let (ell_start, ell_len) = (tri_start + tri_len, self.transparent_ellipses.block_amount as u32);
-        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
-        
-        renderer.depth_mask(true);
-    }
-
-    pub fn reset(&mut self) {
-        self.allocated_blocks = 0;
-        println!("{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n", self.rectangles, self.transparent_rectangles, self.triangles, self.transparent_triangles, self.ellipses, self.transparent_ellipses);
-
-        self.rectangles.reset();
-        self.transparent_rectangles.reset();
-        self.triangles.reset();
-        self.transparent_rectangles.reset();
-        self.ellipses.reset();
-        self.transparent_ellipses.reset();
-    }
-
-    pub fn finish(&self) {
-        self.vbo.flush_range(0, self.allocated_blocks as usize * BLOCK_SIZE as usize);
     }
 
     pub fn send_rotated_rectangle(

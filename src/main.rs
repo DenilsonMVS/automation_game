@@ -175,8 +175,6 @@ impl<'a> State<'a> {
             
             self.scene.generate_output(&mut main_context);
         }
-        
-        self.simple_shape_renderer.setup_command_buffer();
 
         self.simple_shape_renderer.finish();
         self.font.finish();
@@ -188,7 +186,7 @@ impl<'a> State<'a> {
         self.fonts.draw(&mut self.font, &proj_matrix);
         self.renderer.depth_mask(true);
 
-        self.simple_shape_renderer.draw_transparent(self.renderer, &proj_matrix);
+        self.simple_shape_renderer.draw_transparent(self.renderer);
 
         self.fence = Some(self.renderer.new_fence());
 

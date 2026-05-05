@@ -14,10 +14,10 @@ uniform mat4 u_vp;
 void main() {
     vec2 bottom_left = a_top_left + a_bottom_right - a_top_right;
     vec2 positions[4] = vec2[](
-        a_top_left,
-        bottom_left,
         a_top_right,
-        a_bottom_right
+        a_bottom_right,
+        a_top_left,
+        bottom_left
     );
 
     vec4 proj_pos = u_vp * vec4(positions[gl_VertexID % 4], 0, 1);
