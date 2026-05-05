@@ -50,7 +50,7 @@ impl<'a> ViewChunk<'a> {
     fn send_updates(&mut self, logic_chunk: &Chunk) {
         for update_pos in logic_chunk.get_pending_updates() {
             let index = update_pos.y as usize * CHUNK_SIZE + update_pos.x as usize;
-            self.vbo.write(index, logic_chunk.get_local_position(*update_pos).get_render_info());
+            self.vbo.write(index, &logic_chunk.get_local_position(*update_pos).get_render_info());
         }
     }
 

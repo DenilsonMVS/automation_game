@@ -3,9 +3,10 @@ use std::array;
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 
-use crate::graphics::{camera::Camera, renderer::{Renderer, buffer::{DynamicBuffer, GenericBuffer}, drawable::DrawMode, positioning::{self, OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
+use crate::graphics::{camera::Camera, renderer::{Renderer, buffer::{DynamicBuffer, DynamicUnitBuffer, GenericBuffer}, drawable::DrawMode, positioning::{self, OrientedBox, PositionMode, RenderBox}, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
-const FORMS_PER_RENDER: usize = 1 << 20;
+const MAX_FORMS_CAPACITY: usize = 1 << 20;
+const BLOCK_SIZE: u16 = 1 << 12;
 
 #[program_interface(
 	vert = "../../../res/shaders/rectangle.vert",
@@ -45,16 +46,55 @@ struct ShapeVertex {
 }
 
 #[derive(Debug)]
-struct RenderGroup<'a> {
-    pub vbo: DynamicBuffer<'a, ShapeVertex>,
-    pub vao: VertexArrayObject<'a>,
+struct RenderGroup {
+    blocks: [u8; 13],
+    block_amount: u8,
+    current_block_pos: u16,
 }
 
-impl<'a> RenderGroup<'a> {
-    fn new(renderer: &'a Renderer) -> Self {
-        let vbo = DynamicBuffer::new(renderer, FORMS_PER_RENDER);
-        let vao = VertexArrayObject::new(renderer, &[&vbo]);
-        Self { vbo, vao }
+impl RenderGroup {
+    fn new() -> Self {
+        Self { blocks: [0; _], block_amount: 0, current_block_pos: 0 }
+    }
+
+    fn reset(&mut self) {
+        self.block_amount = 0;
+        self.current_block_pos = 0;
+    }
+
+    fn push<'a>(
+        &mut self,
+        shape: &ShapeVertex,
+        vbo: &mut DynamicUnitBuffer<'a, ShapeVertex>,
+        allocated_blocks: &mut u32,
+    ) {
+        if self.block_amount == 0 || self.current_block_pos == BLOCK_SIZE {
+            self.blocks[self.block_amount as usize] = *allocated_blocks as u8;
+            self.block_amount += 1;
+            *allocated_blocks += 1;
+            self.current_block_pos = 0;
+        }
+
+        let position = self.blocks[(self.block_amount - 1) as usize] as usize * BLOCK_SIZE as usize + self.current_block_pos as usize;
+        self.current_block_pos += 1;
+        vbo.write(position, shape);
+    }
+
+    fn write_command_buffer<'a>(
+        &mut self,
+        command_buffer: &mut DynamicBuffer<'a, DrawArraysIndirectCommand>,
+        count: u32,
+    ) {
+        for i in 0..self.block_amount {
+            let pos = self.blocks[i as usize] as u32 * BLOCK_SIZE as u32;
+            let instance_count = if i + 1 == self.block_amount { self.current_block_pos as u32 } else { BLOCK_SIZE as u32 };
+            command_buffer.write(&DrawArraysIndirectCommand {
+                count,
+                instance_count: instance_count,
+                first: pos,
+                base_instance: 0,
+            });
+        }
     }
 }
 
@@ -70,16 +110,21 @@ pub struct SimpleShapeRenderer<'a> {
     command_buffer: DynamicBuffer<'a, DrawArraysIndirectCommand>,
     
     rec_program: SimpleRectangleProgram<'a>,
-    rec_buff: RenderGroup<'a>,
-    rec_buff_trans: RenderGroup<'a>,
-
     tri_program: SimpleTriangleProgram<'a>,
-    tri_buff: RenderGroup<'a>,
-    tri_buff_trans: RenderGroup<'a>,
-
     ell_program: SimpleEllipseProgram<'a>,
-    ell_buff: RenderGroup<'a>,
-    ell_buff_trans: RenderGroup<'a>,
+
+    vbo: DynamicUnitBuffer<'a, ShapeVertex>,
+    vao: VertexArrayObject<'a>,
+    allocated_blocks: u32,
+
+    rectangles: RenderGroup,
+    transparent_rectangles: RenderGroup,
+
+    triangles: RenderGroup,
+    transparent_triangles: RenderGroup,
+
+    ellipses: RenderGroup,
+    transparent_ellipses: RenderGroup,
 }
 
 pub trait HasSimpleShapeRenderer<'a> {
@@ -94,49 +139,35 @@ impl<'a> HasSimpleShapeRenderer<'a> for SimpleShapeRenderer<'a> {
 
 impl<'a> SimpleShapeRenderer<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
+        let vbo = DynamicUnitBuffer::new_empty_manual_flush(renderer, MAX_FORMS_CAPACITY);
+        let vao = VertexArrayObject::new(renderer, &[&vbo]);
+
         Self {
-            command_buffer: DynamicBuffer::new(renderer, 1 << 8),
-
             rec_program: SimpleRectangleProgram::init(renderer).unwrap(),
-            rec_buff: RenderGroup::new(renderer),
-            rec_buff_trans: RenderGroup::new(renderer),
-
             tri_program: SimpleTriangleProgram::init(renderer).unwrap(),
-            tri_buff: RenderGroup::new(renderer),
-            tri_buff_trans: RenderGroup::new(renderer),
-
             ell_program: SimpleEllipseProgram::init(renderer).unwrap(),
-            ell_buff: RenderGroup::new(renderer),
-            ell_buff_trans: RenderGroup::new(renderer),
+            command_buffer: DynamicBuffer::new(renderer, 1 << 8),
+            vbo, vao,
+            allocated_blocks: 0,
+            rectangles: RenderGroup::new(),
+            transparent_rectangles: RenderGroup::new(),
+            triangles: RenderGroup::new(),
+            transparent_triangles: RenderGroup::new(),
+            ellipses: RenderGroup::new(),
+            transparent_ellipses: RenderGroup::new(),
         }
     }
 
     pub fn setup_command_buffer(&mut self) {
         self.command_buffer.reset_index();
 
-        let RenderGroup { vbo, ..} = &mut self.rec_buff;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 4, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
+        self.rectangles.write_command_buffer(&mut self.command_buffer, 4);
+        self.triangles.write_command_buffer(&mut self.command_buffer, 3);
+        self.ellipses.write_command_buffer(&mut self.command_buffer, 4);
 
-        let RenderGroup { vbo, ..} = &mut self.tri_buff;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 3, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
-
-        let RenderGroup { vbo, ..} = &mut self.ell_buff;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 4, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
-
-        let RenderGroup { vbo, ..} = &mut self.rec_buff_trans;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 4, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
-
-        let RenderGroup { vbo, ..} = &mut self.tri_buff_trans;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 3, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
-
-        let RenderGroup { vbo, ..} = &mut self.ell_buff_trans;
-        self.command_buffer.write(&DrawArraysIndirectCommand {
-            count: 4, instance_count: vbo.get_len() as u32, first: 0, base_instance: 0 });
+        self.transparent_rectangles.write_command_buffer(&mut self.command_buffer, 4);
+        self.transparent_triangles.write_command_buffer(&mut self.command_buffer, 3);
+        self.transparent_ellipses.write_command_buffer(&mut self.command_buffer, 4);
 
         self.command_buffer.flush();
     }
@@ -144,71 +175,61 @@ impl<'a> SimpleShapeRenderer<'a> {
     pub fn draw(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
         self.rec_program.bind();
         self.rec_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.rec_buff;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 0, 1, DrawMode::TriangleStrip);
+        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len, DrawMode::TriangleStrip);
 
         self.tri_program.bind();
         self.tri_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.tri_buff;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 1, 1, DrawMode::Triangles);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), tri_start, tri_len, DrawMode::TriangleStrip);
         
         renderer.depth_mask(false);
         self.ell_program.bind();
         self.ell_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.ell_buff;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 2, 1, DrawMode::TriangleStrip);
+        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
         renderer.depth_mask(true);
     }
 
     pub fn draw_transparent(&mut self, renderer: &'a Renderer, proj_matrix: &glm::Mat4) {
+        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
+        let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
+
         renderer.depth_mask(false);
 
         self.rec_program.bind();
         self.rec_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.rec_buff_trans;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 3, 1, DrawMode::TriangleStrip);
+        let (rec_start, rec_len) = (ell_start + ell_len, self.transparent_rectangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), rec_start, rec_len, DrawMode::TriangleStrip);
 
         self.tri_program.bind();
         self.tri_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.tri_buff_trans;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 4, 1, DrawMode::Triangles);
+        let (tri_start, tri_len) = (rec_start + rec_len, self.transparent_triangles.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), tri_start, tri_len, DrawMode::TriangleStrip);
         
         self.ell_program.bind();
         self.ell_program.set_u_vp(proj_matrix);
-        let RenderGroup { vao, ..} = &mut self.ell_buff_trans;
-        vao.draw_multi_instanced(self.command_buffer.get_id(), 5, 1, DrawMode::TriangleStrip);
+        let (ell_start, ell_len) = (tri_start + tri_len, self.transparent_ellipses.block_amount as u32);
+        self.vao.draw_multi_instanced(self.command_buffer.get_id(), ell_start, ell_len, DrawMode::TriangleStrip);
         
         renderer.depth_mask(true);
     }
 
-    fn get_rec_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, ShapeVertex> {
-        if alpha == 255 { &mut self.rec_buff.vbo } else { &mut self.rec_buff_trans.vbo }
-    }
-
-    fn get_tri_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, ShapeVertex> {
-        if alpha == 255 { &mut self.tri_buff.vbo } else { &mut self.tri_buff_trans.vbo }
-    }
-
-    fn get_ell_buffer(&mut self, alpha: u8) -> &mut DynamicBuffer<'a, ShapeVertex> {
-        if alpha == 255 { &mut self.ell_buff.vbo } else { &mut self.ell_buff_trans.vbo }
-    }
-
     pub fn reset(&mut self) {
-        self.rec_buff.vbo.reset_index();
-        self.rec_buff_trans.vbo.reset_index();
-        self.tri_buff.vbo.reset_index();
-        self.tri_buff_trans.vbo.reset_index();
-        self.ell_buff.vbo.reset_index();
-        self.ell_buff_trans.vbo.reset_index();
+        self.allocated_blocks = 0;
+        println!("{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n{:?}\n", self.rectangles, self.transparent_rectangles, self.triangles, self.transparent_triangles, self.ellipses, self.transparent_ellipses);
+
+        self.rectangles.reset();
+        self.transparent_rectangles.reset();
+        self.triangles.reset();
+        self.transparent_rectangles.reset();
+        self.ellipses.reset();
+        self.transparent_ellipses.reset();
     }
 
     pub fn finish(&self) {
-        self.rec_buff.vbo.flush();
-        self.rec_buff_trans.vbo.flush();
-        self.tri_buff.vbo.flush();
-        self.tri_buff_trans.vbo.flush();
-        self.ell_buff.vbo.flush();
-        self.ell_buff_trans.vbo.flush();
+        self.vbo.flush_range(0, self.allocated_blocks as usize * BLOCK_SIZE as usize);
     }
 
     pub fn send_rotated_rectangle(
@@ -227,13 +248,14 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             oriented_box
         };
-        let buffer = self.get_rec_buffer(color.w);
-        buffer.write(&ShapeVertex {
+
+        let group = if color.w == 255 { &mut self.rectangles } else { &mut self.transparent_rectangles };
+        group.push(&ShapeVertex {
             v1: oriented_box.top_left,
             v2: oriented_box.top_right,
             v3: oriented_box.bot_right,
             color, depth,
-        });
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 
     pub fn preview_render_box(
@@ -256,13 +278,14 @@ impl<'a> SimpleShapeRenderer<'a> {
         } else {
             *simple_box
         };
-        let buffer = self.get_rec_buffer(color.w);
-        buffer.write(&ShapeVertex {
+
+        let group = if color.w == 255 { &mut self.rectangles } else { &mut self.transparent_rectangles };
+        group.push(&ShapeVertex {
             v1: bbox.get_top_left(),
             v2: bbox.get_top_right(),
             v3: bbox.get_bottom_right(),
             color, depth,
-        });
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 
     pub fn send_rectangle(
@@ -309,14 +332,13 @@ impl<'a> SimpleShapeRenderer<'a> {
             (apex, vertex_b, vertex_c)
         };
 
-        let buffer = self.get_tri_buffer(color.w);
-        buffer.write(&ShapeVertex {
+        let group = if color.w == 255 { &mut self.triangles } else { &mut self.transparent_triangles };
+        group.push(&ShapeVertex {
             v1: apex,
             v2: vertex_b,
             v3: vertex_c,
-            color,
-            depth,
-        });
+            color, depth,
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 
     pub fn send_arbitrary_triangle(
@@ -332,14 +354,13 @@ impl<'a> SimpleShapeRenderer<'a> {
             vertices[i]
         });
 
-        let buffer = self.get_tri_buffer(color.w);
-        buffer.write(&ShapeVertex {
+        let group = if color.w == 255 { &mut self.triangles } else { &mut self.transparent_triangles };
+        group.push(&ShapeVertex {
             v1: vertices[0],
             v2: vertices[1],
             v3: vertices[2],
-            color,
-            depth,
-        });
+            color, depth,
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 
     pub fn send_rotated_ellipse(
@@ -359,13 +380,13 @@ impl<'a> SimpleShapeRenderer<'a> {
             oriented_box
         };
 
-        let buffer = self.get_ell_buffer(color.w);
-        buffer.write(&ShapeVertex {
+        let group = if color.w == 255 { &mut self.ellipses } else { &mut self.transparent_ellipses };
+        group.push(&ShapeVertex {
             v1: oriented_box.top_left,
             v2: oriented_box.top_right,
             v3: oriented_box.bot_right,
             color, depth,
-        });
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 
     pub fn send_ellipse(
@@ -384,12 +405,12 @@ impl<'a> SimpleShapeRenderer<'a> {
             simple_box
         };
 
-        let buffer = self.get_ell_buffer(color.w);
-        buffer.write(&ShapeVertex {
+        let group = if color.w == 255 { &mut self.ellipses } else { &mut self.transparent_ellipses };
+        group.push(&ShapeVertex {
             v1: simple_box.get_top_left(),
             v2: simple_box.get_top_right(),
             v3: simple_box.get_bottom_right(),
             color, depth,
-        });
+        }, &mut self.vbo, &mut self.allocated_blocks);
     }
 }

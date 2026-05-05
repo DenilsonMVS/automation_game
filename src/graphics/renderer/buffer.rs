@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, os::raw::c_void};
+use std::{marker::PhantomData, os::raw::c_void, ptr};
 use crate::graphics::renderer::{Renderer, vertex_array_object::{FieldType, StaticVertexLayout, VertexLayout}};
 
 pub trait GenericBuffer {
@@ -221,14 +221,49 @@ impl<'a, T> DynamicUnitBuffer<'a, T> {
         }
     }
 
+    pub fn new_empty_manual_flush(_renderer: &'a Renderer, count: usize) -> Self {
+        let mut id = 0u32;
+        let byte_size = (std::mem::size_of::<T>() * count) as isize;
+
+        let storage_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::DYNAMIC_STORAGE_BIT;
+        let map_flags = gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_FLUSH_EXPLICIT_BIT;
+
+        let mapped_ptr;
+        unsafe {
+            gl::CreateBuffers(1, &mut id);
+            
+            gl::NamedBufferStorage(
+                id, 
+                byte_size, 
+                ptr::null(), 
+                storage_flags
+            );
+
+            mapped_ptr = gl::MapNamedBufferRange(id, 0, byte_size, map_flags) as *mut T;
+        }
+
+        Self {
+            id,
+            ptr: mapped_ptr,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn flush_range(&self, start: usize, count: usize) {
+        unsafe {
+            let length = (count * std::mem::size_of::<T>()) as isize;
+            gl::FlushMappedNamedBufferRange(self.id, start as isize, length);
+        }
+    }
+
     pub fn mut_ref(&mut self) -> &mut T {
         unsafe { &mut *self.ptr }
     }
 
-    pub fn write(&mut self, index: usize, value: T) {
+    pub fn write(&mut self, index: usize, value: &T) {
         unsafe {
             let element = self.ptr.add(index);
-            *element = value;
+            std::ptr::copy_nonoverlapping(value as *const T, element, 1);
         }
     }
 }
