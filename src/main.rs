@@ -176,6 +176,8 @@ impl<'a> State<'a> {
             self.scene.generate_output(&mut main_context);
         }
         
+        self.simple_shape_renderer.setup_command_buffer();
+
         self.simple_shape_renderer.finish();
         self.font.finish();
 

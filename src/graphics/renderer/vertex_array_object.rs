@@ -1,6 +1,6 @@
 use std::{marker::PhantomData};
 
-use crate::graphics::renderer::{GlEnum, Renderer, buffer::GenericBuffer, drawable::DrawMode, types::{GlType, GlTypeEnum}};
+use crate::graphics::renderer::{GlEnum, Renderer, buffer::{DynamicBuffer, GenericBuffer}, drawable::DrawMode, simple_shape_renderer::DrawArraysIndirectCommand, types::{GlType, GlTypeEnum}};
 
 
 pub struct FieldType {
@@ -112,6 +112,26 @@ impl<'a> VertexArrayObject<'a> {
 			);
 		}
 	}
+
+    pub fn draw_multi_instanced(&self,
+        command_buffer_id: u32,
+        command_start: u32,
+        amount_commands: u32,
+        draw_mode: DrawMode,
+    ) {
+        unsafe {
+            gl::BindVertexArray(self.id);
+            gl::BindBuffer(gl::DRAW_INDIRECT_BUFFER, command_buffer_id);
+            let offset_bytes = command_start as usize * std::mem::size_of::<DrawArraysIndirectCommand>();
+            let offset_ptr = offset_bytes as *const std::ffi::c_void;
+            gl::MultiDrawArraysIndirect(
+                draw_mode.to_gl_enum(),
+                offset_ptr,
+                amount_commands as i32,
+                0,
+            );
+        }
+    }
 
     pub fn draw(&self, vertex_count: i32, draw_mode: DrawMode) {
         unsafe {
