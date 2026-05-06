@@ -46,10 +46,11 @@ impl ScissorCutGroup {
         ell_program: &SimpleEllipseProgram<'a>,
         command_buffer_id: u32,
         vao: &VertexArrayObject,
+        command_offset: u32,
     ) {
         filled_program.bind();
         filled_program.set_u_vp(proj_matrix);
-        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (rec_start, rec_len) = (command_offset, self.rectangles.block_amount as u32);
         let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
         vao.draw_multi_instanced(command_buffer_id, rec_start, rec_len + tri_len, DrawMode::TriangleStrip);
 
@@ -67,8 +68,9 @@ impl ScissorCutGroup {
         ell_program: &SimpleEllipseProgram<'a>,
         command_buffer_id: u32,
         vao: &VertexArrayObject,
+        command_offset: u32,
     ) {
-        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (rec_start, rec_len) = (command_offset, self.rectangles.block_amount as u32);
         let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
         let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
 
@@ -86,8 +88,9 @@ impl ScissorCutGroup {
         &self,
         vao: &VertexArrayObject,
         command_buffer_id: u32,
+        command_offset: u32,
     ) {
-        let (rec_start, rec_len) = (0, self.rectangles.block_amount as u32);
+        let (rec_start, rec_len) = (command_offset, self.rectangles.block_amount as u32);
         let (tri_start, tri_len) = (rec_start + rec_len, self.triangles.block_amount as u32);
         let (ell_start, ell_len) = (tri_start + tri_len, self.ellipses.block_amount as u32);
         let (rec_start, rec_len) = (ell_start + ell_len, self.transparent_rectangles.block_amount as u32);
@@ -108,6 +111,16 @@ impl ScissorCutGroup {
         self.transparent_ellipses.write_command_buffer(command_buffer, 4);
 
         self.fonts.write_command_buffer(command_buffer, 4);
+    }
+
+    pub fn get_command_amount(&self) -> u32 {
+        self.rectangles.block_amount as u32 +
+        self.triangles.block_amount as u32 +
+        self.ellipses.block_amount as u32 +
+        self.transparent_rectangles.block_amount as u32 +
+        self.transparent_triangles.block_amount as u32 +
+        self.transparent_ellipses.block_amount as u32 +
+        self.fonts.block_amount as u32
     }
 
     pub(super)fn send_rectangle<'a>(
@@ -178,7 +191,7 @@ impl<'a> ScissorStack<'a> {
     }
 
     pub fn pop(&mut self) {
-        self.groups.pop();
+        self.index_stack.pop();
     }
 
     pub fn reset(&mut self) {

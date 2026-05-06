@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::SimpleManager}};
+use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::Window};
 
@@ -13,6 +13,7 @@ pub mod rendered_area;
 pub mod rendered_button;
 pub mod dnd;
 pub mod menu;
+pub mod scroll_area;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -54,6 +55,7 @@ pub struct Ui {
     mouse_action: Option<MouseAction>,
     pub camera: Camera,
     pressed_keys: [bool; 4],
+    scroll: f32,
 
     pub simple_area_manager: SimpleManager,
     pub events: Events,
@@ -87,6 +89,8 @@ impl Ui {
             simple_area_manager: SimpleManager::new(),
 
             events: Events::default(),
+
+            scroll: 0.0,
         }
     }
 
@@ -116,10 +120,7 @@ impl Ui {
     }
 
     pub fn on_mouse_scroll(&mut self, scroll: f32) {
-        self.camera = Camera::new(
-            self.camera.get_position(),
-            self.camera.get_zoom() * (scroll * CAMERA_ZOOM_SENSITIVITY).exp(),
-        );
+        self.scroll = scroll;
     }
 
     pub fn on_render_start(&mut self, context: &mut UiContext) {
@@ -150,6 +151,13 @@ impl Ui {
             context.window,
             &self.events,
         );
+
+        if self.events.scroll == AreaId::default() {
+            self.camera = Camera::new(
+                self.camera.get_position(),
+                self.camera.get_zoom() * (self.scroll * CAMERA_ZOOM_SENSITIVITY).exp(),
+            );
+        }
     }
 
     pub fn mouse_pressed(&mut self) {
@@ -163,6 +171,7 @@ impl Ui {
     pub fn on_render_end(&mut self) {
         self.previous_ndc_mouse_position = self.ndc_mouse_position;
         self.mouse_action = None;
+        self.scroll = 0.0;
     }
 
     pub fn update_window_size(&mut self, window_size: glm::Vec2) {

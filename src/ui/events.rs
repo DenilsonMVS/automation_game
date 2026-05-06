@@ -15,10 +15,14 @@ pub enum ActionType {
 #[derive(Debug)]
 pub struct Events {
     pub mouse_actions: ActionType,
+    pub scroll: AreaId,
 }
 
 impl Default for Events {
     fn default() -> Self {
-        Self { mouse_actions: ActionType::NoneHover }
+        Self {
+            mouse_actions: ActionType::NoneHover,
+            scroll: AreaId::default(),
+        }
     }
 }

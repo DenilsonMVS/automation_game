@@ -114,6 +114,7 @@ impl<'a> SimpleShapeRenderer<'a> {
     }
 
     pub fn draw(&mut self, renderer: &Renderer, ui: &Ui, proj_matrix: &glm::Mat4, groups: &ScissorStack) {
+        let mut command_offset = 0;
         for group in groups.get_groups() {
             group.activate_scissor(ui);
             group.draw(
@@ -123,11 +124,14 @@ impl<'a> SimpleShapeRenderer<'a> {
                 &self.ell_program,
                 groups.get_command_buffer_id(),
                 &self.vao,
+                command_offset,
             );
+            command_offset += group.get_command_amount();
         }
     }
 
     pub fn draw_transparent(&mut self, ui: &Ui, groups: &ScissorStack) {
+        let mut command_offset = 0;
         for group in groups.get_groups() {
             group.activate_scissor(ui);
             group.draw_transparent(
@@ -135,7 +139,9 @@ impl<'a> SimpleShapeRenderer<'a> {
                 &self.ell_program,
                 groups.get_command_buffer_id(),
                 &self.vao,
+                command_offset,
             );
+            command_offset += group.get_command_amount();
         }
     }
 

@@ -53,6 +53,7 @@ impl SimpleManager {
                 id: AreaId::new(i as u32),
                 depth: simple_area.depth,
                 cursor: simple_area.cursor,
+                scroll: simple_area.is_scroll,
             })
             .collect();
 

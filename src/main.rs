@@ -197,14 +197,14 @@ impl<'a> State<'a> {
         self.font.finish();
 
         let proj_matrix = self.ui.get_projection_matrix();
-        self.renderer.enable(Capability::ScissorTest);
-        self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix, &self.groups);
-        self.renderer.disable(Capability::ScissorTest);
 
-        self.renderer.depth_mask(false);
-        self.fonts.draw(&mut self.font, &self.groups, &self.ui, &proj_matrix);
-        self.simple_shape_renderer.draw_transparent(&self.ui, &self.groups);
-        self.renderer.depth_mask(true);
+        self.renderer.enable(Capability::ScissorTest);
+            self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix, &self.groups);
+            self.renderer.depth_mask(false);
+                self.fonts.draw(&mut self.font, &self.groups, &self.ui, &proj_matrix);
+                self.simple_shape_renderer.draw_transparent(&self.ui, &self.groups);
+            self.renderer.depth_mask(true);
+        self.renderer.disable(Capability::ScissorTest);
 
         self.fence = Some(self.renderer.new_fence());
 

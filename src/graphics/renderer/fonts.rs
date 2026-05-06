@@ -96,9 +96,11 @@ impl<'a> Fonts<'a> {
 
         let (_, vao) = &font.buff;
 
+        let mut command_offset = 0;
         for group in groups.get_groups() {
             group.activate_scissor(ui);
-            group.draw_font(vao, groups.get_command_buffer_id());
+            group.draw_font(vao, groups.get_command_buffer_id(), command_offset);
+            command_offset += group.get_command_amount();
         }
     }
 }

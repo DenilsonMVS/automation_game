@@ -1,4 +1,4 @@
-use crate::{graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::HasSimpleShapeRenderer}, ui::{HasUi, events::ActionType, rendered_area::RenderedArea, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{graphics::renderer::{positioning::{PositionMode, RenderBox}, simple_shape_renderer::HasSimpleShapeRenderer}, ui::{HasUi, events::ActionType, scroll_area::ScrollArea, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use winit::{window::CursorIcon};
 
@@ -18,18 +18,20 @@ pub struct Menu<T, D> {
     opened: bool,
     hovered: bool,
     gap: f32,
-    opened_container: RenderedArea,
+    opened_container: ScrollArea,
+    maximum_displayed: usize,
 }
 
 impl<T, D> Menu<T, D> {
     pub fn new(items: Vec<T>) -> Self {
         Self {
             open_button_id: AreaId::default(),
+            maximum_displayed: items.len(),
             items,
             bbox: Default::default(),
             depth: Default::default(),
             gap: Default::default(),
-            opened_container: RenderedArea::new(CursorIcon::Default, glm::vec4(0, 0, 0, 0)),
+            opened_container: ScrollArea::new(glm::vec4(0, 0, 0, 0)),
             opened: false,
             displayed_value: None,
             hovered: false,
@@ -63,8 +65,12 @@ impl<T, D> Menu<T, D> {
     }
 
     pub fn with_open_bgcolor(mut self, color: glm::U8Vec4) -> Self {
-        self.opened_container.color = color;
-        self.opened_container.hover_color = color;
+        self.opened_container.bgcolor = color;
+        self
+    }
+
+    pub fn with_maximum_displayed(mut self, amount: usize) -> Self {
+        self.maximum_displayed = amount;
         self
     }
 }
@@ -118,18 +124,21 @@ where
         self.hovered = matches!(mouse_actions, ActionType::AreaHover(id, _) if id == self.open_button_id);
 
         if self.opened {
+            let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.maximum_displayed);
+            let total_displayed_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
+            self.opened_container.max_offset = total_displayed_box.get_size().y - outer_box.get_size().y;
+            self.opened_container.update(&outer_box, depth - 100, context.get_ui());
+
             for (i, item) in self.items.iter_mut().enumerate() {
                 let item_bbox = Self::get_item_bounding_box(&self.bbox, self.gap, i);
+                let item_bbox = self.opened_container.apply_offset_to_box(&item_bbox);
                 let mut item_context = MenuContext {
                     base_context: context,
                     displayed_value: &mut self.displayed_value,
                     opened: &mut self.opened,
                 };
-                item.update(&item_bbox, depth - 100, &mut item_context);
+                item.update(&item_bbox, depth - 101, &mut item_context);
             }
-
-            let outer_box = Self::get_outer_bounding_box(&self.bbox, self.gap, self.items.len());
-            self.opened_container.update(&outer_box, depth - 100, context.get_ui());
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
@@ -139,10 +148,18 @@ where
 
     fn send(&mut self, context: &mut SC) {
         if self.opened {
+            if self.opened_container.max_offset > 0.0 {
+                self.opened_container.push_scissor_context(context.get_groups());
+            }
+
             for item in self.items.iter_mut() {
                 item.send(context);
             }
 
+            if self.opened_container.max_offset > 0.0 {
+                context.get_groups().pop();   
+            }
+            
             self.opened_container.send(&mut context.get());
         }
 

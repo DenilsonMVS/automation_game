@@ -82,6 +82,12 @@ impl RenderBox {
         }
     }
 
+    pub fn intersects(&self, other: &RenderBox) -> bool {
+        let separate_x = self.max.x < other.min.x || self.min.x > other.max.x;
+        let separate_y = self.max.y < other.min.y || self.min.y > other.max.y;
+        !(separate_x || separate_y)
+    }
+
     pub fn cut(&self, amount: f32) -> Self {
         Self {
             min: self.min + glm::vec2(amount, amount),

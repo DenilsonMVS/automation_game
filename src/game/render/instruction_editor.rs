@@ -63,7 +63,9 @@ impl InstructionEditor {
             id: AreaId::default(),
             bbox: Default::default(),
             depth: 0,
-            opcode_menu: Menu::new(opcodes).with_gap(PADDING).with_open_bgcolor(get_list_bgcolor()),
+            opcode_menu: Menu::new(opcodes).with_gap(PADDING)
+                .with_open_bgcolor(get_list_bgcolor())
+                .with_maximum_displayed(8),
             delete_button: RenderedButton::new(get_delete_button_color()),
             operands: None,
         }
