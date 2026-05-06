@@ -7,6 +7,10 @@ fn get_delete_button_color() -> glm::U8Vec4 {
     glm::vec4(200, 50, 60, 255)
 }
 
+fn get_scroll_bar_color() -> glm::U8Vec4 {
+    glm::vec4(30, 30, 50, 255)
+}
+
 #[derive(Debug)]
 pub enum OperandState {
     RdImm8 {
@@ -65,7 +69,8 @@ impl InstructionEditor {
             depth: 0,
             opcode_menu: Menu::new(opcodes).with_gap(PADDING)
                 .with_open_bgcolor(get_list_bgcolor())
-                .with_maximum_displayed(8),
+                .with_maximum_displayed(8)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
             delete_button: RenderedButton::new(get_delete_button_color()),
             operands: None,
         }
@@ -135,26 +140,26 @@ impl InstructionEditor {
         if needs_init {
             self.operands = Some(match format {
                 InstructionFormat::RdImm8 => OperandState::RdImm8 {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    imm: Menu::new(generate_imms(256, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
+                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    imm: Menu::new(generate_imms(256, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
                 },
                 InstructionFormat::RsRdImm4 => OperandState::RsRdImm4 {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    rs: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    imm: Menu::new(generate_imms(16, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
+                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    rs: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    imm: Menu::new(generate_imms(16, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
                 },
                 InstructionFormat::R1R2Rd => OperandState::R1R2Rd {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
+                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
                 },
                 InstructionFormat::R1R2Imm4 => OperandState::R1R2Imm4 {
-                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
-                    imm: Menu::new(generate_imms(16, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
+                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
+                    imm: Menu::new(generate_imms(16, l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
                 },
                 InstructionFormat::Syscall => OperandState::Sys {
-                    sys: Menu::new(generate_syscalls(l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg),
+                    sys: Menu::new(generate_syscalls(l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
                 },
             });
         }

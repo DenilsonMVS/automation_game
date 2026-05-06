@@ -73,6 +73,11 @@ impl<T, D> Menu<T, D> {
         self.maximum_displayed = amount;
         self
     }
+
+    pub fn with_scroll_bar(mut self, width: f32, color: glm::U8Vec4) -> Self {
+        self.opened_container = self.opened_container.with_scroll_bar(width, color);
+        self
+    }
 }
 
 impl<T: HasKey, D: HasKey> Menu<T, D> {

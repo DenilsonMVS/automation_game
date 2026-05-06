@@ -5,7 +5,7 @@ use crate::{graphics::renderer::{positioning::RenderBox, scissor_group::ScissorS
 
 #[derive(Debug, Default)]
 pub struct RenderedArea {
-    id: AreaId,
+    pub id: AreaId,
     cursor: CursorIcon,
     depth: u16,
     hovered: bool,
