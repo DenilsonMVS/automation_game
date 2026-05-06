@@ -1,10 +1,10 @@
 use nalgebra_glm as glm;
-use crate::{game::{logic::display_module::DisplayModule, render::robot::ROBOT_DEPTH}, graphics::{camera::Camera, renderer::fonts::{Font, TextAlign, TextRenderConfig}}};
+use crate::{game::{logic::display_module::DisplayModule, render::robot::ROBOT_DEPTH}, graphics::{camera::Camera, renderer::{fonts::{Font, TextAlign, TextRenderConfig}, scissor_group::ScissorStack}}};
 
 const DISPLAY_DEPTH: u16 = ROBOT_DEPTH - 1;
 
 impl DisplayModule {
-    pub fn send(&self, font: &mut Font, position: glm::Vec2, camera: &Camera) {
+    pub fn send(&self, font: &mut Font, groups: &mut ScissorStack, position: glm::Vec2, camera: &Camera) {
         if let Some(value) = self.get_value() {
             let value = format!("{}", value);
             font.add_text(
@@ -17,6 +17,7 @@ impl DisplayModule {
                 .set_recenter(camera)
                 .set_max_line_width(0.5)
                 .set_align(TextAlign::Center),
+                groups,
             );
         }
     }

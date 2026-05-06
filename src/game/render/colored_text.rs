@@ -57,7 +57,7 @@ impl<'a, 'b, 'c, Key: std::fmt::Display> UiElement<Ui, MainContext<'a, 'b>, ()> 
     fn send(&mut self, context: &mut MainContext) {
         let bbox_size = self.bbox.get_size();
         let color = if self.hovered { self.hover_bgcolor } else { self.bgcolor };
-        context.simple_shape_renderer.send_render_box(&self.bbox, color, self.depth, None);
+        context.simple_shape_renderer.send_render_box(&self.bbox, color, self.depth, None, context.groups);
         let label = format!("{}", self.key);
         context.font.add_text(
             &TextRenderConfig::new(
@@ -69,6 +69,7 @@ impl<'a, 'b, 'c, Key: std::fmt::Display> UiElement<Ui, MainContext<'a, 'b>, ()> 
             .set_align(TextAlign::Left)
             .set_depth(self.depth - 1)
             .set_mode(PositionMode::TopLeft),
+            context.groups,
         );
     }
 }

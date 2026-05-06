@@ -12,6 +12,7 @@ pub mod atlas;
 pub mod positioning;
 pub mod simple_texture;
 pub mod simple_shape_renderer;
+pub mod scissor_group;
 
 trait GlEnum: Sized {
     fn to_gl_enum(&self) -> u32;

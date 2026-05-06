@@ -143,17 +143,18 @@ where
                 item.send(context);
             }
 
-            self.opened_container.send(context.get_simple_shape_renderer());
+            self.opened_container.send(&mut context.get());
         }
 
         if let Some(displayed_value) = &mut self.displayed_value {
             displayed_value.send(context);
         }
 
+        let (simple_shape_renderer, groups) = context.get();
         if self.hovered {
-            context.get_simple_shape_renderer().send_render_box(&self.bbox, glm::vec4(255, 255, 255, 40), self.depth - 20, None);
+            simple_shape_renderer.send_render_box(&self.bbox, glm::vec4(255, 255, 255, 40), self.depth - 20, None, groups);
         } else if self.displayed_value.is_none() {
-            context.get_simple_shape_renderer().send_render_box(&self.bbox, glm::vec4(255, 255, 255, 20), self.depth - 20, None);
+            simple_shape_renderer.send_render_box(&self.bbox, glm::vec4(255, 255, 255, 20), self.depth - 20, None, groups);
         }
     }
 

@@ -1,6 +1,6 @@
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
-use crate::{graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}, simple_shape_renderer::SimpleShapeRenderer}, ui::{Ui, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}, scissor_group::ScissorStack, simple_shape_renderer::SimpleShapeRenderer}, ui::{Ui, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 
 #[derive(Debug, Default)]
 pub struct RenderedButton {
@@ -51,6 +51,7 @@ impl RenderedButton {
 pub struct RenderedButtonContext<'a, 'b> {
     pub font: &'a mut Font<'b>,
     pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
+    pub groups: &'a mut ScissorStack<'b>,
 }
 
 impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton {
@@ -63,7 +64,7 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
     }
 
     fn send(&mut self, context: &mut RenderedButtonContext<'a, 'b>) {
-        let RenderedButtonContext { font, simple_shape_renderer} = context;
+        let RenderedButtonContext { groups, font, simple_shape_renderer} = context;
         let (color, bgcolor) = if self.hovered {
             (self.hover_color, self.hover_bgcolor)
         } else {
@@ -71,7 +72,7 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
         };
 
         if bgcolor.w != 0 {
-            simple_shape_renderer.send_render_box(&self.bbox, bgcolor, self.depth, None);
+            simple_shape_renderer.send_render_box(&self.bbox, bgcolor, self.depth, None, groups);
         }
 
         if color.w != 0 {
@@ -84,7 +85,9 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
                 .set_mode(PositionMode::TopLeft)
                 .set_align(TextAlign::Center)
                 .set_depth(self.depth - 1)
-                .set_max_line_width(content_box.get_size().x));
+                .set_max_line_width(content_box.get_size().x),
+                context.groups,
+            );
         }
     }
 }

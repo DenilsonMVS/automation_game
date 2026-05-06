@@ -1,6 +1,6 @@
 use std::{marker::PhantomData};
 
-use crate::graphics::renderer::{GlEnum, Renderer, buffer::{GenericBuffer}, drawable::DrawMode, simple_shape_renderer::DrawArraysIndirectCommand, types::{GlType, GlTypeEnum}};
+use crate::graphics::renderer::{GlEnum, Renderer, buffer::GenericBuffer, drawable::DrawMode, scissor_group::DrawArraysIndirectCommand, types::{GlType, GlTypeEnum}};
 
 
 pub struct FieldType {

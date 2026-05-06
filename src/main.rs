@@ -8,10 +8,11 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, UiContext, rendered_button::RenderedButtonContext}};
+use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, UiContext, rendered_button::RenderedButtonContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
+    pub groups: &'a mut ScissorStack<'b>,
     pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
     pub font: &'a mut Font<'b>,
     pub ui: &'a mut Ui,
@@ -21,7 +22,8 @@ impl<'a, 'b> MainContext<'a, 'b> {
     pub fn get_button_context<'s>(&'s mut self) -> RenderedButtonContext<'s, 'b> {
         RenderedButtonContext { 
             font: self.font, 
-            simple_shape_renderer: self.simple_shape_renderer 
+            simple_shape_renderer: self.simple_shape_renderer,
+            groups: self.groups,
         }
     }
 }
@@ -36,6 +38,14 @@ impl<'a, 'b> HasSimpleShapeRenderer<'b> for MainContext<'a, 'b> {
     fn get_simple_shape_renderer(&mut self) -> &mut SimpleShapeRenderer<'b> {
         self.simple_shape_renderer
     }
+
+    fn get_groups(&mut self) -> &mut ScissorStack<'b> {
+        self.groups
+    }
+
+    fn get(&mut self) -> (&mut SimpleShapeRenderer<'b>, &mut ScissorStack<'b>) {
+        (self.simple_shape_renderer, self.groups)
+    }
 }
 
 pub struct State<'a> {
@@ -49,6 +59,7 @@ pub struct State<'a> {
     fonts: Fonts<'a>,
     font: Font<'a>,
     simple_shape_renderer: SimpleShapeRenderer<'a>,
+    groups: ScissorStack<'a>,
 }
 
 impl<'a> ApplicationState<'a> for State<'a> {
@@ -83,6 +94,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
             fence: None,
             fonts, font,
             simple_shape_renderer,
+            groups: ScissorStack::new(renderer),
         }
     }
 
@@ -152,18 +164,20 @@ impl<'a> State<'a> {
             scene: &mut self.scene,
         };
         self.ui.on_render_start(&mut context);
+        self.groups.reset();
 
         {
             let mut main_context = MainContext {
                 simple_shape_renderer: &mut self.simple_shape_renderer,
                 font: &mut self.font,
                 ui: &mut self.ui,
+                groups: &mut self.groups,
             };
 
             main_context.simple_shape_renderer.reset();
             main_context.font.reset();
 
-            main_context.simple_shape_renderer.push_scissor_group(main_context.ui.get_ndc_render_box());
+            main_context.groups.push(main_context.ui.get_ndc_render_box());
 
             self.scene.game_logic(&mut main_context);
 
@@ -178,19 +192,19 @@ impl<'a> State<'a> {
             self.scene.generate_output(&mut main_context);
         }
 
+        self.groups.finish();
         self.simple_shape_renderer.finish();
         self.font.finish();
 
         let proj_matrix = self.ui.get_projection_matrix();
         self.renderer.enable(Capability::ScissorTest);
-        self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix);
+        self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix, &self.groups);
         self.renderer.disable(Capability::ScissorTest);
 
         self.renderer.depth_mask(false);
-        self.fonts.draw(&mut self.font, &proj_matrix);
+        self.fonts.draw(&mut self.font, &self.groups, &self.ui, &proj_matrix);
+        self.simple_shape_renderer.draw_transparent(&self.ui, &self.groups);
         self.renderer.depth_mask(true);
-
-        self.simple_shape_renderer.draw_transparent(self.renderer, &self.ui);
 
         self.fence = Some(self.renderer.new_fence());
 

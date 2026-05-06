@@ -243,6 +243,7 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
         let mut button_context = RenderedButtonContext {
             font: context.font,
             simple_shape_renderer: context.simple_shape_renderer,
+            groups: context.groups
         };
         self.delete_button.send(&mut button_context);
 
@@ -257,6 +258,6 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
 
         self.opcode_menu.send(context);
 
-        context.simple_shape_renderer.send_render_box(&self.bbox, get_secondary_background_color(), self.depth, None);
+        context.simple_shape_renderer.send_render_box(&self.bbox, get_secondary_background_color(), self.depth, None, context.groups);
     }
 }

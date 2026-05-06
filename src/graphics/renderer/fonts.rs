@@ -3,20 +3,11 @@ use std::marker::PhantomData;
 use msdfgen::{Bitmap, FillRule, FontExt, MsdfGeneratorConfig, Range};
 use ttf_parser::Face;
 use macros::{GlVertex, program_interface};
-use crate::graphics::{camera::Camera, renderer::{
-    Renderer, 
-    buffer::{DynamicBuffer, GenericBuffer, StaticBuffer}, 
-    drawable::DrawMode, 
-    positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short, vec_to_short_recenter}, 
-    program::{Program, ShaderType}, 
-    texture::Texture, 
-    uniform::UniformValue, 
-    vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}
-}};
+use crate::{graphics::{camera::Camera, renderer::{
+    Renderer, buffer::{DynamicUnitBuffer, GenericBuffer, StaticBuffer}, drawable::DrawMode, positioning::{OrientedBox, PositionMode, SCALE_FACTOR, vec_to_short, vec_to_short_recenter}, program::{Program, ShaderType}, scissor_group::ScissorStack, simple_shape_renderer::{BLOCK_SIZE, MAX_FORMS_CAPACITY}, texture::Texture, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}
+}}, ui::Ui};
 use nalgebra_glm as glm;
 use anyhow::Result;
-
-const GLYPHS_PER_RENDER: usize = 1 << 11;
 
 #[repr(C)]
 #[derive(GlVertex)]
@@ -58,7 +49,7 @@ struct GlyphInfo {
     vert = "../../../res/shaders/font.vert",
     frag = "../../../res/shaders/font.frag"
 )]
-struct FontProgram {
+pub struct FontProgram {
     u_texture: i32,
     u_projection: glm::Mat4,
     u_glyph_size: u32,
@@ -97,14 +88,18 @@ impl<'a> Fonts<'a> {
         buffer.vao.draw_instanced(4, buffer.amount, DrawMode::TriangleStrip);
     }
 
-    pub fn draw(&self, font: &mut Font, proj_matrix: &glm::Mat4) {
+    pub fn draw(&self, font: &mut Font, groups: &ScissorStack, ui: &Ui, proj_matrix: &glm::Mat4) {
         self.font_program.bind();
         self.font_program.set_u_projection(proj_matrix);
         font.texture.bind_to_unit(0);
         font.uv_buf.bind_as_storage(5);
 
-        let (vbo, vao) = &font.buff;
-        vao.draw_instanced(4, vbo.get_len() as i32, DrawMode::TriangleStrip);
+        let (_, vao) = &font.buff;
+
+        for group in groups.get_groups() {
+            group.activate_scissor(ui);
+            group.draw_font(vao, groups.get_command_buffer_id());
+        }
     }
 }
 
@@ -119,8 +114,9 @@ pub struct Font<'a> {
     glyphs: [GlyphInfo; WESTERN_CHAR_COUNT],
     ascender: f32,
     descender: f32,
-    buff: (DynamicBuffer<'a, GlyphAttrs>, VertexArrayObject<'a>),
+    buff: (DynamicUnitBuffer<'a, GlyphAttrs>, VertexArrayObject<'a>),
     uv_buf: StaticBuffer<'a, UvData>,
+    allocated_blocks: u32,
 }
 
 const fn map_char_to_index(c: char) -> Option<usize> {
@@ -308,7 +304,7 @@ impl<'a> Font<'a> {
         }
 
         let texture = Texture::from_font_raw(renderer, raw_image_data.as_slice(), ATLAS_WIDTH);
-        let vbo = DynamicBuffer::<GlyphAttrs>::new(renderer, GLYPHS_PER_RENDER);
+        let vbo = DynamicUnitBuffer::<GlyphAttrs>::new_empty_manual_flush(renderer, MAX_FORMS_CAPACITY);
         let vao = VertexArrayObject::new(renderer, &[&vbo]);
         let uv_buf = StaticBuffer::new(renderer, &uvs);
 
@@ -319,12 +315,12 @@ impl<'a> Font<'a> {
             descender: font.descender() as f32,
             buff: (vbo, vao),
             uv_buf,
+            allocated_blocks: 0,
         });
     }
 
     pub fn reset(&mut self) {
-        let vbo = &mut self.buff.0;
-        vbo.reset_index();
+        self.allocated_blocks = 0;
     }
 
     pub fn get_monospace_width(&self, line_height: f32) -> f32 {
@@ -346,13 +342,15 @@ impl<'a> Font<'a> {
         self.texture.bind_to_unit(unit);
     }
 
-    pub fn add_text(&mut self, text: &TextRenderConfig) {
+    pub fn add_text(&mut self, text: &TextRenderConfig, groups: &mut ScissorStack) {
         let glyphs = &self.glyphs;
         let ascender = self.ascender;
         let descender = self.descender;
         let vbo = &mut self.buff.0;
-        Self::generate_vertex(glyphs, ascender, descender, text,
-            |vertex| vbo.write(&vertex));
+        if let Some(group) = groups.get_last() {
+            Self::generate_vertex(glyphs, ascender, descender, text,
+                |vertex| group.send_text(&vertex, vbo, &mut self.allocated_blocks));
+        }    
     }
 
     pub fn create_text_vbo<'b>(&self, renderer: &'b Renderer, rendered_text: &[TextRenderConfig]) -> FontVbo<'b> {
@@ -562,6 +560,6 @@ impl<'a> Font<'a> {
     }
 
     pub fn finish(&self) {
-        self.buff.0.flush();
+        self.buff.0.flush_range(0, self.allocated_blocks as usize * BLOCK_SIZE);
     }
 }

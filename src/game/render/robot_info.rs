@@ -95,6 +95,6 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotIn
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         self.instructions.send(context);
         self.add_instruction_button.send(&mut context.get_button_context());
-        self.outer_container.send(context.simple_shape_renderer);
+        self.outer_container.send(&mut (context.simple_shape_renderer, context.groups));
     }
 }
