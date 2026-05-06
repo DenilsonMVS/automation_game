@@ -26,10 +26,10 @@ impl Robot {
     }
 
     pub fn get_render_box(position: glm::Vec2) -> RenderBox {
-        SimpleShapeRenderer::preview_render_box(
+        RenderBox::new_simple(
             position,
-            glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
             PositionMode::Center,
+            glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
         )
     }
 

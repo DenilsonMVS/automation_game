@@ -67,7 +67,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
         let ui = Ui::new(Self::get_window_size());
-        let scene = MainScene::new(&renderer);
+        let scene = MainScene::new(renderer);
 
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
@@ -163,6 +163,8 @@ impl<'a> State<'a> {
             main_context.simple_shape_renderer.reset();
             main_context.font.reset();
 
+            main_context.simple_shape_renderer.push_scissor_group(main_context.ui.get_ndc_render_box());
+
             self.scene.game_logic(&mut main_context);
 
             if let Some(fence) = &self.fence {
@@ -180,13 +182,15 @@ impl<'a> State<'a> {
         self.font.finish();
 
         let proj_matrix = self.ui.get_projection_matrix();
-        self.simple_shape_renderer.draw(self.renderer, &proj_matrix);
+        self.renderer.enable(Capability::ScissorTest);
+        self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix);
+        self.renderer.disable(Capability::ScissorTest);
 
         self.renderer.depth_mask(false);
         self.fonts.draw(&mut self.font, &proj_matrix);
         self.renderer.depth_mask(true);
 
-        self.simple_shape_renderer.draw_transparent(self.renderer);
+        self.simple_shape_renderer.draw_transparent(self.renderer, &self.ui);
 
         self.fence = Some(self.renderer.new_fence());
 

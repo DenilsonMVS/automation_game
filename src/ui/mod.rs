@@ -48,7 +48,7 @@ pub enum MouseAction {
 pub struct Ui {
     ndc_mouse_position: glm::Vec2,
     previous_ndc_mouse_position: glm::Vec2,
-    window_size: glm::Vec2,
+    pub window_size: glm::Vec2,
     current_time: Instant,
     previous_frame_time: Instant,
     mouse_action: Option<MouseAction>,
@@ -106,8 +106,8 @@ impl Ui {
 
     pub fn get_ndc_render_box(&self) -> RenderBox {
         RenderBox {
-            min: self.screen_to_ndc_position(glm::vec2(0.0, 0.0)),
-            max: self.screen_to_ndc_position(glm::vec2(1.0, 1.0)),
+            min: self.screen_to_ndc_position(glm::vec2(0.0, self.window_size.y)),
+            max: self.screen_to_ndc_position(glm::vec2(self.window_size.x, 0.0)),
         }
     }
 
@@ -195,6 +195,26 @@ impl Ui {
             let ratio = window_size.y / window_size.x;
             glm::vec2(inverted.x, inverted.y * ratio)
         }
+    }
+
+    pub fn ndc_to_screen_position(&self, position: glm::Vec2) -> glm::Vec2 {
+        let window_size = self.window_size;
+    
+        let mut normalized = position;
+        if window_size.x > window_size.y {
+            let ratio = window_size.x / window_size.y;
+            normalized.x /= ratio;
+        } else {
+            let ratio = window_size.y / window_size.x;
+            normalized.y /= ratio;
+        }
+
+        let screen_coord = glm::vec2(
+            (normalized.x + 1.0) * 0.5,
+            (normalized.y + 1.0) * 0.5
+        );
+
+        screen_coord.component_mul(&window_size)
     }
 
     pub fn get_events(&self) -> &Events {
