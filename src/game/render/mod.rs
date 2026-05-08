@@ -17,7 +17,7 @@ pub mod colored_text;
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
     robot_info: Option<RobotInfo>,
-    robot_buttons: Vec<AreaId>,
+    robot_buttons: Vec<(u32, AreaId)>,
 }
 
 impl<'a> RenderState<'a> {
@@ -38,18 +38,18 @@ impl<'a> RenderState<'a> {
         )
     }
 
-    pub fn update(&mut self, logic_state: &GameState, context: &mut MainContext) {
+    pub fn update(&mut self, logic_state: &mut GameState, context: &mut MainContext) {
         match context.ui.events.mouse_actions {
             ActionType::NonePress => self.robot_info = None,
             ActionType::AreaPress(id, _) => {
-                for (i, button) in self.robot_buttons.iter().enumerate() {
+                for (_, (robot_id, button)) in self.robot_buttons.iter().enumerate() {
                     if
                         id == *button &&
-                        self.robot_info.as_ref().map(|r| r.robot_idx) != Some(i)
+                        self.robot_info.as_ref().map(|r| r.robot_id) != Some(*robot_id)
                     {
                         self.robot_info = Some(RobotInfo::new(
-                            i,
-                            logic_state.get_robots()[i].get_computer().instructions.get(),
+                            *robot_id,
+                            logic_state.get_robots()[*robot_id as usize].get_computer().instructions.get(),
                         ));
                     }
                 }
@@ -57,17 +57,21 @@ impl<'a> RenderState<'a> {
             _ => {},
         }
 
-        let ndc_bbox = context.ui.get_ndc_render_box();
         if let Some(robot_info) = &mut self.robot_info {
+            let ndc_bbox = context.ui.get_ndc_render_box();
             robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
+            if let Some(code) = robot_info.finished() {
+                logic_state.write_code(robot_info.robot_id as usize, code);
+                self.robot_info = None;
+            }
         }
 
         self.robot_buttons.clear();
-        for robot in logic_state.get_robots().iter() {
-            self.robot_buttons.push(context.ui.simple_area_manager.push(SimpleArea::new(
+        for (i, robot) in logic_state.get_robots().iter_enumerate_unordered() {
+            self.robot_buttons.push((i as u32, context.ui.simple_area_manager.push(SimpleArea::new(
                 Robot::get_render_box(robot.get_position()).world_to_ndc_pos(&context.ui.camera),
                 ROBOT_DEPTH,
-            ).with_cursor(CursorIcon::Pointer)));
+            ).with_cursor(CursorIcon::Pointer))));
         }
     }
 
@@ -76,7 +80,7 @@ impl<'a> RenderState<'a> {
             robot_info.send(context);
         }
 
-        for robot in logic_state.get_robots().iter() {
+        for robot in logic_state.get_robots().iter_unordered() {
             robot.send(context);
         }
 

@@ -23,6 +23,7 @@ pub fn get_list_bgcolor() -> glm::U8Vec4 {
 }
 
 const CONTAINER_PADDING: f32 = 0.02;
+const BUTTON_PADDING: f32 = 0.03;
 const BUTTTON_AREA_WIDTH: f32 = 0.4;
 const BUTTON_HEIGHT: f32 = 0.15;
 const BUTTON_WIDTH: f32 = BUTTTON_AREA_WIDTH - 2.0 * CONTAINER_PADDING;
@@ -31,14 +32,16 @@ const INSTRUCTION_HEIGHT: f32 = (INFO_HEIGHT - (MEMORY_SIZE + 1) as f32 * CONTAI
 
 #[derive(Debug)]
 pub struct RobotInfo {
-    pub robot_idx: usize,
+    pub robot_id: u32,
+    finish_button_pressed: bool,
     outer_container: RenderedArea,
     add_instruction_button: RenderedButton,
+    finish_button: RenderedButton,
     instructions: Dnd<InstructionEditor>,
 }
 
 impl RobotInfo {
-    pub fn new(robot_idx: usize, instructions: &[Instruction; MEMORY_SIZE]) -> Self {
+    pub fn new(robot_id: u32, instructions: &[Instruction; MEMORY_SIZE]) -> Self {
         let mut dnd = Dnd::new(glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT))
             .with_gap(CONTAINER_PADDING);
 
@@ -52,17 +55,52 @@ impl RobotInfo {
         }
 
         Self {
-            robot_idx,
+            robot_id,
             outer_container: RenderedArea::new(CursorIcon::Default, get_background_color()),
             add_instruction_button: RenderedButton::new(get_add_instruction_button_bgcolor())
-                .with_content("ADD", get_add_instruction_button_color()),
+                .with_content("ADD", get_add_instruction_button_color())
+                .with_padding(BUTTON_PADDING),
+            finish_button: RenderedButton::new(get_add_instruction_button_bgcolor())
+                .with_content("FINISH", get_add_instruction_button_color())
+                .with_padding(BUTTON_PADDING),
             instructions: dnd,
+            finish_button_pressed: false,
+        }
+    }
+
+    fn get_code(&self) -> Option<[Instruction; MEMORY_SIZE]> {
+        let mut instructions = [Instruction::default(); MEMORY_SIZE];
+
+        for (i, inst) in instructions.iter_mut().enumerate() {
+            let editor = self.instructions.get_elements().get(i);
+            *inst = match editor {
+                Some(editor) => editor.get_instruction()?,
+                None => Default::default(),
+            };
+        }
+
+        Some(instructions)
+    }
+
+    pub fn finished(&self) -> Option<[Instruction; MEMORY_SIZE]> {
+        if self.finish_button_pressed {
+            self.get_code()
+        } else {
+            None
         }
     }
 
     fn get_add_instruction_button_container(bbox: &RenderBox) -> RenderBox {
         RenderBox::new_simple(
             bbox.get_top_right() + glm::vec2(-CONTAINER_PADDING, -CONTAINER_PADDING),
+            PositionMode::TopRight,
+            glm::vec2(BUTTON_WIDTH, BUTTON_HEIGHT),
+        )
+    }
+
+    fn get_finish_button_container(bbox: &RenderBox) -> RenderBox {
+        RenderBox::new_simple(
+            bbox.get_top_right() + glm::vec2(-CONTAINER_PADDING, -CONTAINER_PADDING * 2.0 - BUTTON_HEIGHT),
             PositionMode::TopRight,
             glm::vec2(BUTTON_WIDTH, BUTTON_HEIGHT),
         )
@@ -79,6 +117,7 @@ impl RobotInfo {
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotInfo {
     fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext) {
+        self.finish_button_pressed = false;
         if let ActionType::AreaPress(id, _) = context.ui.events.mouse_actions {
             if id == self.add_instruction_button.id && self.instructions.len() < MEMORY_SIZE {
                 self.instructions.push(InstructionEditor::new());
@@ -90,20 +129,30 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotIn
                 .map(|(idx, _)| idx)
             {
                 self.instructions.remove(idx);
+            } else if id == self.finish_button.id {
+                self.finish_button_pressed = true;
             }
         }
+
+        self.instructions.update(&Self::get_dnd_bbox(bbox), depth - 1, context);
+        
+        self.finish_button.disabled = self.get_code().is_none();
+        self.finish_button.update(
+            &Self::get_finish_button_container(bbox),
+            depth - 1, context.ui,
+        );
 
         self.outer_container.update(bbox, depth, context.ui);
         self.add_instruction_button.update(
             &Self::get_add_instruction_button_container(bbox),
             depth - 1, context.ui,
         );
-        self.instructions.update(&Self::get_dnd_bbox(bbox), depth - 1, context);
     }
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         self.instructions.send(context);
         self.add_instruction_button.send(&mut context.get_button_context());
+        self.finish_button.send(&mut context.get_button_context());
         self.outer_container.send(&mut (context.simple_shape_renderer, context.groups));
     }
 }

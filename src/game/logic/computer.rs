@@ -45,7 +45,7 @@ pub const PC: RegisterAddress = X[PROGRAM_COUNTER_IDX];
 
 #[derive(Debug)]
 pub struct Computer {
-    registers: RegisterMemory<u8, MEMORY_SIZE>,
+    pub registers: RegisterMemory<u8, MEMORY_SIZE>,
     pub instructions: InstructionMemory<MEMORY_SIZE>,
 }
 

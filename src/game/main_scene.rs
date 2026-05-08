@@ -16,7 +16,7 @@ impl<'a> MainScene<'a> {
 impl<'a> Scene for MainScene<'a> {
     fn game_logic(&mut self, context: &mut crate::MainContext) {
         self.logic.update(context);
-        self.render.update(&self.logic, context);
+        self.render.update(&mut self.logic, context);
     }
 
     fn send(&mut self, context: &mut crate::MainContext) {

@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{colored_text::{ColoredTextButton, ColoredTextView}, robot_info::{get_list_bgcolor, get_secondary_background_color}}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, dnd::HasId, menu::Menu, rendered_button::{RenderedButton, RenderedButtonContext}, simple_area_manager::AreaId, text_input::{CharFilter, TextInput, ValidateInput}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{colored_text::{ColoredTextButton, ColoredTextView}, robot_info::{get_list_bgcolor, get_secondary_background_color}}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, dnd::HasId, menu::Menu, rendered_button::{RenderedButton, RenderedButtonContext}, simple_area_manager::AreaId, text_input::{CharFilter, TextInput, ValidateInput}, ui_element::UiElement}};
 use nalgebra_glm as glm;
 
 const PADDING: f32 = 0.01;
@@ -83,6 +83,67 @@ impl InstructionEditor {
     const WIDTH_IMM: f32 = 3.0;
     const WIDTH_SYS: f32 = 12.0;
     const CHAR_MARGIN: f32 = 1.0;
+
+    pub fn get_instruction(&self) -> Option<Instruction> {
+        let opcode = self.opcode_menu.get_selected_key()?;
+        let operands = self.operands.as_ref()?;
+
+        match operands {
+            OperandState::RdImm8 { rd, imm } => {
+                let rd = rd.get_selected_key()?;
+                let imm: u16 = imm.get_content()?.parse().ok()?;
+                match opcode {
+                    InstructionId::Lui => Some(Instruction::new_lui(rd, imm)),
+                    _ => None,
+                }
+            }
+            OperandState::R1R2Imm4 { r1, r2, imm } => {
+                let r1 = r1.get_selected_key()?;
+                let r2 = r2.get_selected_key()?;
+                let imm: u16 = imm.get_content()?.parse().ok()?;
+                match opcode {
+                    InstructionId::Beq => Some(Instruction::new_beq(r1, r2, imm)),
+                    InstructionId::Ble => Some(Instruction::new_ble(r1, r2, imm)),
+                    InstructionId::Blt => Some(Instruction::new_blt(r1, r2, imm)),
+                    InstructionId::Bne => Some(Instruction::new_bne(r1, r2, imm)),
+                    _ => None,
+                }
+            },
+            OperandState::RdRsImm4 { rd, rs, imm } => {
+                let rd = rd.get_selected_key()?;
+                let rs = rs.get_selected_key()?;
+                let imm: u16 = imm.get_content()?.parse().ok()?;
+                match opcode {
+                    InstructionId::Addi => Some(Instruction::new_addi(rd, rs, imm)),
+                    InstructionId::Subi => Some(Instruction::new_subi(rd, rs, imm)),
+                    _ => None,
+                }
+            },
+            OperandState::RdR1R2 { rd, r1, r2 } => {
+                let r1 = r1.get_selected_key()?;
+                let r2 = r2.get_selected_key()?;
+                let rd = rd.get_selected_key()?;
+                match opcode {
+                    InstructionId::Add => Some(Instruction::new_add(rd, r1, r2)),
+                    InstructionId::Sub => Some(Instruction::new_sub(rd, r1, r2)),
+                    InstructionId::Mul => Some(Instruction::new_mul(rd, r1, r2)),
+                    InstructionId::Div => Some(Instruction::new_div(rd, r1, r2)),
+                    InstructionId::Rem => Some(Instruction::new_rem(rd, r1, r2)),
+                    InstructionId::Seq => Some(Instruction::new_seq(rd, r1, r2)),
+                    InstructionId::Slt => Some(Instruction::new_slt(rd, r1, r2)),
+                    InstructionId::Sle => Some(Instruction::new_sle(rd, r1, r2)),
+                    _ => None,
+                }
+            },
+            OperandState::Sys { sys } => {
+                let sys = sys.get_selected_key()?;
+                match opcode {
+                    InstructionId::Sys => Some(Instruction::new_sys(sys)),
+                    _ => None
+                }
+            }
+        }
+    }
 
     fn create_opcode_options() -> Vec<ColoredTextButton<InstructionId>> {
         (0..16)

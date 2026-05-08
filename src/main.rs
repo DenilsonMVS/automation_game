@@ -2,6 +2,7 @@ pub mod graphics;
 pub mod game;
 pub mod open_simplex;
 pub mod ui;
+pub mod stable_index_vector;
 
 use std::num::{NonZeroU32};
 

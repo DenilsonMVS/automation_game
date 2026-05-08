@@ -7,11 +7,13 @@ pub struct RenderedButton {
     pub id: AreaId,
     depth: u16,
     hovered: bool,
+    pub disabled: bool,
     bbox: RenderBox,
     color: glm::U8Vec4,
     hover_color: glm::U8Vec4,
     bgcolor: glm::U8Vec4,
     hover_bgcolor: glm::U8Vec4,
+    disabled_bgcolor: glm::U8Vec4,
     content: &'static str,
     padding: f32,
 }
@@ -21,6 +23,7 @@ impl RenderedButton {
         Self {
             bgcolor,
             hover_bgcolor: bgcolor.map(|x| x.saturating_add(20)),
+            disabled_bgcolor: glm::vec4(120, 120,120, 255),
             ..Default::default()
         }
     }
@@ -46,6 +49,11 @@ impl RenderedButton {
         self.hover_color = hover_color;
         self
     }
+
+    pub fn with_disabled_bgcolor(mut self, disabled_bgcolor: glm::U8Vec4) -> Self {
+        self.disabled_bgcolor = disabled_bgcolor;
+        self
+    }
 }
 
 pub struct RenderedButtonContext<'a, 'b> {
@@ -60,7 +68,9 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
         self.bbox = *bbox;
         self.depth = depth;
 
-        self.id = ui.simple_area_manager.push(SimpleArea::new(*bbox, depth).with_cursor(CursorIcon::Pointer));
+        self.id = ui.simple_area_manager.push(
+            SimpleArea::new(*bbox, depth)
+                .with_cursor(if self.disabled { CursorIcon::Default } else { CursorIcon::Pointer }));
     }
 
     fn send(&mut self, context: &mut RenderedButtonContext<'a, 'b>) {
@@ -69,6 +79,12 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
             (self.hover_color, self.hover_bgcolor)
         } else {
             (self.color, self.bgcolor)
+        };
+
+        let bgcolor = if self.disabled {
+            self.disabled_bgcolor
+        } else {
+            bgcolor
         };
 
         if bgcolor.w != 0 {
