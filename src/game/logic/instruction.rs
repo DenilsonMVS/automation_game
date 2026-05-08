@@ -25,8 +25,8 @@ pub enum InstructionId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstructionFormat {
     RdImm8,      // Ex: lui rd, imm8
-    RsRdImm4,    // Ex: addi rd, rs, imm4
-    R1R2Rd,      // Ex: add rd, r1, r2
+    RdRsImm4,    // Ex: addi rd, rs, imm4
+    RdR1R2,      // Ex: add rd, r1, r2
     R1R2Imm4,    // Ex: beq r1, r2, imm4
     Syscall,     // Ex: sys <syscall_name>
 }
@@ -58,12 +58,12 @@ impl InstructionId {
             Self::Lui  => InstructionFormat::RdImm8,
             
             Self::Addi | 
-            Self::Subi => InstructionFormat::RsRdImm4,
+            Self::Subi => InstructionFormat::RdRsImm4,
             
             Self::Add | Self::Sub | 
             Self::Mul | Self::Div | 
             Self::Rem | Self::Seq | 
-            Self::Slt | Self::Sle => InstructionFormat::R1R2Rd,
+            Self::Slt | Self::Sle => InstructionFormat::RdR1R2,
             
             Self::Beq | Self::Bne | 
             Self::Blt | Self::Ble => InstructionFormat::R1R2Imm4,
@@ -139,72 +139,72 @@ impl Default for Instruction {
 }
 
 impl Instruction {
-    fn pack(id: InstructionId, r1: u16, r2: u16, r3_or_imm: u16) -> Self {
+    fn pack(id: InstructionId, p1: u16, p2: u16, p3: u16) -> Self {
         Self {
-            data: ((id as u16) << 12) | ((r1 & 0xF) << 8) | ((r2 & 0xF) << 4) | (r3_or_imm & 0xF),
+            data: ((id as u16) << 12) | ((p1 & 0xF) << 8) | ((p2 & 0xF) << 4) | (p3 & 0xF),
         }
     }
 
-    pub fn new_lui(write: RegisterAddress, value: u16) -> Instruction {
+    pub fn new_lui(rd: RegisterAddress, value: u16) -> Instruction {
         Self {
-            data: ((InstructionId::Lui as u16) << 12) | (write.get_raw() << 8) | (value & 0xff),
+            data: ((InstructionId::Lui as u16) << 12) | (rd.get_raw() << 8) | (value & 0xff),
         }
     }
 
-    pub fn new_addi(read: RegisterAddress, write: RegisterAddress, value: u16) -> Instruction {
-        Self::pack(InstructionId::Addi, read.get_raw(), write.get_raw(), value)
+    pub fn new_addi(rd: RegisterAddress, rs: RegisterAddress, value: u16) -> Instruction {
+        Self::pack(InstructionId::Addi, rd.get_raw(), rs.get_raw(), value)
     }
 
-    pub fn new_subi(read: RegisterAddress, write: RegisterAddress, value: u16) -> Instruction {
-        Self::pack(InstructionId::Subi, read.get_raw(), write.get_raw(), value)
+    pub fn new_subi(rd: RegisterAddress, rs: RegisterAddress, value: u16) -> Instruction {
+        Self::pack(InstructionId::Subi, rd.get_raw(), rs.get_raw(), value)
     }
 
-    pub fn new_add(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Add, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_add(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Add, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_sub(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Sub, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_sub(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Sub, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_mul(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Mul, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_mul(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Mul, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_div(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Div, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_div(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Div, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_rem(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Rem, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_rem(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Rem, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_beq(read1: RegisterAddress, read2: RegisterAddress, jump: u16) -> Instruction {
-        Self::pack(InstructionId::Beq, read1.get_raw(), read2.get_raw(), jump)
+    pub fn new_beq(r1: RegisterAddress, r2: RegisterAddress, jump: u16) -> Instruction {
+        Self::pack(InstructionId::Beq, r1.get_raw(), r2.get_raw(), jump)
     }
 
-    pub fn new_bne(read1: RegisterAddress, read2: RegisterAddress, jump: u16) -> Instruction {
-        Self::pack(InstructionId::Bne, read1.get_raw(), read2.get_raw(), jump)
+    pub fn new_bne(r1: RegisterAddress, r2: RegisterAddress, jump: u16) -> Instruction {
+        Self::pack(InstructionId::Bne, r1.get_raw(), r2.get_raw(), jump)
     }
 
-    pub fn new_blt(read1: RegisterAddress, read2: RegisterAddress, jump: u16) -> Instruction {
-        Self::pack(InstructionId::Blt, read1.get_raw(), read2.get_raw(), jump)
+    pub fn new_blt(r1: RegisterAddress, r2: RegisterAddress, jump: u16) -> Instruction {
+        Self::pack(InstructionId::Blt, r1.get_raw(), r2.get_raw(), jump)
     }
 
-    pub fn new_ble(read1: RegisterAddress, read2: RegisterAddress, jump: u16) -> Instruction {
-        Self::pack(InstructionId::Ble, read1.get_raw(), read2.get_raw(), jump)
+    pub fn new_ble(r1: RegisterAddress, r2: RegisterAddress, jump: u16) -> Instruction {
+        Self::pack(InstructionId::Ble, r1.get_raw(), r2.get_raw(), jump)
     }
 
-    pub fn new_seq(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Seq, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_seq(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Seq, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_slt(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Slt, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_slt(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Slt, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
-    pub fn new_sle(read1: RegisterAddress, read2: RegisterAddress, write: RegisterAddress) -> Instruction {
-        Self::pack(InstructionId::Sle, read1.get_raw(), read2.get_raw(), write.get_raw())
+    pub fn new_sle(rd: RegisterAddress, r1: RegisterAddress, r2: RegisterAddress) -> Instruction {
+        Self::pack(InstructionId::Sle, rd.get_raw(), r1.get_raw(), r2.get_raw())
     }
 
     pub fn new_sys(value: Syscall) -> Instruction {
@@ -216,30 +216,30 @@ impl Instruction {
     pub fn unpack(&self) -> UnpackedInstruction {
         let id = InstructionId::from_u16(self.data >> 12);
         
-        let r1 = RegisterAddress::new(((self.data >> 8) & 0xF) as u8);
-        let r2 = RegisterAddress::new(((self.data >> 4) & 0xF) as u8);
-        let r3 = RegisterAddress::new((self.data & 0xF) as u8);
+        let p1 = RegisterAddress::new(((self.data >> 8) & 0xF) as u8);
+        let p2 = RegisterAddress::new(((self.data >> 4) & 0xF) as u8);
+        let p3 = RegisterAddress::new((self.data & 0xF) as u8);
         
         let imm4 = (self.data & 0xF) as u8;
         let imm8 = (self.data & 0xFF) as u8;
         let imm12 = self.data & 0xFFF;
 
         match id {
-            InstructionId::Lui  => UnpackedInstruction::Lui(r1, imm8),
-            InstructionId::Addi => UnpackedInstruction::Addi(r1, r2, imm4),
-            InstructionId::Subi => UnpackedInstruction::Subi(r1, r2, imm4),
-            InstructionId::Add  => UnpackedInstruction::Add(r1, r2, r3),
-            InstructionId::Sub  => UnpackedInstruction::Sub(r1, r2, r3),
-            InstructionId::Mul  => UnpackedInstruction::Mul(r1, r2, r3),
-            InstructionId::Div  => UnpackedInstruction::Div(r1, r2, r3),
-            InstructionId::Rem  => UnpackedInstruction::Rem(r1, r2, r3),
-            InstructionId::Beq  => UnpackedInstruction::Beq(r1, r2, imm4),
-            InstructionId::Bne  => UnpackedInstruction::Bne(r1, r2, imm4),
-            InstructionId::Blt  => UnpackedInstruction::Blt(r1, r2, imm4),
-            InstructionId::Ble  => UnpackedInstruction::Ble(r1, r2, imm4),
-            InstructionId::Seq  => UnpackedInstruction::Seq(r1, r2, r3),
-            InstructionId::Slt  => UnpackedInstruction::Slt(r1, r2, r3),
-            InstructionId::Sle  => UnpackedInstruction::Sle(r1, r2, r3),
+            InstructionId::Lui  => UnpackedInstruction::Lui(p1, imm8),
+            InstructionId::Addi => UnpackedInstruction::Addi(p1, p2, imm4),
+            InstructionId::Subi => UnpackedInstruction::Subi(p1, p2, imm4),
+            InstructionId::Add  => UnpackedInstruction::Add(p1, p2, p3),
+            InstructionId::Sub  => UnpackedInstruction::Sub(p1, p2, p3),
+            InstructionId::Mul  => UnpackedInstruction::Mul(p1, p2, p3),
+            InstructionId::Div  => UnpackedInstruction::Div(p1, p2, p3),
+            InstructionId::Rem  => UnpackedInstruction::Rem(p1, p2, p3),
+            InstructionId::Beq  => UnpackedInstruction::Beq(p1, p2, imm4),
+            InstructionId::Bne  => UnpackedInstruction::Bne(p1, p2, imm4),
+            InstructionId::Blt  => UnpackedInstruction::Blt(p1, p2, imm4),
+            InstructionId::Ble  => UnpackedInstruction::Ble(p1, p2, imm4),
+            InstructionId::Seq  => UnpackedInstruction::Seq(p1, p2, p3),
+            InstructionId::Slt  => UnpackedInstruction::Slt(p1, p2, p3),
+            InstructionId::Sle  => UnpackedInstruction::Sle(p1, p2, p3),
             InstructionId::Sys  => UnpackedInstruction::Sys(Syscall::from_raw(imm12)),
         }
     }
@@ -248,14 +248,14 @@ impl Instruction {
 #[derive(Debug, PartialEq, Eq)]
 pub enum UnpackedInstruction {
     Lui(RegisterAddress, u8),
-    Addi(RegisterAddress, RegisterAddress, u8),
-    Subi(RegisterAddress, RegisterAddress, u8),
-    Add(RegisterAddress, RegisterAddress, RegisterAddress),
+    Addi(RegisterAddress, RegisterAddress, u8),     // rd, rs, imm
+    Subi(RegisterAddress, RegisterAddress, u8),     // rd, rs, imm
+    Add(RegisterAddress, RegisterAddress, RegisterAddress), // rd, r1, r2
     Sub(RegisterAddress, RegisterAddress, RegisterAddress),
     Mul(RegisterAddress, RegisterAddress, RegisterAddress),
     Div(RegisterAddress, RegisterAddress, RegisterAddress),
     Rem(RegisterAddress, RegisterAddress, RegisterAddress),
-    Beq(RegisterAddress, RegisterAddress, u8),
+    Beq(RegisterAddress, RegisterAddress, u8),      // r1, r2, imm
     Bne(RegisterAddress, RegisterAddress, u8),
     Blt(RegisterAddress, RegisterAddress, u8),
     Ble(RegisterAddress, RegisterAddress, u8),
@@ -293,18 +293,18 @@ impl UnpackedInstruction {
             UnpackedInstruction::Lui(rd, imm) => 
                 format!("{} {:<3}{:<3}", id, rd, imm),
             
-            UnpackedInstruction::Addi(rs, rd, imm) |
-            UnpackedInstruction::Subi(rs, rd, imm) => 
+            UnpackedInstruction::Addi(rd, rs, imm) |
+            UnpackedInstruction::Subi(rd, rs, imm) => 
                 format!("{} {:<3}{:<3}{:<3}", id, rd, rs, imm),
             
-            UnpackedInstruction::Add(r1, r2, rd) |
-            UnpackedInstruction::Sub(r1, r2, rd) |
-            UnpackedInstruction::Mul(r1, r2, rd) |
-            UnpackedInstruction::Div(r1, r2, rd) |
-            UnpackedInstruction::Rem(r1, r2, rd) |
-            UnpackedInstruction::Seq(r1, r2, rd) |
-            UnpackedInstruction::Slt(r1, r2, rd) |
-            UnpackedInstruction::Sle(r1, r2, rd) => 
+            UnpackedInstruction::Add(rd, r1, r2) |
+            UnpackedInstruction::Sub(rd, r1, r2) |
+            UnpackedInstruction::Mul(rd, r1, r2) |
+            UnpackedInstruction::Div(rd, r1, r2) |
+            UnpackedInstruction::Rem(rd, r1, r2) |
+            UnpackedInstruction::Seq(rd, r1, r2) |
+            UnpackedInstruction::Slt(rd, r1, r2) |
+            UnpackedInstruction::Sle(rd, r1, r2) => 
                 format!("{} {:<3}{:<3}{:<3}", id, rd, r1, r2),
 
             UnpackedInstruction::Beq(r1, r2, imm) |
@@ -355,9 +355,9 @@ impl UnpackedInstruction {
 
         match self {
             UnpackedInstruction::Lui(_, _) => [
-                (get_slice(0, 5), mnemonic), // "lui "
-                (get_slice(5, 9), dest),     // "x14 "
-                (get_slice(9, 13), literal), // "1 "
+                (get_slice(0, 5), mnemonic),
+                (get_slice(5, 9), dest),
+                (get_slice(9, 13), literal),
                 nothing,
             ],
 
@@ -371,10 +371,10 @@ impl UnpackedInstruction {
             UnpackedInstruction::Seq(_, _, _) |
             UnpackedInstruction::Slt(_, _, _) |
             UnpackedInstruction::Sle(_, _, _) => [
-                (get_slice(0, 5), mnemonic),  // "addi "
-                (get_slice(5, 9), dest),      // "x3 "
-                (get_slice(9, 13), reg1),     // "x15 "
-                (get_slice(13, 17), literal), // "0 "
+                (get_slice(0, 5), mnemonic),
+                (get_slice(5, 9), dest),      // rd
+                (get_slice(9, 13), reg1),     // r1 / rs
+                (get_slice(13, 17), reg2),    // r2 / literal (usando reg2 color para o 3º op)
             ],
 
             UnpackedInstruction::Beq(_, _, _) |

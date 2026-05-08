@@ -1,6 +1,6 @@
 use winit::window::CursorIcon;
 use nalgebra_glm as glm;
-use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::InstructionEditor}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::RenderedButton, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, Syscall, UnpackedInstruction}}, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::InstructionEditor}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::RenderedButton, ui_element::UiElement}};
 
 pub fn get_background_color() -> glm::U8Vec4 {
     glm::vec4(8, 17, 25, 255)
@@ -38,9 +38,18 @@ pub struct RobotInfo {
 }
 
 impl RobotInfo {
-    pub fn new(robot_idx: usize) -> Self {
-        let dnd = Dnd::new(glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT))
+    pub fn new(robot_idx: usize, instructions: &[Instruction; MEMORY_SIZE]) -> Self {
+        let mut dnd = Dnd::new(glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT))
             .with_gap(CONTAINER_PADDING);
+
+        for instruction in instructions {
+            let unpacked = instruction.unpack();
+            if unpacked == UnpackedInstruction::Sys(Syscall::Nop) {
+                continue;
+            }
+
+            dnd.push(InstructionEditor::from_instruction(&unpacked));
+        }
 
         Self {
             robot_idx,

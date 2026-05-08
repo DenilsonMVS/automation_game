@@ -47,12 +47,12 @@ pub enum OperandState {
         rd: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
         imm: TextInput<U8Input>,
     },
-    RsRdImm4 {
+    RdRsImm4 {
         rd: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
         rs: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
         imm: TextInput<U4Input>,
     },
-    R1R2Rd {
+    RdR1R2 {
         rd: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
         r1: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
         r2: Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
@@ -84,25 +84,49 @@ impl InstructionEditor {
     const WIDTH_SYS: f32 = 12.0;
     const CHAR_MARGIN: f32 = 1.0;
 
-    pub fn new() -> Self {
-        let opcodes = (0..16)
+    fn create_opcode_options() -> Vec<ColoredTextButton<InstructionId>> {
+        (0..16)
             .map(InstructionId::from_u16)
             .map(|opcode| ColoredTextButton::new(
                 opcode,
                 UnpackedInstruction::get_mnemonic_color(),
                 get_secondary_background_color(),
             ))
-            .collect();
+            .collect()
+    }
+
+    fn create_opcode_menu() -> Menu<ColoredTextButton<InstructionId>, ColoredTextView<InstructionId>> {
+        let opcodes = Self::create_opcode_options();
+        Menu::new(opcodes).with_gap(PADDING)
+            .with_open_bgcolor(get_list_bgcolor())
+            .with_maximum_displayed(8)
+            .with_scroll_bar(0.02, get_scroll_bar_color())
+    }
+
+    pub fn new() -> Self {
         Self {
             id: AreaId::default(),
             bbox: Default::default(),
             depth: 0,
-            opcode_menu: Menu::new(opcodes).with_gap(PADDING)
-                .with_open_bgcolor(get_list_bgcolor())
-                .with_maximum_displayed(8)
-                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            opcode_menu: Self::create_opcode_menu(),
             delete_button: RenderedButton::new(get_delete_button_color()),
             operands: None,
+        }
+    }
+
+    pub fn from_instruction(inst: &UnpackedInstruction) -> Self {
+        Self {
+            id: AreaId::default(),
+            bbox: Default::default(),
+            depth: 0,
+            opcode_menu: Self::create_opcode_menu()
+                .with_display_value(ColoredTextView::new(
+                    inst.get_id(),
+                    UnpackedInstruction::get_mnemonic_color(),
+                    get_secondary_background_color(),
+                )),
+            delete_button: RenderedButton::new(get_delete_button_color()),
+            operands: Some(Self::create_operands_from_instruction(inst)),
         }
     }
 
@@ -114,8 +138,8 @@ impl InstructionEditor {
         let mut bboxes = [RenderBox::default(); 3];
         let widths = match format {
             InstructionFormat::RdImm8    => [Self::WIDTH_REG, Self::WIDTH_IMM, 0.0],
-            InstructionFormat::RsRdImm4  => [Self::WIDTH_REG, Self::WIDTH_REG, Self::WIDTH_IMM],
-            InstructionFormat::R1R2Rd    => [Self::WIDTH_REG, Self::WIDTH_REG, Self::WIDTH_REG],
+            InstructionFormat::RdRsImm4  => [Self::WIDTH_REG, Self::WIDTH_REG, Self::WIDTH_IMM],
+            InstructionFormat::RdR1R2    => [Self::WIDTH_REG, Self::WIDTH_REG, Self::WIDTH_REG],
             InstructionFormat::R1R2Imm4  => [Self::WIDTH_REG, Self::WIDTH_REG, Self::WIDTH_IMM],
             InstructionFormat::Syscall   => [Self::WIDTH_SYS, 0.0, 0.0],
         };
@@ -130,65 +154,223 @@ impl InstructionEditor {
         bboxes
     }
 
-    fn manage_operand_menus(&mut self, ui: &mut Ui, depth: u16, format: InstructionFormat, bboxes: [RenderBox; 3]) {
+    fn generate_reg_opts(color: glm::U8Vec4, bgcolor: glm::U8Vec4) -> Vec<ColoredTextButton<RegisterAddress>> {
+        (0..MEMORY_SIZE)
+            .map(|i| RegisterAddress::new(i as u8))
+            .map(|reg| ColoredTextButton::new(reg, color, bgcolor))
+            .collect()
+    }
+
+    fn generate_syscalls() -> Vec<ColoredTextButton<Syscall>> {
+        [
+            Syscall::Nop, Syscall::MoveLeft, Syscall::MoveRight, Syscall::MoveTop, 
+            Syscall::MoveBottom, Syscall::Mine, Syscall::Display, Syscall::Scan, 
+            Syscall::Stored, Syscall::MaxStorage,
+        ]
+        .iter()
+        .map(|s| ColoredTextButton::new(*s, UnpackedInstruction::get_literal_color(), get_secondary_background_color()))
+        .collect()
+    }
+
+    fn create_rdimm8() -> (
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        TextInput<U8Input>
+    ) {
         let d_col = UnpackedInstruction::get_dest_color();
-        let r1_col = UnpackedInstruction::get_reg1_color();
-        let r2_col = UnpackedInstruction::get_reg2_color();
         let l_col = UnpackedInstruction::get_literal_color();
         let bg = get_secondary_background_color();
         let empty_text_bgcolor = glm::vec4(255, 255, 255, 20);
         let text_hover_color = glm::vec4(255, 255, 255, 40);
         let list_bg = get_list_bgcolor();
+        (
+            Menu::new(Self::generate_reg_opts(d_col, bg))
+                .with_gap(PADDING)
+                .with_open_bgcolor(list_bg)
+                .with_maximum_displayed(8)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            TextInput::new(empty_text_bgcolor, l_col, U8Input)
+                .with_hover_bgcolor(text_hover_color)
+                .with_max_len(3),
+        )
+    }
 
-        let generate_reg_opts = |color, bgcolor| (0..MEMORY_SIZE)
-            .map(|i| RegisterAddress::new(i as u8))
-            .map(|reg| ColoredTextButton::new(reg, color, bgcolor))
-            .collect::<Vec<_>>();
+    fn create_r1r2imm4() -> (
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        TextInput<U4Input>,
+    ) {
+        let l_col = UnpackedInstruction::get_literal_color();
+        let bg = get_secondary_background_color();
+        let r1_col = UnpackedInstruction::get_reg1_color();
+        let empty_text_bgcolor = glm::vec4(255, 255, 255, 20);
+        let text_hover_color = glm::vec4(255, 255, 255, 40);
+        let list_bg = get_list_bgcolor();
+        let r2_col = UnpackedInstruction::get_reg2_color();
+        (
+            Menu::new(Self::generate_reg_opts(r1_col, bg))
+                .with_gap(PADDING)
+                .with_open_bgcolor(list_bg)
+                .with_maximum_displayed(8)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            Menu::new(Self::generate_reg_opts(r2_col, bg))
+                .with_gap(PADDING)
+                .with_open_bgcolor(list_bg)
+                .with_maximum_displayed(8)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            TextInput::new(empty_text_bgcolor, l_col, U4Input)
+                .with_hover_bgcolor(text_hover_color)
+                .with_max_len(3),
+        )
+    }
+
+    fn create_syscall() -> Menu<ColoredTextButton<Syscall>, ColoredTextView<Syscall>> {
+        let list_bg = get_list_bgcolor();
+        Menu::new(Self::generate_syscalls())
+            .with_gap(PADDING)
+            .with_open_bgcolor(list_bg)
+            .with_maximum_displayed(8)
+            .with_scroll_bar(0.02, get_scroll_bar_color())
+    }
+
+    fn create_rd_rs_imm4() -> (
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        TextInput<U4Input>
+    ) {
+        let d_col = UnpackedInstruction::get_dest_color();
+        let r1_col = UnpackedInstruction::get_reg1_color();
+        let l_col = UnpackedInstruction::get_literal_color();
+        let bg = get_secondary_background_color();
+        let list_bg = get_list_bgcolor();
+        
+        (
+            Menu::new(Self::generate_reg_opts(d_col, bg))
+                .with_open_bgcolor(list_bg)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            Menu::new(Self::generate_reg_opts(r1_col, bg))
+                .with_open_bgcolor(list_bg)
+                .with_scroll_bar(0.02, get_scroll_bar_color()),
+            TextInput::new(glm::vec4(255, 255, 255, 20), l_col, U4Input)
+                .with_max_len(3),
+        )
+    }
+
+    fn create_rd_r1_r2() -> (
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+        Menu<ColoredTextButton<RegisterAddress>, ColoredTextView<RegisterAddress>>,
+    ) {
+        let d_col = UnpackedInstruction::get_dest_color();
+        let r1_col = UnpackedInstruction::get_reg1_color();
+        let r2_col = UnpackedInstruction::get_reg2_color();
+        let bg = get_secondary_background_color();
+        let list_bg = get_list_bgcolor();
+        (
+            Menu::new(Self::generate_reg_opts(d_col, bg)).with_open_bgcolor(list_bg),
+            Menu::new(Self::generate_reg_opts(r1_col, bg)).with_open_bgcolor(list_bg),
+            Menu::new(Self::generate_reg_opts(r2_col, bg)).with_open_bgcolor(list_bg),
+        )
+    }
+
+    fn create_rd_display(value: RegisterAddress) -> ColoredTextView<RegisterAddress> {
+        ColoredTextView::new(value,
+            UnpackedInstruction::get_dest_color(),
+            get_secondary_background_color(),
+        )
+    }
+
+    fn create_r1_display(value: RegisterAddress) -> ColoredTextView<RegisterAddress> {
+        ColoredTextView::new(value,
+            UnpackedInstruction::get_reg1_color(),
+            get_secondary_background_color(),
+        )
+    }
+
+    fn create_r2_display(value: RegisterAddress) -> ColoredTextView<RegisterAddress> {
+        ColoredTextView::new(value,
+            UnpackedInstruction::get_reg2_color(),
+            get_secondary_background_color(),
+        )
+    }
+
+    fn create_rs_display(value: RegisterAddress) -> ColoredTextView<RegisterAddress> {
+        Self::create_r1_display(value)
+    }
+
+    fn create_sys_display(sys: Syscall) -> ColoredTextView<Syscall> {
+        ColoredTextView::new(sys,
+            UnpackedInstruction::get_literal_color(),
+            get_secondary_background_color(),
+        )
+    }
+
+    fn create_operands_from_instruction(inst: &UnpackedInstruction) -> OperandState {
+        use UnpackedInstruction::*;
+        match inst {
+            Lui(rdv, immv) => {
+                let (rd, imm) = Self::create_rdimm8();
+                OperandState::RdImm8 {
+                    rd: rd.with_display_value(Self::create_rd_display(*rdv)),
+                    imm: imm.with_content(immv.to_string()),
+                }
+            },
+
+            Addi(rsv, rdv, immv) | Subi(rsv, rdv, immv) => {
+                let (rd, rs, imm) = Self::create_rd_rs_imm4();
+                OperandState::RdRsImm4 {
+                    rd: rd.with_display_value(Self::create_rd_display(*rdv)),
+                    rs: rs.with_display_value(Self::create_rs_display(*rsv)),
+                    imm: imm.with_content(immv.to_string()),
+                }
+            },
+
+            Add(r1v, r2v, rdv) | Sub(r1v, r2v, rdv) | Mul(r1v, r2v, rdv) | Div(r1v, r2v, rdv) |
+            Rem(r1v, r2v, rdv) | Seq(r1v, r2v, rdv) | Slt(r1v, r2v, rdv) | Sle(r1v, r2v, rdv) => {
+                let (rd, r1, r2) = Self::create_rd_r1_r2();
+                OperandState::RdR1R2 {
+                    rd: rd.with_display_value(Self::create_rd_display(*rdv)),
+                    r1: r1.with_display_value(Self::create_r1_display(*r1v)),
+                    r2: r2.with_display_value(Self::create_r2_display(*r2v)),
+                }
+            },
+
+            Beq(r1v, r2v, immv) | Bne(r1v, r2v, immv) | Blt(r1v, r2v, immv) | Ble(r1v, r2v, immv) => {
+                let (r1, r2, imm) = Self::create_r1r2imm4();
+                OperandState::R1R2Imm4 {
+                    r1: r1.with_display_value(Self::create_r1_display(*r1v)),
+                    r2: r2.with_display_value(Self::create_r2_display(*r2v)),
+                    imm: imm.with_content(immv.to_string()),
+                }
+            },
+
+            Sys(sysv) => {
+                OperandState::Sys {
+                    sys: Self::create_syscall().with_display_value(Self::create_sys_display(*sysv)),
+                }
+            },
+        }
+    }
+
+    fn manage_operand_menus(&mut self, ui: &mut Ui, depth: u16, format: InstructionFormat, bboxes: [RenderBox; 3]) {
+        let bg = get_secondary_background_color();
+        let empty_bg = glm::vec4(255, 255, 255, 20);
         
         let needs_init = match (&self.operands, format) {
             (Some(OperandState::RdImm8 { .. }), InstructionFormat::RdImm8) => false,
-            (Some(OperandState::RsRdImm4 { .. }), InstructionFormat::RsRdImm4) => false,
-            (Some(OperandState::R1R2Rd { .. }), InstructionFormat::R1R2Rd) => false,
+            (Some(OperandState::RdRsImm4 { .. }), InstructionFormat::RdRsImm4) => false,
+            (Some(OperandState::RdR1R2 { .. }), InstructionFormat::RdR1R2) => false,
             (Some(OperandState::R1R2Imm4 { .. }), InstructionFormat::R1R2Imm4) => false,
             (Some(OperandState::Sys { .. }), InstructionFormat::Syscall) => false,
             _ => true,
         };
 
-        let generate_syscalls = |color, bgcolor| {
-            vec![
-                Syscall::Nop, Syscall::MoveLeft, Syscall::MoveRight, Syscall::MoveTop, 
-                Syscall::MoveBottom, Syscall::Mine, Syscall::Display, Syscall::Scan, 
-                Syscall::Stored, Syscall::MaxStorage
-            ]
-            .into_iter()
-            .map(|s| ColoredTextButton::new(s, color, bgcolor))
-            .collect::<Vec<_>>()
-        };
-
         if needs_init {
             self.operands = Some(match format {
-                InstructionFormat::RdImm8 => OperandState::RdImm8 {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    imm: TextInput::new(empty_text_bgcolor, l_col, U8Input).with_hover_bgcolor(text_hover_color).with_max_len(3),
-                },
-                InstructionFormat::RsRdImm4 => OperandState::RsRdImm4 {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    rs: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    imm: TextInput::new(empty_text_bgcolor, l_col, U4Input).with_hover_bgcolor(text_hover_color).with_max_len(3),
-                },
-                InstructionFormat::R1R2Rd => OperandState::R1R2Rd {
-                    rd: Menu::new(generate_reg_opts(d_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                },
-                InstructionFormat::R1R2Imm4 => OperandState::R1R2Imm4 {
-                    r1: Menu::new(generate_reg_opts(r1_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    r2: Menu::new(generate_reg_opts(r2_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                    imm: TextInput::new(empty_text_bgcolor, l_col, U4Input).with_hover_bgcolor(text_hover_color).with_max_len(3),
-                },
-                InstructionFormat::Syscall => OperandState::Sys {
-                    sys: Menu::new(generate_syscalls(l_col, bg)).with_gap(PADDING).with_open_bgcolor(list_bg).with_maximum_displayed(8).with_scroll_bar(0.02, get_scroll_bar_color()),
-                },
+                InstructionFormat::RdImm8 => { let (rd, imm) = Self::create_rdimm8(); OperandState::RdImm8 { rd, imm } },
+                InstructionFormat::RdRsImm4 => { let (rd, rs, imm) = Self::create_rd_rs_imm4(); OperandState::RdRsImm4 { rd, rs, imm } },
+                InstructionFormat::RdR1R2 => { let (rd, r1, r2) = Self::create_rd_r1_r2(); OperandState::RdR1R2 { rd, r1, r2 } },
+                InstructionFormat::R1R2Imm4 => { let (r1, r2, imm) = Self::create_r1r2imm4(); OperandState::R1R2Imm4 { r1, r2, imm } },
+                InstructionFormat::Syscall => OperandState::Sys { sys: Self::create_syscall() },
             });
         }
 
@@ -197,23 +379,15 @@ impl InstructionEditor {
                 OperandState::RdImm8 { rd, imm } => {
                     rd.update(&bboxes[0], depth, ui);
                     imm.update(&bboxes[1], depth, ui);
-                    imm.bgcolor = if imm.get_content().is_some() {
-                        bg
-                    } else {
-                        empty_text_bgcolor
-                    };
+                    imm.bgcolor = if imm.get_content().is_some() { bg } else { empty_bg };
                 },
-                OperandState::RsRdImm4 { rd, rs, imm } => {
+                OperandState::RdRsImm4 { rd, rs, imm } => {
                     rd.update(&bboxes[0], depth, ui);
                     rs.update(&bboxes[1], depth, ui);
                     imm.update(&bboxes[2], depth, ui);
-                    imm.bgcolor = if imm.get_content().is_some() {
-                        bg
-                    } else {
-                        empty_text_bgcolor
-                    };
+                    imm.bgcolor = if imm.get_content().is_some() { bg } else { empty_bg };
                 },
-                OperandState::R1R2Rd { rd, r1, r2 } => {
+                OperandState::RdR1R2 { rd, r1, r2 } => {
                     rd.update(&bboxes[0], depth, ui);
                     r1.update(&bboxes[1], depth, ui);
                     r2.update(&bboxes[2], depth, ui);
@@ -222,15 +396,9 @@ impl InstructionEditor {
                     r1.update(&bboxes[0], depth, ui);
                     r2.update(&bboxes[1], depth, ui);
                     imm.update(&bboxes[2], depth, ui);
-                    imm.bgcolor = if imm.get_content().is_some() {
-                        bg
-                    } else {
-                        empty_text_bgcolor
-                    };
+                    imm.bgcolor = if imm.get_content().is_some() { bg } else { empty_bg };
                 },
-                OperandState::Sys { sys } => {
-                    sys.update(&bboxes[0], depth, ui);
-                },
+                OperandState::Sys { sys } => sys.update(&bboxes[0], depth, ui),
             }
         }
     }
@@ -302,12 +470,12 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
                 rd.send(context);
                 imm.send(&mut context.get_button_context());
             },
-            Some(OperandState::RsRdImm4 { rd, rs, imm }) => {
+            Some(OperandState::RdRsImm4 { rd, rs, imm }) => {
                 rd.send(context);
                 rs.send(context);
                 imm.send(&mut context.get_button_context());
             },
-            Some(OperandState::R1R2Rd { rd, r1, r2 }) => {
+            Some(OperandState::RdR1R2 { rd, r1, r2 }) => {
                 rd.send(context);
                 r1.send(context);
                 r2.send(context);

@@ -78,6 +78,11 @@ impl<T, D> Menu<T, D> {
         self.opened_container = self.opened_container.with_scroll_bar(width, color);
         self
     }
+
+    pub fn with_display_value(mut self, value: D) -> Self {
+        self.displayed_value = Some(value);
+        self
+    }
 }
 
 impl<T: HasKey, D: HasKey> Menu<T, D> {

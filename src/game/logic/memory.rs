@@ -82,7 +82,7 @@ impl<const SIZE: usize> InstructionMemory<SIZE> {
         self.memory.iter()
     }
 
-    pub fn get(&self) -> &[Instruction] {
+    pub fn get(&self) -> &[Instruction; SIZE] {
         &self.memory
     }
 }

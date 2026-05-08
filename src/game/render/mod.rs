@@ -47,7 +47,10 @@ impl<'a> RenderState<'a> {
                         id == *button &&
                         self.robot_info.as_ref().map(|r| r.robot_idx) != Some(i)
                     {
-                        self.robot_info = Some(RobotInfo::new(i));
+                        self.robot_info = Some(RobotInfo::new(
+                            i,
+                            logic_state.get_robots()[i].get_computer().instructions.get(),
+                        ));
                     }
                 }
             },

@@ -80,6 +80,11 @@ impl<T: Default + Debug> TextInput<T> {
         self.padding = padding;
         self
     }
+
+    pub fn with_content(mut self, content: String) -> Self {
+        self.content = content;
+        self
+    }
 }
 
 impl <T: Default + Debug + CharFilter + ValidateInput> TextInput<T> {
