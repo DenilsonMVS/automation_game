@@ -36,7 +36,7 @@ pub struct TextInput<T: Default + Debug> {
     content: String,
     bbox: RenderBox,
     depth: u16,
-    bgcolor: glm::U8Vec4,
+    pub bgcolor: glm::U8Vec4,
     hover_bgcolor: glm::U8Vec4,
     focus_bgcolor: glm::U8Vec4,
     color: glm::U8Vec4,

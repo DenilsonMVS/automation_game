@@ -115,7 +115,9 @@ impl Ui {
 
         match &mut self.keyboard_input {
             KeyboardInput::Text(input) => {
-                *input = event.text.clone().unwrap_or_default();
+                if event.state == ElementState::Pressed {
+                    *input = event.text.clone().unwrap_or_default();
+                }
             }
             KeyboardInput::KeyState(pressed_keys) => {
                 if let PhysicalKey::Code(code) = event.physical_key {

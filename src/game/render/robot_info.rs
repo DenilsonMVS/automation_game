@@ -1,6 +1,6 @@
 use winit::window::CursorIcon;
 use nalgebra_glm as glm;
-use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::InstructionEditor}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::RenderedButton, text_input::{CharFilter, TextInput, ValidateInput}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::computer::MEMORY_SIZE, render::{INFO_HEIGHT, INFO_WIDTH, instruction_editor::InstructionEditor}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::RenderedButton, ui_element::UiElement}};
 
 pub fn get_background_color() -> glm::U8Vec4 {
     glm::vec4(8, 17, 25, 255)
@@ -29,28 +29,12 @@ const BUTTON_WIDTH: f32 = BUTTTON_AREA_WIDTH - 2.0 * CONTAINER_PADDING;
 const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - BUTTTON_AREA_WIDTH - 2.0 * CONTAINER_PADDING;
 const INSTRUCTION_HEIGHT: f32 = (INFO_HEIGHT - (MEMORY_SIZE + 1) as f32 * CONTAINER_PADDING) / MEMORY_SIZE as f32;
 
-#[derive(Debug, Default)]
-struct NumFilter;
-
-impl CharFilter for NumFilter {
-    fn filter(&self, c: char) -> bool {
-        c.is_ascii_digit() || c == '\x08'
-    }
-}
-
-impl ValidateInput for NumFilter {
-    fn validate(&self, input: &str) -> bool {
-        input.parse::<u8>().is_ok()
-    }
-}
-
 #[derive(Debug)]
 pub struct RobotInfo {
     pub robot_idx: usize,
     outer_container: RenderedArea,
     add_instruction_button: RenderedButton,
     instructions: Dnd<InstructionEditor>,
-    text_input: TextInput<NumFilter>,
 }
 
 impl RobotInfo {
@@ -64,15 +48,6 @@ impl RobotInfo {
             add_instruction_button: RenderedButton::new(get_add_instruction_button_bgcolor())
                 .with_content("ADD", get_add_instruction_button_color()),
             instructions: dnd,
-            text_input: TextInput::new(
-                glm::vec4(50, 50, 50,255),
-                glm::vec4(150, 220, 180, 255),
-                NumFilter,
-            )
-            .with_hover_bgcolor(glm::vec4(70, 70, 70, 255))
-            .with_focus_bgcolor(glm::vec4(30, 30, 30, 255))
-            .with_padding(0.015)
-            .with_max_len(3),
         }
     }
 
@@ -115,15 +90,11 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotIn
             depth - 1, context.ui,
         );
         self.instructions.update(&Self::get_dnd_bbox(bbox), depth - 1, context);
-
-        let tmp = Self::get_add_instruction_button_container(bbox);
-        self.text_input.update(&tmp.apply_offset(glm::vec2(0.0, -0.2)), depth - 1, context.ui);
     }
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         self.instructions.send(context);
         self.add_instruction_button.send(&mut context.get_button_context());
         self.outer_container.send(&mut (context.simple_shape_renderer, context.groups));
-        self.text_input.send(&mut context.get_button_context());
     }
 }
