@@ -10,6 +10,7 @@ pub enum ActionType {
     NoneRelease,
     AreaRelease(AreaId, u16),
     Grabbing(AreaId, u16),
+    Typing(AreaId, u16),
 }
 
 #[derive(Debug)]

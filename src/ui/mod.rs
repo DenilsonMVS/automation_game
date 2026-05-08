@@ -1,8 +1,8 @@
 use std::time::Instant;
 
-use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
+use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::{ActionType, Events}, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
 use nalgebra_glm as glm;
-use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey}, window::Window};
+use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey, SmolStr}, window::Window};
 
 pub mod simple_area;
 pub mod simple_area_manager;
@@ -14,6 +14,7 @@ pub mod rendered_button;
 pub mod dnd;
 pub mod menu;
 pub mod scroll_area;
+pub mod text_input;
 
 const CAMERA_ZOOM_SENSITIVITY: f32 = 0.05;
 const CAMERA_MOVEMENT_SENSITIVITY: f32 = 1.0;
@@ -46,6 +47,11 @@ pub enum MouseAction {
     Released,
 }
 
+pub enum KeyboardInput {
+    Text(SmolStr),
+    KeyState([bool; 4]),
+}
+
 pub struct Ui {
     ndc_mouse_position: glm::Vec2,
     previous_ndc_mouse_position: glm::Vec2,
@@ -54,8 +60,8 @@ pub struct Ui {
     previous_frame_time: Instant,
     mouse_action: Option<MouseAction>,
     pub camera: Camera,
-    pressed_keys: [bool; 4],
     scroll: f32,
+    pub keyboard_input: KeyboardInput,
 
     pub simple_area_manager: SimpleManager,
     pub events: Events,
@@ -84,7 +90,7 @@ impl Ui {
             mouse_action: None,
 
             camera: Camera::new(glm::vec2(0.0, 0.0), 1.0),
-            pressed_keys: [false; 4],
+            keyboard_input: KeyboardInput::KeyState([false; 4]),
 
             simple_area_manager: SimpleManager::new(),
 
@@ -99,24 +105,40 @@ impl Ui {
     }
 
     pub fn on_key_event(&mut self, event: &KeyEvent) {
-        match event.physical_key {
-            PhysicalKey::Code(code) =>
-                if let Some(idx) = map_key_to_index(code) {
-                    self.pressed_keys[idx] = event.state == ElementState::Pressed;
-                },
-            _ => (),
-        };
+        let is_typing = matches!(self.events.mouse_actions, ActionType::Typing(_, _));
+
+        match (&self.keyboard_input, is_typing) {
+            (KeyboardInput::Text(_), false) => self.keyboard_input = KeyboardInput::KeyState([false; 4]),
+            (KeyboardInput::KeyState(_), true) => self.keyboard_input = KeyboardInput::Text(Default::default()),
+            _ => {},
+        }
+
+        match &mut self.keyboard_input {
+            KeyboardInput::Text(input) => {
+                *input = event.text.clone().unwrap_or_default();
+            }
+            KeyboardInput::KeyState(pressed_keys) => {
+                if let PhysicalKey::Code(code) = event.physical_key {
+                    if let Some(idx) = map_key_to_index(code) {
+                        pressed_keys[idx] = event.state == ElementState::Pressed;
+                    }
+                }
+            }
+        }
     }
 
     pub fn get_ndc_render_box(&self) -> RenderBox {
         RenderBox {
-            min: self.screen_to_ndc_position(glm::vec2(0.0, self.window_size.y)),
-            max: self.screen_to_ndc_position(glm::vec2(self.window_size.x, 0.0)),
+            min: self.screen_to_ndc_position(glm::vec2(0.0, 0.0)),
+            max: self.screen_to_ndc_position(glm::vec2(self.window_size.x, self.window_size.y)),
         }
     }
 
     pub fn update_mouse_position(&mut self, screen_position: glm::Vec2) {
-        self.ndc_mouse_position = self.screen_to_ndc_position(screen_position);
+        self.ndc_mouse_position = self.screen_to_ndc_position(glm::vec2(
+            screen_position.x,
+            self.window_size.y - screen_position.y,
+        ));
     }
 
     pub fn on_mouse_scroll(&mut self, scroll: f32) {
@@ -134,12 +156,14 @@ impl Ui {
             glm::vec2( 1.0,  0.0),
         ];
 
-        for (idx, state) in self.pressed_keys.iter().enumerate() {
-            if *state {
-                self.camera = Camera::new(
-                    self.camera.get_position() + self.get_delta() * camera_movement_offsets[idx] / self.camera.get_zoom() * CAMERA_MOVEMENT_SENSITIVITY,
-                    self.camera.get_zoom(),
-                );
+        if let KeyboardInput::KeyState(pressed_keys) = self.keyboard_input {
+            for (idx, state) in pressed_keys.iter().enumerate() {
+                if *state {
+                    self.camera = Camera::new(
+                        self.camera.get_position() + self.get_delta() * camera_movement_offsets[idx] / self.camera.get_zoom() * CAMERA_MOVEMENT_SENSITIVITY,
+                        self.camera.get_zoom(),
+                    );
+                }
             }
         }
 
@@ -172,6 +196,10 @@ impl Ui {
         self.previous_ndc_mouse_position = self.ndc_mouse_position;
         self.mouse_action = None;
         self.scroll = 0.0;
+
+        if let KeyboardInput::Text(input) = &mut self.keyboard_input {
+            *input = Default::default();
+        }
     }
 
     pub fn update_window_size(&mut self, window_size: glm::Vec2) {
@@ -195,14 +223,13 @@ impl Ui {
 
     pub fn screen_to_ndc_position(&self, position: glm::Vec2) -> glm::Vec2 {
         let window_size = self.window_size;
-        let normalized = position.component_div(&window_size);
-        let inverted = glm::vec2(normalized.x * 2.0 - 1.0, 1.0 - 2.0 * normalized.y);
+        let normalized = position.component_div(&window_size) * 2.0 - glm::vec2(1.0, 1.0);
         if window_size.x > window_size.y {
             let ratio = window_size.x / window_size.y;
-            glm::vec2(inverted.x * ratio, inverted.y)
+            glm::vec2(normalized.x * ratio, normalized.y)
         } else {
             let ratio = window_size.y / window_size.x;
-            glm::vec2(inverted.x, inverted.y * ratio)
+            glm::vec2(normalized.x, normalized.y * ratio)
         }
     }
 

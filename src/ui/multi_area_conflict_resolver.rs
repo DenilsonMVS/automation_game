@@ -10,7 +10,10 @@ pub struct AreaConflict {
 }
 
 fn resolve_scroll(conflicts: &[AreaConflict]) -> AreaId {
-    let scroll_winner = conflicts.iter().filter(|area| area.scroll).min_by_key(|area| area.depth);
+    let scroll_winner = conflicts
+        .iter()
+        .filter(|area| area.scroll)
+        .min_by_key(|area| area.depth);
     scroll_winner.map(|w| w.id).unwrap_or(AreaId::default())
 }
 
@@ -21,15 +24,27 @@ fn resolve_mouse_actions(
     prev_actions: &ActionType,
 ) -> ActionType {
     let winner = conflicts.iter().min_by_key(|area| area.depth);
+    
     if let Some(winner) = winner && winner.cursor == CursorIcon::Grab && mouse_action == Some(MouseAction::Pressed) {
         window.set_cursor(CursorIcon::Grabbing);
         return ActionType::Grabbing(winner.id, winner.depth);
-    } else if let ActionType::Grabbing(_, _) = prev_actions && mouse_action != Some(MouseAction::Released) {
+    }
+    
+    if let ActionType::Grabbing(_, _) = prev_actions && mouse_action != Some(MouseAction::Released) {
         window.set_cursor(CursorIcon::Grabbing);
         return *prev_actions;
     }
 
     window.set_cursor(winner.map(|w| w.cursor).unwrap_or(CursorIcon::Default));
+    
+    if let Some(winner) = winner && winner.cursor == CursorIcon::Text && mouse_action == Some(MouseAction::Pressed) {
+        return ActionType::Typing(winner.id, winner.depth);
+    }
+
+    if let ActionType::Typing(_, _) = *prev_actions && mouse_action != Some(MouseAction::Pressed) {
+        return *prev_actions;
+    }
+
     match (mouse_action, winner) {
         (Some(MouseAction::Pressed), None) => ActionType::NonePress,
         (Some(MouseAction::Pressed), Some(area)) => ActionType::AreaPress(area.id, area.depth),

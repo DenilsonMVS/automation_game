@@ -125,6 +125,8 @@ impl<'a> ApplicationState<'a> for State<'a> {
                     ElementState::Released => self.ui.mouse_released(),
                 },
             WindowEvent::KeyboardInput { event, .. } => {
+                self.ui.on_key_event(event);
+
                 if event.repeat {
                     return;
                 }
@@ -141,8 +143,6 @@ impl<'a> ApplicationState<'a> for State<'a> {
                         _ => {},
                     }
                 }
-
-                self.ui.on_key_event(event);
             },
             _ => (),
         }
