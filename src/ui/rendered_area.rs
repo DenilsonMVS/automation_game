@@ -7,9 +7,9 @@ use crate::{graphics::renderer::{positioning::RenderBox, scissor_group::ScissorS
 pub struct RenderedArea {
     pub id: AreaId,
     cursor: CursorIcon,
-    depth: u16,
+    pub depth: u16,
     hovered: bool,
-    bbox: RenderBox,
+    pub bbox: RenderBox,
     pub color: glm::U8Vec4,
     pub hover_color: glm::U8Vec4,
 }

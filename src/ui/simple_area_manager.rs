@@ -28,6 +28,18 @@ impl AreaId {
     }
 }
 
+impl Ord for AreaId {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl PartialOrd for AreaId {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Default for AreaId {
     fn default() -> Self {
         Self::NONE
@@ -59,6 +71,10 @@ impl SimpleManager {
 
         self.simple_areas.clear();
         conflicts
+    }
+
+    pub fn next_id(&self) -> AreaId {
+        AreaId::new(self.simple_areas.len() as u32)
     }
 
     pub fn get(&self, id: AreaId) -> Option<&SimpleArea> {

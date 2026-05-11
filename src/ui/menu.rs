@@ -11,6 +11,7 @@ pub trait HasKey {
 #[derive(Debug)]
 pub struct Menu<T, D> {
     open_button_id: AreaId,
+    end_content_id: AreaId,
     items: Vec<T>,
     displayed_value: Option<D>,
     bbox: RenderBox,
@@ -35,6 +36,7 @@ impl<T, D> Menu<T, D> {
             opened: false,
             displayed_value: None,
             hovered: false,
+            end_content_id: AreaId::default(),
         }
     }
 
@@ -112,10 +114,10 @@ where
 
         let mouse_actions = context.get_ui().events.mouse_actions;
         match mouse_actions {
-            ActionType::AreaPress(id, depth) => {
+            ActionType::AreaPress(id, _) => {
                 if id == self.open_button_id {
                     self.opened = true;
-                } else if depth > self.depth {
+                } else if id < self.open_button_id || id >= self.end_content_id {
                     self.opened = false;
                 }
             },
@@ -154,6 +156,8 @@ where
         if let Some(displayed_value) = &mut self.displayed_value {
             displayed_value.update(bbox, depth - 1, context);
         }
+
+        self.end_content_id = context.get_ui().simple_area_manager.next_id();
     }
 
     fn send(&mut self, context: &mut SC) {

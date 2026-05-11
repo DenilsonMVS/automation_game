@@ -1,7 +1,7 @@
 use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, InstructionFormat, InstructionId, RegisterAddress, Syscall, UnpackedInstruction}}, render::{colored_text::{ColoredTextButton, ColoredTextView}, robot_info::{get_list_bgcolor, get_secondary_background_color}}}, graphics::renderer::{fonts::Font, positioning::{PositionMode, RenderBox}}, ui::{Ui, dnd::HasId, menu::Menu, rendered_button::{RenderedButton, RenderedButtonContext}, simple_area_manager::AreaId, text_input::{CharFilter, TextInput, ValidateInput}, ui_element::UiElement}};
 use nalgebra_glm as glm;
 
-const PADDING: f32 = 0.01;
+pub const PADDING: f32 = 0.01;
 
 fn get_delete_button_color() -> glm::U8Vec4 {
     glm::vec4(200, 50, 60, 255)
@@ -307,10 +307,12 @@ impl InstructionEditor {
         (
             Menu::new(Self::generate_reg_opts(d_col, bg))
                 .with_open_bgcolor(list_bg)
-                .with_scroll_bar(0.02, get_scroll_bar_color()),
+                .with_scroll_bar(0.02, get_scroll_bar_color())
+                .with_maximum_displayed(8),
             Menu::new(Self::generate_reg_opts(r1_col, bg))
                 .with_open_bgcolor(list_bg)
-                .with_scroll_bar(0.02, get_scroll_bar_color()),
+                .with_scroll_bar(0.02, get_scroll_bar_color())
+                .with_maximum_displayed(8),
             TextInput::new(glm::vec4(255, 255, 255, 20), l_col, U4Input)
                 .with_max_len(3),
         )
@@ -327,9 +329,18 @@ impl InstructionEditor {
         let bg = get_secondary_background_color();
         let list_bg = get_list_bgcolor();
         (
-            Menu::new(Self::generate_reg_opts(d_col, bg)).with_open_bgcolor(list_bg),
-            Menu::new(Self::generate_reg_opts(r1_col, bg)).with_open_bgcolor(list_bg),
-            Menu::new(Self::generate_reg_opts(r2_col, bg)).with_open_bgcolor(list_bg),
+            Menu::new(Self::generate_reg_opts(d_col, bg))
+                .with_open_bgcolor(list_bg)
+                .with_scroll_bar(0.02, get_scroll_bar_color())
+                .with_maximum_displayed(8),
+            Menu::new(Self::generate_reg_opts(r1_col, bg))
+                .with_open_bgcolor(list_bg)
+                .with_scroll_bar(0.02, get_scroll_bar_color())
+                .with_maximum_displayed(8),
+            Menu::new(Self::generate_reg_opts(r2_col, bg))
+                .with_open_bgcolor(list_bg)
+                .with_scroll_bar(0.02, get_scroll_bar_color())
+                .with_maximum_displayed(8),
         )
     }
 

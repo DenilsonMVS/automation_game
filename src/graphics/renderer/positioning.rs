@@ -109,6 +109,10 @@ impl RenderBox {
         }
     }
 
+    pub fn get_center(&self) -> glm::Vec2 {
+        (self.max + self.min) * 0.5
+    }
+
     pub fn get_size(&self) -> glm::Vec2 {
         self.max - self.min
     }

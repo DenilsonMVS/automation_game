@@ -2,6 +2,12 @@ use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 use crate::{graphics::renderer::{fonts::{Font, TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}, scissor_group::ScissorStack, simple_shape_renderer::SimpleShapeRenderer}, ui::{Ui, events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 
+#[derive(Debug)]
+pub enum Content {
+    Str(&'static str),
+    Icon(fn(bbox: &RenderBox, depth: u16, color: glm::U8Vec4, simple_shape_renderer: &mut SimpleShapeRenderer, groups: &mut ScissorStack)),
+}
+
 #[derive(Debug, Default)]
 pub struct RenderedButton {
     pub id: AreaId,
@@ -14,7 +20,7 @@ pub struct RenderedButton {
     bgcolor: glm::U8Vec4,
     hover_bgcolor: glm::U8Vec4,
     disabled_bgcolor: glm::U8Vec4,
-    content: &'static str,
+    content: Option<Content>,
     padding: f32,
 }
 
@@ -33,8 +39,8 @@ impl RenderedButton {
         self
     }
 
-    pub fn with_content(mut self, content: &'static str, color: glm::U8Vec4) -> Self {
-        self.content = content;
+    pub fn with_content(mut self, content: Content, color: glm::U8Vec4) -> Self {
+        self.content = Some(content);
         self.color = color;
         self.hover_color = color;
         self
@@ -93,17 +99,24 @@ impl<'a, 'b> UiElement<Ui, RenderedButtonContext<'a, 'b>, ()> for RenderedButton
 
         if color.w != 0 {
             let content_box = self.bbox.cut(self.padding);
-            font.add_text(
-                &TextRenderConfig::new(&
-                    [(self.content, color)],
-                    content_box.get_top_left(), content_box.get_size().y,
-                )
-                .set_mode(PositionMode::TopLeft)
-                .set_align(TextAlign::Center)
-                .set_depth(self.depth - 1)
-                .set_max_line_width(content_box.get_size().x),
-                context.groups,
-            );
+            match self.content {
+                Some(Content::Str(content)) => font.add_text(
+                    &TextRenderConfig::new(&
+                        [(content, color)],
+                        content_box.get_top_left(), content_box.get_size().y,
+                    )
+                    .set_mode(PositionMode::TopLeft)
+                    .set_align(TextAlign::Center)
+                    .set_depth(self.depth - 1)
+                    .set_max_line_width(content_box.get_size().x),
+                    context.groups,
+                ),
+                Some(Content::Icon(content)) => content(
+                    &content_box, self.depth - 1, color,
+                    simple_shape_renderer, groups,
+                ),
+                _ => {},
+            }
         }
     }
 }

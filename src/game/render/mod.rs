@@ -12,7 +12,9 @@ pub mod robot;
 pub mod world;
 pub mod robot_info;
 pub mod instruction_editor;
+pub mod instruction_view;
 pub mod colored_text;
+pub mod go_back_arrow;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -49,7 +51,7 @@ impl<'a> RenderState<'a> {
                     {
                         self.robot_info = Some(RobotInfo::new(
                             *robot_id,
-                            logic_state.get_robots()[*robot_id as usize].get_computer().instructions.get(),
+                            *logic_state.get_robots()[*robot_id as usize].get_computer().instructions.get(),
                         ));
                     }
                 }
