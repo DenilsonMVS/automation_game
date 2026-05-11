@@ -120,4 +120,8 @@ impl Computer {
     pub fn get(&self) -> &[Instruction] {
         self.instructions.get()
     }
+
+    pub fn get_data(&self) -> &[u8; MEMORY_SIZE] {
+        self.registers.get()
+    }
 }

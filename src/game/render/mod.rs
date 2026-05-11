@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::RobotInfo, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{GameState, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::{RobotInfo, RobotInfoContext}, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
@@ -15,6 +15,7 @@ pub mod instruction_editor;
 pub mod instruction_view;
 pub mod colored_text;
 pub mod go_back_arrow;
+pub mod memory_visualizer;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -59,8 +60,15 @@ impl<'a> RenderState<'a> {
             _ => {},
         }
 
-        if let Some(robot_info) = &mut self.robot_info {
-            let ndc_bbox = context.ui.get_ndc_render_box();
+        if
+            let Some(robot_info) = &mut self.robot_info &&
+            let Some(robot) = logic_state.get_robots().get(robot_info.robot_id as usize)
+        {
+            let context = &mut RobotInfoContext {
+                mc: context,
+                data: robot.computer.registers.get(),
+            };
+            let ndc_bbox = context.mc.ui.get_ndc_render_box();
             robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
             if let Some(code) = robot_info.finished() {
                 logic_state.write_code(robot_info.robot_id as usize, code);
@@ -78,7 +86,14 @@ impl<'a> RenderState<'a> {
     }
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
-        if let Some(robot_info) = &mut self.robot_info {
+        if
+            let Some(robot_info) = &mut self.robot_info &&
+            let Some(robot) = logic_state.get_robots().get(robot_info.robot_id as usize)
+        {
+            let context = &mut RobotInfoContext {
+                mc: context,
+                data: robot.computer.registers.get(),
+            };
             robot_info.send(context);
         }
 

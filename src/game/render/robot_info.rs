@@ -2,7 +2,7 @@ use std::array;
 
 use winit::window::CursorIcon;
 use nalgebra_glm as glm;
-use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, Syscall, UnpackedInstruction}}, render::{INFO_HEIGHT, INFO_WIDTH, go_back_arrow, instruction_editor::InstructionEditor, instruction_view::InstructionView}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::{Content, RenderedButton}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{computer::MEMORY_SIZE, instruction::{Instruction, Syscall, UnpackedInstruction}, memory::PROGRAM_COUNTER_IDX}, render::{INFO_HEIGHT, INFO_WIDTH, go_back_arrow, instruction_editor::{InstructionEditor, PADDING}, instruction_view::InstructionView, memory_visualizer::{self, SpecialHighlight}}}, graphics::renderer::positioning::{PositionMode, RenderBox}, ui::{dnd::Dnd, events::ActionType, rendered_area::RenderedArea, rendered_button::{Content, RenderedButton}, ui_element::UiElement}};
 
 pub fn get_background_color() -> glm::U8Vec4 {
     glm::vec4(8, 17, 25, 255)
@@ -171,6 +171,12 @@ impl RobotView {
             glm::vec2(INSTRUCTION_WIDTH, INSTRUCTION_HEIGHT),
         )
     }
+
+    fn update_execution_state(&mut self, executed_instruction: usize) {
+        for (i, inst) in self.instructions.iter_mut().enumerate() {
+            inst.update_execution_state(i == executed_instruction);
+        }
+    }
 }
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotView {
@@ -184,7 +190,6 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotVi
 
     fn send(&mut self, context: &mut MainContext<'a, 'b>) {
         self.edit_button.send(&mut context.get_button_context());
-
         for inst in self.instructions.iter_mut() {
             inst.send(context);
         }
@@ -224,18 +229,78 @@ impl RobotInfo {
             None
         }
     }
+
+    fn get_mem_bbox(bbox: &RenderBox) -> RenderBox {
+        RenderBox::new_simple(
+            bbox.get_bottom_right() + glm::vec2(-PADDING, PADDING),
+            PositionMode::BottomRight,
+            glm::vec2(BUTTTON_AREA_WIDTH - PADDING * 2.0, 0.3),
+        )
+    }
 }
 
-impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotInfo {
-    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MainContext) {
+impl UnpackedInstruction {
+    fn get_highlights(&self) -> SpecialHighlight {
+        let mut highlight = SpecialHighlight {
+            r1: None,
+            r2: None,
+            rd: None,
+        };
+
+        match self {
+            UnpackedInstruction::Lui(rd, _) => {
+                highlight.rd = Some(*rd);
+            }
+
+            UnpackedInstruction::Addi(rd, rs, _) | 
+            UnpackedInstruction::Subi(rd, rs, _) => {
+                highlight.rd = Some(*rd);
+                highlight.r1 = Some(*rs);
+            }
+
+            UnpackedInstruction::Add(rd, r1, r2) |
+            UnpackedInstruction::Sub(rd, r1, r2) |
+            UnpackedInstruction::Mul(rd, r1, r2) |
+            UnpackedInstruction::Div(rd, r1, r2) |
+            UnpackedInstruction::Rem(rd, r1, r2) |
+            UnpackedInstruction::Seq(rd, r1, r2) |
+            UnpackedInstruction::Slt(rd, r1, r2) |
+            UnpackedInstruction::Sle(rd, r1, r2) => {
+                highlight.rd = Some(*rd);
+                highlight.r1 = Some(*r1);
+                highlight.r2 = Some(*r2);
+            }
+
+            UnpackedInstruction::Beq(r1, r2, _) |
+            UnpackedInstruction::Bne(r1, r2, _) |
+            UnpackedInstruction::Blt(r1, r2, _) |
+            UnpackedInstruction::Ble(r1, r2, _) => {
+                highlight.r1 = Some(*r1);
+                highlight.r2 = Some(*r2);
+            }
+
+            UnpackedInstruction::Sys(_) => {}
+        }
+
+        highlight
+    }
+}
+
+pub struct RobotInfoContext<'a, 'b, 'c> {
+    pub mc: &'c mut MainContext<'a, 'b>,
+    pub data: &'c [u8; MEMORY_SIZE],
+}
+
+impl<'a, 'b, 'c> UiElement<RobotInfoContext<'a, 'b, 'c>, RobotInfoContext<'a, 'b, 'c>, ()> for RobotInfo {
+    fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut RobotInfoContext) {
         match &mut self.mode {
             RobotInfoMode::Edit(edit) => {
-                if matches!(context.ui.events.mouse_actions, ActionType::AreaPress(id, _) if id == self.back_button.id) {
+                if matches!(context.mc.ui.events.mouse_actions, ActionType::AreaPress(id, _) if id == self.back_button.id) {
                     self.mode = RobotInfoMode::View(RobotView::new(edit.original_instructions));
                 }
             },
             RobotInfoMode::View(view) => {
-                if matches!(context.ui.events.mouse_actions, ActionType::AreaPress(id, _) if id == view.edit_button.id) {
+                if matches!(context.mc.ui.events.mouse_actions, ActionType::AreaPress(id, _) if id == view.edit_button.id) {
                     let instructions: [_; MEMORY_SIZE] = array::from_fn(|i| view.instructions[i].get_instruction());
                     self.mode = RobotInfoMode::Edit(RobotEdit::new(instructions));
                 }
@@ -244,19 +309,42 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for RobotIn
 
         self.back_button.disabled = matches!(self.mode, RobotInfoMode::View(_));
         match &mut self.mode {
-            RobotInfoMode::Edit(edit) => edit.update(bbox, depth, context),
-            RobotInfoMode::View(view) => view.update(bbox, depth, context),
+            RobotInfoMode::Edit(edit) => {
+                edit.update(bbox, depth, context.mc);
+            },
+            RobotInfoMode::View(view) => {
+                view.update(bbox, depth, context.mc);
+                view.update_execution_state((context.data[PROGRAM_COUNTER_IDX] as usize) % MEMORY_SIZE);
+            }
         }
-        self.outer_container.update(bbox, depth, context.ui);
-        self.back_button.update(&get_back_button_bbox(bbox), depth - 1, context.ui);
+        self.outer_container.update(bbox, depth, context.mc.ui);
+        self.back_button.update(&get_back_button_bbox(bbox), depth - 1, context.mc.ui);
     }
 
-    fn send(&mut self, context: &mut MainContext<'a, 'b>) {
-        self.back_button.send(&mut context.get_button_context());
+    fn send(&mut self, context: &mut RobotInfoContext<'a, 'b, 'c>) {
+        let mut main_context = &mut context.mc;
+        self.back_button.send(&mut main_context.get_button_context());
+
+        let executed_instruction = (context.data[PROGRAM_COUNTER_IDX] & 0xf) as usize;
+        let instruction = match &self.mode {
+            RobotInfoMode::Edit(edit) => edit.original_instructions[executed_instruction],
+            RobotInfoMode::View(view) => view.instructions[executed_instruction].get_instruction(),
+        }.unpack();
+
+        memory_visualizer::send(
+            main_context.simple_shape_renderer,
+            main_context.font,
+            main_context.groups,
+            context.data,
+            &Self::get_mem_bbox(&self.outer_container.bbox),
+            self.outer_container.depth - 1,
+            instruction.get_highlights(),
+        );
+
         match &mut self.mode {
-            RobotInfoMode::Edit(edit) => edit.send(context),
-            RobotInfoMode::View(view) => view.send(context),
+            RobotInfoMode::Edit(edit) => edit.send(&mut main_context),
+            RobotInfoMode::View(view) => view.send(&mut main_context),
         }
-        self.outer_container.send(&mut (context.simple_shape_renderer, context.groups));
+        self.outer_container.send(&mut (main_context.simple_shape_renderer, main_context.groups));
     }
 }

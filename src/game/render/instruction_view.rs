@@ -19,6 +19,14 @@ impl InstructionView {
     pub fn get_instruction(&self) -> Instruction {
         self.instruction
     }
+
+    pub fn update_execution_state(&mut self, being_executed: bool) {
+        self.rendered_area.color = if being_executed {
+            get_secondary_background_color().map(|x| x.saturating_add(25))
+        } else {
+            get_secondary_background_color()
+        };
+    }
 }
 
 impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for InstructionView {
@@ -26,21 +34,21 @@ impl<'a, 'b> UiElement<MainContext<'a, 'b>, MainContext<'a, 'b>, ()> for Instruc
         self.rendered_area.update(bbox, depth, context.ui);
     }
 
-    fn send(&mut self, context: &mut MainContext) {
+    fn send(&mut self, mc: &mut MainContext) {
         if self.instruction.unpack() == Instruction::default().unpack() {
             return;
         }
 
-        self.rendered_area.send(&mut (context.simple_shape_renderer, context.groups));
+        self.rendered_area.send(&mut (mc.simple_shape_renderer, mc.groups));
 
         let inner_box = self.rendered_area.bbox.cut(instruction_editor::PADDING);
         let unpacked = self.instruction.unpack();
         let instruction_text = unpacked.format_assembly();
         let colors = unpacked.format_with_colors(&instruction_text);
-        context.font.add_text(&TextRenderConfig::new(
+        mc.font.add_text(&TextRenderConfig::new(
             &colors,
             inner_box.get_top_left(),
             inner_box.get_size().y,
-        ).set_mode(PositionMode::TopLeft).set_depth(self.rendered_area.depth - 1), context.groups);
+        ).set_mode(PositionMode::TopLeft).set_depth(self.rendered_area.depth - 1), mc.groups);
     }
 }

@@ -1,6 +1,5 @@
 use crate::game::logic::instruction::Instruction;
 
-
 const ZERO_IDX: usize = 0;
 pub const PROGRAM_COUNTER_IDX: usize = 1;
 
@@ -50,6 +49,10 @@ impl<T: Copy + Default, const SIZE: usize> RegisterMemory<T, SIZE> {
         let val3 = self.read(input_addr3);
         let result = func(val1, val2, val3);
         self.write(out_addr, result);
+    }
+
+    pub fn get(&self) -> &[T; SIZE] {
+        &self.memory
     }
 }
 
