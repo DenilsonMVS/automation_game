@@ -10,13 +10,13 @@ pub enum ActionType {
     NoneRelease,
     AreaRelease(AreaId, u16),
     Grabbing(AreaId, u16),
-    Typing(AreaId, u16),
 }
 
 #[derive(Debug)]
 pub struct Events {
     pub mouse_actions: ActionType,
     pub scroll: AreaId,
+    pub typing: AreaId,
 }
 
 impl Default for Events {
@@ -24,6 +24,7 @@ impl Default for Events {
         Self {
             mouse_actions: ActionType::NoneHover,
             scroll: AreaId::default(),
+            typing: AreaId::default(),
         }
     }
 }

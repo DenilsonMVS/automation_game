@@ -36,15 +36,6 @@ fn resolve_mouse_actions(
     }
 
     window.set_cursor(winner.map(|w| w.cursor).unwrap_or(CursorIcon::Default));
-    
-    if let Some(winner) = winner && winner.cursor == CursorIcon::Text && mouse_action == Some(MouseAction::Pressed) {
-        return ActionType::Typing(winner.id, winner.depth);
-    }
-
-    if let ActionType::Typing(_, _) = *prev_actions && mouse_action != Some(MouseAction::Pressed) {
-        return *prev_actions;
-    }
-
     match (mouse_action, winner) {
         (Some(MouseAction::Pressed), None) => ActionType::NonePress,
         (Some(MouseAction::Pressed), Some(area)) => ActionType::AreaPress(area.id, area.depth),
@@ -53,6 +44,23 @@ fn resolve_mouse_actions(
         (None, None) => ActionType::NoneHover,
         (None, Some(area)) => ActionType::AreaHover(area.id, area.depth),
     }
+}
+
+fn resolve_typing(
+    mouse_action: Option<MouseAction>,
+    conflicts: &[AreaConflict],
+    prev_typing: AreaId,
+) -> AreaId {
+    let winner = conflicts.iter().min_by_key(|area| area.depth);
+
+    if mouse_action == Some(MouseAction::Pressed) {
+        if let Some(winner) = winner && winner.cursor == CursorIcon::Text {
+            return winner.id;
+        }
+        return Default::default();
+    }
+
+    prev_typing
 }
 
 pub fn resolve_multi_area_conflict(
@@ -64,5 +72,6 @@ pub fn resolve_multi_area_conflict(
     Events {
         mouse_actions: resolve_mouse_actions(mouse_action, conflicts, window, &prev_events.mouse_actions),
         scroll: resolve_scroll(conflicts),
+        typing: resolve_typing(mouse_action, conflicts, prev_events.typing),
     }
 }

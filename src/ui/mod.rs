@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::{ActionType, Events}, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
+use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey, SmolStr}, window::Window};
 
@@ -105,8 +105,7 @@ impl Ui {
     }
 
     pub fn on_key_event(&mut self, event: &KeyEvent) {
-        let is_typing = matches!(self.events.mouse_actions, ActionType::Typing(_, _));
-
+        let is_typing = self.events.typing != AreaId::default();
         match (&self.keyboard_input, is_typing) {
             (KeyboardInput::Text(_), false) => self.keyboard_input = KeyboardInput::KeyState([false; 4]),
             (KeyboardInput::KeyState(_), true) => self.keyboard_input = KeyboardInput::Text(Default::default()),

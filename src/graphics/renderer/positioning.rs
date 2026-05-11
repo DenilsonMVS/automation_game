@@ -75,6 +75,28 @@ impl RenderBox {
         return Self { min, max };
     }
 
+    pub fn clamp_to_bounds(&self, bounds: &RenderBox) -> RenderBox {
+        let new_min = glm::vec2(
+            self.min.x.max(bounds.min.x),
+            self.min.y.max(bounds.min.y),
+        );
+
+        let new_max = glm::vec2(
+            self.max.x.min(bounds.max.x),
+            self.max.y.min(bounds.max.y),
+        );
+
+        let safe_max = glm::vec2(
+            new_max.x.max(new_min.x),
+            new_max.y.max(new_min.y),
+        );
+
+        Self {
+            min: new_min,
+            max: safe_max,
+        }
+    }
+
     pub fn recenter(&self, camera: &Camera) -> Self {
         Self {
             min: recenter(self.min, camera),

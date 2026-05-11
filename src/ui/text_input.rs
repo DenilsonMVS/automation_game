@@ -5,7 +5,7 @@ use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
 const BAR_STATUS_SWITCH: f32 = 0.5;
-const CURSOR_PROPORTIONAL_WIDTH: f32 = 0.1;
+const CURSOR_PROPORTIONAL_WIDTH: f32 = 0.2;
 
 #[derive(Debug, Default)]
 struct BarStatus {
@@ -109,23 +109,21 @@ impl<'a, 'b, T: Default + Debug + CharFilter + ValidateInput> UiElement<Ui, Rend
             focused.on_time_passed(delta);
         }
 
-        if
-            matches!(ui.events.mouse_actions, ActionType::Typing(id, _) if id == self.area_id) &&
-            let KeyboardInput::Text(input) = &ui.keyboard_input
-        {
+        if ui.events.typing == self.area_id {
             if self.focused.is_none() {
                 self.focused = Some(Default::default());
             }
-            for c in input.chars() {
-                if c == '\x08' {
-                    self.content.pop();
-                } else if self.text_handling.filter(c) && self.content.len() < self.max_len as usize {
-                    self.content.push(c);
+            
+            if let KeyboardInput::Text(input) = &ui.keyboard_input {
+                for c in input.chars() {
+                    if c == '\x08' {
+                        self.content.pop();
+                    } else if self.text_handling.filter(c) && self.content.len() < self.max_len as usize {
+                        self.content.push(c);
+                    }
                 }
             }
-        }
-
-        if matches!(ui.events.mouse_actions, ActionType::AreaPress(_, _) | ActionType::NonePress) {
+        } else {
             self.focused = None;
         }
 

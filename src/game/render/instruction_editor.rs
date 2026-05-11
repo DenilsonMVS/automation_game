@@ -306,10 +306,12 @@ impl InstructionEditor {
         
         (
             Menu::new(Self::generate_reg_opts(d_col, bg))
+                .with_gap(PADDING)
                 .with_open_bgcolor(list_bg)
                 .with_scroll_bar(0.02, get_scroll_bar_color())
                 .with_maximum_displayed(8),
             Menu::new(Self::generate_reg_opts(r1_col, bg))
+                .with_gap(PADDING)
                 .with_open_bgcolor(list_bg)
                 .with_scroll_bar(0.02, get_scroll_bar_color())
                 .with_maximum_displayed(8),
@@ -330,14 +332,17 @@ impl InstructionEditor {
         let list_bg = get_list_bgcolor();
         (
             Menu::new(Self::generate_reg_opts(d_col, bg))
+                .with_gap(PADDING)
                 .with_open_bgcolor(list_bg)
                 .with_scroll_bar(0.02, get_scroll_bar_color())
                 .with_maximum_displayed(8),
             Menu::new(Self::generate_reg_opts(r1_col, bg))
+                .with_gap(PADDING)
                 .with_open_bgcolor(list_bg)
                 .with_scroll_bar(0.02, get_scroll_bar_color())
                 .with_maximum_displayed(8),
             Menu::new(Self::generate_reg_opts(r2_col, bg))
+                .with_gap(PADDING)
                 .with_open_bgcolor(list_bg)
                 .with_scroll_bar(0.02, get_scroll_bar_color())
                 .with_maximum_displayed(8),

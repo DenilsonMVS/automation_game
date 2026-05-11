@@ -2,7 +2,7 @@
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
-use crate::{MainContext, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{HasUi, Ui, events::ActionType, menu::{HasKey, MenuContext}, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{HasUi, Ui, events::ActionType, menu::{HasKey, MenuContext, ResetIds}, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 
 #[derive(Debug)]
 pub struct ColoredTextView<Key> {
@@ -99,15 +99,21 @@ impl<Key: Copy> HasKey for ColoredTextButton<Key> {
     }
 }
 
+impl<Key: std::fmt::Display + Clone> ResetIds for ColoredTextButton<Key> {
+    fn reset_ids(&mut self) {
+        self.view.area_id = Default::default();
+    }
+}
+
 impl<'a, 'b, 'c, Key: std::fmt::Display + Clone> UiElement<MenuContext<'c, Ui, ColoredTextView<Key>>, MainContext<'a, 'b>, ()> for ColoredTextButton<Key> {
     fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut MenuContext<'c, Ui, ColoredTextView<Key>>) {
-        self.view.update(bbox, depth, context.base_context);
-
         let ui = context.base_context.get_ui();
         if matches!(ui.events.mouse_actions, ActionType::AreaPress(id, _) if id == self.view.area_id) {
             *context.opened = false;
             *context.displayed_value = Some(self.view.create_display_clone());
         }
+
+        self.view.update(&bbox.clamp_to_bounds(&context.parent_bbox), depth, context.base_context);
     }
 
     fn send(&mut self, context: &mut MainContext) {

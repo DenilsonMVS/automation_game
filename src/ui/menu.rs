@@ -93,8 +93,13 @@ impl<T: HasKey, D: HasKey> Menu<T, D> {
     }
 }
 
+pub trait ResetIds {
+    fn reset_ids(&mut self);
+}
+
 pub struct MenuContext<'a, C, D> {
     pub base_context: &'a mut C,
+    pub parent_bbox: RenderBox,
     pub displayed_value: &'a mut Option<D>,
     pub opened: &'a mut bool,
 }
@@ -106,7 +111,7 @@ where
     // D é puramente visual (ex: ColoredTextView)
     D: UiElement<UC, SC, GOC>, 
     // T é interativo e "conversa" com o menu (ex: ColoredTextButton)
-    for<'b> T: UiElement<MenuContext<'b, UC, D>, SC, GOC>,
+    for<'b> T: UiElement<MenuContext<'b, UC, D>, SC, GOC> + ResetIds,
 {
     fn update(&mut self, bbox: &RenderBox, depth: u16, context: &mut UC) {
         self.bbox = *bbox;
@@ -117,7 +122,15 @@ where
             ActionType::AreaPress(id, _) => {
                 if id == self.open_button_id {
                     self.opened = true;
+                    for item in self.items.iter_mut() {
+                        item.reset_ids();
+                    }
                 } else if id < self.open_button_id || id >= self.end_content_id {
+                    self.opened = false;
+                }
+            },
+            ActionType::Grabbing(id, _) => {
+                if id < self.open_button_id || id >= self.end_content_id {
                     self.opened = false;
                 }
             },
@@ -148,6 +161,7 @@ where
                     base_context: context,
                     displayed_value: &mut self.displayed_value,
                     opened: &mut self.opened,
+                    parent_bbox: outer_box,
                 };
                 item.update(&item_bbox, depth - 101, &mut item_context);
             }
