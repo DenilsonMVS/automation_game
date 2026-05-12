@@ -50,9 +50,9 @@ void main() {
     vec2 bl = tl + br - tr;
     vec2 positions[4] = vec2[](tl, bl, tr, br);
 
-    vec4 transformed = u_projection * vec4(positions[gl_VertexID % 4], 0, 1);
+    vec4 transformed = u_projection * vec4(positions[gl_VertexID], 0, 1);
 	gl_Position = vec4(transformed.xy, a_depth, 1.0);
 
-    v_tex_coord = mix(uv_min, uv_max, OFFSETS[gl_VertexID % 4]);
+    v_tex_coord = mix(uv_min, uv_max, OFFSETS[gl_VertexID]);
     v_color = a_color;
 }

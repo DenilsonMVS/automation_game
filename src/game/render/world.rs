@@ -23,6 +23,7 @@ impl GridPosition {
                 },
                 id: 1,
             },
+            Self::Obstacle => ChunkPosition { id: 2, size: 255 },
         }
     }
 }

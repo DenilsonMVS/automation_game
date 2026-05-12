@@ -59,8 +59,8 @@ impl MiningModule {
                         world.get_position(position.map(|x| x.round() as i32))
                         .unwrap_or(GridPosition::None);
                     match position {
-                        GridPosition::None => Some(0),
                         GridPosition::Resource(amount) => Some(amount as u8),
+                        _ => None,
                     }
                 } else {
                     self.remaining_time -= delta;

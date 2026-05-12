@@ -17,15 +17,16 @@ const vec2 OFFSETS[4] = vec2[](
     vec2( 0.5,  0.5)
 );
 
-const vec3 COLORS[2] = vec3[](
+const vec3 COLORS[3] = vec3[](
     vec3(0.0,   0.0,  0.0),
-    vec3(0.078, 0.59, 0.078)
+    vec3(0.078, 0.59, 0.078),
+    vec3(0.1, 0.1, 0.2)
 );
 
 void main() {
     int chunk_size = 1 << u_cunk_mag;
     vec2 center_position = vec2(ivec2(gl_InstanceID & (chunk_size - 1), gl_InstanceID >> u_cunk_mag));
-    vec2 vertice_rel_position = center_position + a_size * OFFSETS[gl_VertexID % 4];
+    vec2 vertice_rel_position = center_position + a_size * OFFSETS[gl_VertexID];
     vec2 vertice_global_position = u_chunk_start_pos + vertice_rel_position;
 
     vec2 transformed = (u_vp * vec4(vertice_global_position, 0, 1)).xy;

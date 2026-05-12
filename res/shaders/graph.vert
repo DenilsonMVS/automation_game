@@ -26,9 +26,9 @@ void main() {
     );
 
     vec2 bottom_left = center - dimensions * 0.5;
-    vec2 pos = bottom_left + dimensions * mults[gl_VertexID % 4];
+    vec2 pos = bottom_left + dimensions * mults[gl_VertexID];
 
     vec4 t_pos = u_projection * vec4(pos, 0, 1);
     gl_Position = vec4(t_pos.xy, 0.99, 1);
-    v_coord = mults[gl_VertexID % 4];
+    v_coord = mults[gl_VertexID];
 }

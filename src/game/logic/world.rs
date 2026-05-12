@@ -11,6 +11,7 @@ pub const CHUNK_SIZE: usize = 1 << CHUNK_MAG;
 pub enum GridPosition {
     None,
     Resource(u8),
+    Obstacle,
 }
 
 impl Default for GridPosition {
@@ -115,7 +116,6 @@ impl World {
         let Some(chunk) = self.get_chunk_mut(global_position) else { return false };
         let position = chunk.get_position_mut(global_position);
         return match position {
-            GridPosition::None => false,
             GridPosition::Resource(quantity) => {
                 if *quantity == 1 {
                     *position = GridPosition::None;
@@ -124,7 +124,8 @@ impl World {
                 }
                 chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
                 return true;
-            }
+            },
+            _ => false,
         };
     }
 }

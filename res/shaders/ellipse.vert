@@ -28,8 +28,8 @@ void main() {
         a_bottom_right
     );
 
-    vec4 proj_pos = u_vp * vec4(positions[gl_VertexID % 4], 0, 1);
+    vec4 proj_pos = u_vp * vec4(positions[gl_VertexID], 0, 1);
     gl_Position = vec4(proj_pos.xy, a_depth, 1.0);
     v_color = a_color;
-    v_uv = RELATIVE_POSITIONS[gl_VertexID % 4];
+    v_uv = RELATIVE_POSITIONS[gl_VertexID];
 }
