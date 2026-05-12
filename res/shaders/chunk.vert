@@ -1,7 +1,7 @@
 
 #version 460 core
 
-layout (location = 0) in vec3 a_color; 
+layout (location = 0) in uint a_id; 
 layout (location = 1) in float a_size;
 
 uniform mat4 u_vp;
@@ -17,6 +17,11 @@ const vec2 OFFSETS[4] = vec2[](
     vec2( 0.5,  0.5)
 );
 
+const vec3 COLORS[2] = vec3[](
+    vec3(0.0,   0.0,  0.0),
+    vec3(0.078, 0.59, 0.078)
+);
+
 void main() {
     int chunk_size = 1 << u_cunk_mag;
     vec2 center_position = vec2(ivec2(gl_InstanceID & (chunk_size - 1), gl_InstanceID >> u_cunk_mag));
@@ -26,5 +31,5 @@ void main() {
     vec2 transformed = (u_vp * vec4(vertice_global_position, 0, 1)).xy;
     gl_Position = vec4(transformed, 0.999999, 1);
 
-    v_color = vec4(a_color, 1);
+    v_color = vec4(COLORS[a_id], 1);
 }

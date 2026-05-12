@@ -60,7 +60,7 @@ impl MiningModule {
                         .unwrap_or(GridPosition::None);
                     match position {
                         GridPosition::None => Some(0),
-                        GridPosition::Resource(amount, _) => Some(amount as u8),
+                        GridPosition::Resource(amount) => Some(amount as u8),
                     }
                 } else {
                     self.remaining_time -= delta;

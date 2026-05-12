@@ -7,8 +7,7 @@ use crate::{game::logic::world::{CHUNK_MAG, CHUNK_SIZE, Chunk, GridPosition, Wor
 #[derive(Debug, Clone, Copy, GlVertex)]
 #[vertex(divisor = 1)]
 struct ChunkPosition {
-    #[normalized]
-    color: glm::U8Vec3,
+    id: u8,
     #[normalized]
     size: u8,
 }
@@ -16,13 +15,13 @@ struct ChunkPosition {
 impl GridPosition {
     fn get_render_info(&self) -> ChunkPosition {
         match self {
-            Self::None => ChunkPosition { color: glm::vec3(0, 0,0), size: 0 },
-            Self::Resource(quantity, original_size_base) => ChunkPosition {
+            Self::None => ChunkPosition { id: 0, size: 0 },
+            Self::Resource(quantity) => ChunkPosition {
                 size: {
-                    let max_qtd = Self::get_starting_amount(*original_size_base);
+                    let max_qtd = 255;
                     ((*quantity as f32 / max_qtd as f32).sqrt() * 255.0).clamp(0.0, 255.0) as u8
                 },
-                color: glm::vec3(20, 150, 20),
+                id: 1,
             },
         }
     }
