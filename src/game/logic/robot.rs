@@ -8,6 +8,10 @@ const EPS: f32 = 0.0001;
 const MAX_ACCELLERATION: f32 = 1.0;
 const DRAG: f32 = 1.0;
 
+pub fn get_robot_default_color() -> glm::U8Vec3 {
+    glm::vec3(120, 200, 190)
+}
+
 #[derive(Debug)]
 pub struct Robot {
     movement_module: MovementModule,
@@ -24,7 +28,7 @@ impl Robot {
             computer: Computer::new(instructions),
             movement_module: MovementModule::new(position),
             mining_module: MiningModule::new(16),
-            color: glm::vec3(120, 200, 190),
+            color: get_robot_default_color(),
             context: ComputeContext::Computer,
             display_module: DisplayModule::new(),
         }

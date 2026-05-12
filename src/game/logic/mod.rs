@@ -1,5 +1,6 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::{computer::{MEMORY_SIZE, PC, X0, X2, X3, X14, X15}, instruction::{Instruction, Syscall}, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::World}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{computer::MEMORY_SIZE, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::World}, stable_index_vector::StableIndexVector};
+use crate::game::logic::fabricator::Direction;
 
 pub mod world;
 pub mod compute_context;
@@ -10,113 +11,27 @@ pub mod memory;
 pub mod mining_module;
 pub mod movement_module;
 pub mod robot;
+pub mod fabricator;
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
 pub struct GameState {
     world: World,
     robots: StableIndexVector<Robot>,
+    pub fabricators: Vec<Fabricator>,
     pub robot_info_opened: Option<usize>,
     last_instruction_time_passed: f32,
 }
 
 impl GameState {
     pub fn new() -> Self {
-        let mut robots = StableIndexVector::with_capacity(5);
-        robots.push(Robot::new(glm::vec2(0.0, 0.0), [
-            Instruction::new_lui(X14, 1),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_sys(Syscall::Scan),
-            Instruction::new_addi(X15, X3, 0),
-            Instruction::new_beq(X3, X0, 6),
-            Instruction::new_sys(Syscall::Mine),
-            Instruction::new_sub(X3, X15, X3),
-            Instruction::new_add(X2, X15, X2),
-            Instruction::new_addi(X2, X15, 0),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_bne(X3, X0, 9),
-            Instruction::new_sys(Syscall::MoveRight),
-            Instruction::new_lui(PC, 1),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-        ]));
-        robots.push(Robot::new(glm::vec2(0.0, -1.0), [
-            Instruction::new_lui(X14, 1),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_sys(Syscall::Scan),
-            Instruction::new_addi(X15, X3, 0),
-            Instruction::new_beq(X3, X0, 6),
-            Instruction::new_sys(Syscall::Mine),
-            Instruction::new_sub(X3, X15, X3),
-            Instruction::new_add(X2, X15, X2),
-            Instruction::new_addi(X2, X15, 0),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_bne(X3, X0, 9),
-            Instruction::new_sys(Syscall::MoveRight),
-            Instruction::new_lui(PC, 1),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-        ]));
-        robots.push(Robot::new(glm::vec2(0.0, -2.0), [
-            Instruction::new_lui(X14, 1),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_sys(Syscall::Scan),
-            Instruction::new_addi(X15, X3, 0),
-            Instruction::new_beq(X3, X0, 6),
-            Instruction::new_sys(Syscall::Mine),
-            Instruction::new_sub(X3, X15, X3),
-            Instruction::new_add(X2, X15, X2),
-            Instruction::new_addi(X2, X15, 0),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_bne(X3, X0, 9),
-            Instruction::new_sys(Syscall::MoveRight),
-            Instruction::new_lui(PC, 1),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-        ]));
-        robots.push(Robot::new(glm::vec2(0.0, 1.0), [
-            Instruction::new_lui(X14, 1),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_sys(Syscall::Scan),
-            Instruction::new_addi(X15, X3, 0),
-            Instruction::new_beq(X3, X0, 6),
-            Instruction::new_sys(Syscall::Mine),
-            Instruction::new_sub(X3, X15, X3),
-            Instruction::new_add(X2, X15, X2),
-            Instruction::new_addi(X2, X15, 0),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_bne(X3, X0, 9),
-            Instruction::new_sys(Syscall::MoveRight),
-            Instruction::new_lui(PC, 1),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-        ]));
-        robots.push(Robot::new(glm::vec2(0.0, 2.0), [
-            Instruction::new_lui(X14, 1),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_sys(Syscall::Scan),
-            Instruction::new_addi(X15, X3, 0),
-            Instruction::new_beq(X3, X0, 6),
-            Instruction::new_sys(Syscall::Mine),
-            Instruction::new_sub(X3, X15, X3),
-            Instruction::new_add(X2, X15, X2),
-            Instruction::new_addi(X2, X15, 0),
-            Instruction::new_sys(Syscall::Display),
-            Instruction::new_bne(X3, X0, 9),
-            Instruction::new_sys(Syscall::MoveRight),
-            Instruction::new_lui(PC, 1),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-            Instruction::new_sys(Syscall::Nop),
-        ]));
+        let mut robots = StableIndexVector::new();
+        robots.push(Robot::new(glm::vec2(0.0, 0.0), [Default::default(); _]));
 
         Self {
             last_instruction_time_passed: 0.0,
             world: World::new(),
+            fabricators: vec![Fabricator::new(glm::vec2(-5, 5), Direction::Left, Direction::Right)],
             robot_info_opened: None,
             robots,
         }
@@ -134,6 +49,10 @@ impl GameState {
 
         for robot in self.robots.iter_unordered_mut() {
             robot.update(is_instruction_tick, &mut self.world, context);
+        }
+
+        for fabricator in self.fabricators.iter_mut() {
+            fabricator.update(context, &mut self.world, &mut self.robots);
         }
     }
 

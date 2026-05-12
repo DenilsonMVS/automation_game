@@ -16,6 +16,7 @@ pub mod instruction_view;
 pub mod colored_text;
 pub mod go_back_arrow;
 pub mod memory_visualizer;
+pub mod fabricator;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -99,6 +100,10 @@ impl<'a> RenderState<'a> {
 
         for robot in logic_state.get_robots().iter_unordered() {
             robot.send(context);
+        }
+
+        for fabricator in logic_state.fabricators.iter() {
+            fabricator.send(context);
         }
 
         self.world.send(logic_state.get_world());

@@ -8,6 +8,34 @@ pub const ROBOT_DEPTH: u16 = 50000;
 const WEELS_DEPTH: u16 = ROBOT_DEPTH + 1;
 const WEEL_COLOR: [u8; 3] = [45, 40, 40];
 
+pub(super) fn send_ghost(position: glm::Vec2, color: glm::U8Vec3, alpha: u8, context: &mut MainContext) {
+    let edge_offsets = [
+        (glm::vec2(-1.0, -1.0), PositionMode::BottomLeft),
+        (glm::vec2( 1.0, -1.0), PositionMode::BottomRight),
+        (glm::vec2( 1.0,  1.0), PositionMode::TopRight),
+        (glm::vec2(-1.0,  1.0), PositionMode::TopLeft),
+    ];
+
+    for (offset, _) in edge_offsets {
+        context.simple_shape_renderer.send_ellipse(
+            position + offset * WEEL_DISTANCE,
+            glm::vec2(WEEL_DIAMETER, WEEL_DIAMETER),
+            PositionMode::Center,
+            glm::vec4(WEEL_COLOR[0], WEEL_COLOR[1], WEEL_COLOR[2], alpha),
+            WEELS_DEPTH, Some(&context.ui.camera),
+            context.groups
+        );
+    }
+
+    let render_box = Robot::get_render_box(position);
+    context.simple_shape_renderer.send_render_box(
+        &render_box,
+        glm::vec4(color.x, color.y, color.z, alpha),
+        ROBOT_DEPTH, Some(&context.ui.camera),
+        context.groups
+    );
+}
+
 impl Robot {
     pub fn draw_vec(&self, vec: glm::Vec2, color: glm::U8Vec4, context: &mut MainContext) {
         let size = glm::length(&vec);
@@ -33,35 +61,9 @@ impl Robot {
         )
     }
 
-    pub fn send(
-        &self,
-        context: &mut MainContext,
-    ) {
-        let edge_offsets = [
-            (glm::vec2(-1.0, -1.0), PositionMode::BottomLeft),
-            (glm::vec2( 1.0, -1.0), PositionMode::BottomRight),
-            (glm::vec2( 1.0,  1.0), PositionMode::TopRight),
-            (glm::vec2(-1.0,  1.0), PositionMode::TopLeft),
-        ];
-
-        for (offset, _) in edge_offsets {
-            context.simple_shape_renderer.send_ellipse(
-                self.get_position() + offset * WEEL_DISTANCE,
-                glm::vec2(WEEL_DIAMETER, WEEL_DIAMETER),
-                PositionMode::Center,
-                glm::vec4(WEEL_COLOR[0], WEEL_COLOR[1], WEEL_COLOR[2], 255),
-                WEELS_DEPTH, Some(&context.ui.camera),
-                context.groups
-            );
-        }
-
-        let render_box = Self::get_render_box(self.get_position());
-        context.simple_shape_renderer.send_render_box(
-            &render_box,
-            self.get_color(),
-            ROBOT_DEPTH, Some(&context.ui.camera),
-            context.groups
-        );
+    pub fn send(&self, context: &mut MainContext) {
+        let color = self.get_color();
+        send_ghost(self.get_position(), glm::vec3(color.x, color.y, color.z), 255, context);
 
         self.get_display_module().send(context.font, context.groups, self.get_position(), context.ui.get_camera());
     }
