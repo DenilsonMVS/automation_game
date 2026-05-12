@@ -128,4 +128,26 @@ impl World {
             _ => false,
         };
     }
+
+    pub fn try_release(&mut self, global_position: glm::IVec2) -> bool {
+        let Some(chunk) = self.get_chunk_mut(global_position) else { return false };
+        let position = chunk.get_position_mut(global_position);
+        match position {
+            GridPosition::Resource(quantity) => {
+                if *quantity == u8::MAX {
+                    false
+                } else {
+                    *quantity += 1;
+                    chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
+                    true
+                }
+            },
+            GridPosition::None => {
+                *position = GridPosition::Resource(1);
+                chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
+                true
+            }
+            _ => false,
+        }
+    }
 }

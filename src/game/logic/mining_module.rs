@@ -67,6 +67,24 @@ impl MiningModule {
                     None
                 }
             },
+            Syscall::Release => {
+                if delta >= self.remaining_time {
+                    self.remaining_time = 0.0;
+                    if self.stored == 0 {
+                        return Some(0);
+                    }
+
+                    if world.try_release(position.map(|x| x.round() as i32)) {
+                        self.stored -= 1;
+                        Some(1)
+                    } else {
+                        Some(0)
+                    }
+                } else {
+                    self.remaining_time -= delta;
+                    None
+                }
+            },
             _ => None,
         }
     }

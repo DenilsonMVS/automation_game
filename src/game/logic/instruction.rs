@@ -409,6 +409,7 @@ pub enum Syscall {
     Scan,
     Stored,
     MaxStorage,
+    Release,
 }
 
 impl fmt::Display for Syscall {
@@ -424,6 +425,7 @@ impl fmt::Display for Syscall {
             Syscall::Scan => "scan",
             Syscall::Stored => "stored",
             Syscall::MaxStorage => "max_storage",
+            Syscall::Release => "release",
         };
         write!(f, "{}", name)
     }
@@ -441,6 +443,7 @@ impl Syscall {
             7 => Self::Scan,
             8 => Self::Stored,
             9 => Self::MaxStorage,
+            10 => Self::Release,
             _ => Self::Nop,
         }
     }
@@ -456,6 +459,7 @@ impl Syscall {
             Self::Scan => 7,
             Self::Stored => 8,
             Self::MaxStorage => 9,
+            Self::Release => 10,
             Self::Nop => 0,
         }
     }

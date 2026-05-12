@@ -53,7 +53,7 @@ impl Robot {
                                 self.context = ComputeContext::MovementComputer;
                                 self.movement_module.receive_syscall(sys);
                             },
-                            Syscall::Mine | Syscall::Stored | Syscall::MaxStorage | Syscall::Scan => {
+                            Syscall::Mine | Syscall::Stored | Syscall::MaxStorage | Syscall::Scan | Syscall::Release => {
                                 self.context = ComputeContext::MiningComputer;
                                 self.mining_module.receive_syscall(sys);
                             },
