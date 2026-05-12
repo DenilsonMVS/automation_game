@@ -10,6 +10,7 @@ pub struct ColoredTextView<Key> {
     key: Key,
     color: glm::U8Vec4,
     bbox: RenderBox,
+    logical_bbox: RenderBox,
     depth: u16,
     bgcolor: glm::U8Vec4,
     hover_bgcolor: glm::U8Vec4,
@@ -22,6 +23,7 @@ impl<Key: Clone> ColoredTextView<Key> {
             key,
             color,
             bbox: Default::default(),
+            logical_bbox: Default::default(),
             depth: 0,
             bgcolor,
             hover_bgcolor: bgcolor.map(|x| x.saturating_add(15)),
@@ -35,6 +37,7 @@ impl<Key: Clone> ColoredTextView<Key> {
             key: self.key.clone(),
             color: self.color,
             bbox: Default::default(),
+            logical_bbox: Default::default(),
             depth: 0,
             bgcolor: self.bgcolor,
             hover_bgcolor: self.hover_bgcolor,
@@ -51,7 +54,7 @@ impl<'a, 'b, 'c, Key: std::fmt::Display> UiElement<Ui, MainContext<'a, 'b>, ()> 
 
         self.hovered = matches!(ui.events.mouse_actions, ActionType::AreaHover(id, _) if id == self.area_id);
 
-        self.area_id = ui.simple_area_manager.push(SimpleArea::new(*bbox, depth).with_cursor(CursorIcon::Pointer));
+        self.area_id = ui.simple_area_manager.push(SimpleArea::new(self.logical_bbox, depth).with_cursor(CursorIcon::Pointer));
     }
 
     fn send(&mut self, context: &mut MainContext) {
@@ -113,7 +116,8 @@ impl<'a, 'b, 'c, Key: std::fmt::Display + Clone> UiElement<MenuContext<'c, Ui, C
             *context.displayed_value = Some(self.view.create_display_clone());
         }
 
-        self.view.update(&bbox.clamp_to_bounds(&context.parent_bbox), depth, context.base_context);
+        self.view.logical_bbox = bbox.clamp_to_bounds(&context.parent_bbox);
+        self.view.update(bbox, depth, context.base_context);
     }
 
     fn send(&mut self, context: &mut MainContext) {
