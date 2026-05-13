@@ -3,6 +3,7 @@ pub mod game;
 pub mod open_simplex;
 pub mod ui;
 pub mod stable_index_vector;
+pub mod kd_tree;
 
 use std::num::{NonZeroU32};
 
