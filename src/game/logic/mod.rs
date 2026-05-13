@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::{computer::MEMORY_SIZE, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::World}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{computer::{MEMORY_SIZE, X0, X2}, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::World}, stable_index_vector::StableIndexVector};
 use crate::game::logic::fabricator::Direction;
 
 pub mod world;
@@ -12,6 +12,7 @@ pub mod mining_module;
 pub mod movement_module;
 pub mod robot;
 pub mod fabricator;
+pub mod collision;
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
@@ -26,7 +27,24 @@ pub struct GameState {
 impl GameState {
     pub fn new() -> Self {
         let mut robots = StableIndexVector::new();
-        robots.push(Robot::new(glm::vec2(0.0, 0.0), [Default::default(); _]));
+        robots.push(Robot::new(glm::vec2(0.0, 0.0), [
+            Instruction::new_lui(X2, 5),
+            Instruction::new_sys(instruction::Syscall::MoveLeft),
+            Instruction::new_subi(X2, X2, 1),
+            Instruction::new_bne(X2, X0, 13),
+            Instruction::new_sys(instruction::Syscall::MoveTop),
+            Instruction::new_beq(X0, X0, 14),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ]));
 
         Self {
             last_instruction_time_passed: 0.0,
@@ -54,6 +72,8 @@ impl GameState {
         for fabricator in self.fabricators.iter_mut() {
             fabricator.update(context, &mut self.world, &mut self.robots);
         }
+
+        self.handle_collisions();
     }
 
     pub fn write_code(&mut self, robot_id: usize, code: [Instruction; MEMORY_SIZE]) {

@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::{logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}}};
+use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
 
 const EPS: f32 = 0.0001;
 
@@ -14,7 +14,7 @@ pub fn get_robot_default_color() -> glm::U8Vec3 {
 
 #[derive(Debug)]
 pub struct Robot {
-    movement_module: MovementModule,
+    pub movement_module: MovementModule,
     mining_module: MiningModule,
     display_module: DisplayModule,
     pub computer: Computer,
@@ -122,10 +122,6 @@ impl Robot {
         let next_speed = speed + all_acc * delta;
 
         self.movement_module.update_sensor(next_position, next_speed);
-    }
-
-    pub fn get_position(&self) -> glm::Vec2 {
-        self.movement_module.get_position()
     }
 
     pub fn get_color(&self) -> glm::U8Vec4 {

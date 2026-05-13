@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::{MainContext, game::logic::{robot::Robot, world::World}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{robot::Robot, world::World}, graphics::renderer::positioning::{PositionMode, RenderBox}, stable_index_vector::StableIndexVector};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -46,18 +46,44 @@ impl Fabricator {
         self.time_next_phase -= delta;
         if self.time_next_phase <= 0.0 {
             let input_pos = self.position + self.input.get_offset();
-            if world.try_mine(input_pos) {
-                self.phase += 1;
-                self.time_next_phase += PHASE_TIME;                
-            }
+            let output_pos = self.position + self.output.get_offset();
+            let output_bbox = Robot::get_render_box(output_pos.map(|x| x as f32));
 
-            if self.phase == PHASE_AMOUNT {
-                self.phase = 0;
-                let output_pos = self.position + self.output.get_offset();
-                robots.push(Robot::new(output_pos.map(|x| x as f32), [Default::default(); _]));
+            if self.phase != 0 || robots.iter_unordered()
+                .fold(true, |prev, robot| {
+                    let bbox = Robot::get_render_box(robot.movement_module.get_position());
+                    prev && !bbox.intersects(&output_bbox)
+                })
+            {
+                if world.try_mine(input_pos) {
+                    self.phase += 1;
+                    self.time_next_phase += PHASE_TIME;                
+                }
+
+                if self.phase == PHASE_AMOUNT {
+                    self.phase = 0;
+                    
+                    robots.push(Robot::new(output_pos.map(|x| x as f32), [Default::default(); _]));
+                }
             }
         }
 
         self.time_next_phase = self.time_next_phase.max(0.0);
+    }
+
+    pub fn get_bbox(&self) -> RenderBox {
+        RenderBox::new_simple(
+            self.position.map(|x| x as f32),
+            PositionMode::Center,
+            glm::vec2(1.0, 1.0)
+        )
+    }
+
+    pub fn get_possible_ghost_position(&self) -> glm::Vec2 {
+        (self.position + self.output.get_offset()).map(|x| x as f32)
+    }
+
+    pub fn get_ghost_position(&self) -> Option<glm::Vec2> {
+        (self.phase != 0).then_some(self.get_possible_ghost_position())
     }
 }

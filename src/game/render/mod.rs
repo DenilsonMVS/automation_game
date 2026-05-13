@@ -80,7 +80,7 @@ impl<'a> RenderState<'a> {
         self.robot_buttons.clear();
         for (i, robot) in logic_state.get_robots().iter_enumerate_unordered() {
             self.robot_buttons.push((i as u32, context.ui.simple_area_manager.push(SimpleArea::new(
-                Robot::get_render_box(robot.get_position()).world_to_ndc_pos(&context.ui.camera),
+                Robot::get_render_box(robot.movement_module.get_position()).world_to_ndc_pos(&context.ui.camera),
                 ROBOT_DEPTH,
             ).with_cursor(CursorIcon::Pointer))));
         }

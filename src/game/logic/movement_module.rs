@@ -8,6 +8,7 @@ const SPEED_TOLERANCE: f32 = 0.01;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MovementModule {
+    prev_position: glm::Vec2,
     position: glm::Vec2,
     speed: glm::Vec2,
     target: glm::Vec2,
@@ -16,13 +17,19 @@ pub struct MovementModule {
 impl MovementModule {
     pub fn new(position: glm::Vec2) -> Self {
         Self {
+            prev_position: position,
             position,
             speed: glm::vec2(0.0, 0.0),
             target: position,
         }
     }
 
+    pub fn set_position(&mut self, position: glm::Vec2) {
+        self.position = position;
+    }
+
     pub fn update_sensor(&mut self, position: glm::Vec2, speed: glm::Vec2) {
+        self.prev_position = self.position;
         self.position = position;
         self.speed = speed;
     }
@@ -53,6 +60,10 @@ impl MovementModule {
 
     pub fn get_position(&self) -> glm::Vec2 {
         self.position
+    }
+
+    pub fn get_prev_position(&self) -> glm::Vec2 {
+        self.prev_position
     }
 
     pub fn get_speed(&self) -> glm::Vec2 {

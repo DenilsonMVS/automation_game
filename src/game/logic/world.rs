@@ -69,7 +69,7 @@ impl Chunk {
 }
 
 pub struct World {
-    chunks: HashMap<glm::I32Vec2, Chunk>,
+    pub chunks: HashMap<glm::I32Vec2, Chunk>,
 }
 
 impl World {

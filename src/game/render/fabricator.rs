@@ -49,10 +49,8 @@ impl Fabricator {
             context.groups,
         );
 
-        context.simple_shape_renderer.send_rectangle(
-            fpos,
-            glm::vec2(1.0, 1.0),
-            PositionMode::Center,
+        context.simple_shape_renderer.send_render_box(
+            &self.get_bbox(),
             glm::vec4(100, 100, 100, 255),
             ROBOT_DEPTH,
             Some(context.ui.get_camera()),

@@ -40,15 +40,15 @@ impl Robot {
     pub fn draw_vec(&self, vec: glm::Vec2, color: glm::U8Vec4, context: &mut MainContext) {
         let size = glm::length(&vec);
         context.simple_shape_renderer.send_rotated_rectangle(
-            self.get_position(),
+            self.movement_module.get_position(),
             glm::vec2(0.5, 0.04) * size,
             PositionMode::CenterLeft,
             glm::vec2(-vec.y, vec.x),
             color, 2000, Some(&context.ui.camera), context.groups);
         
         context.simple_shape_renderer.send_symmetrical_triangle(
-            self.get_position() + vec * 0.6,
-            self.get_position() + vec * 0.5,
+            self.movement_module.get_position() + vec * 0.6,
+            self.movement_module.get_position() + vec * 0.5,
             size * 0.1,
             color, 2000, Some(&context.ui.camera), context.groups);
     }
@@ -63,8 +63,8 @@ impl Robot {
 
     pub fn send(&self, context: &mut MainContext) {
         let color = self.get_color();
-        send_ghost(self.get_position(), glm::vec3(color.x, color.y, color.z), 255, context);
+        send_ghost(self.movement_module.get_position(), glm::vec3(color.x, color.y, color.z), 255, context);
 
-        self.get_display_module().send(context.font, context.groups, self.get_position(), context.ui.get_camera());
+        self.get_display_module().send(context.font, context.groups, self.movement_module.get_position(), context.ui.get_camera());
     }
 }
