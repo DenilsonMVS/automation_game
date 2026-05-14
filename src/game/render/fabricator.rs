@@ -50,7 +50,7 @@ impl Fabricator {
         );
 
         context.simple_shape_renderer.send_render_box(
-            &self.get_bbox(),
+            &Self::get_bbox(self.position.map(|x| x as f32)),
             glm::vec4(100, 100, 100, 255),
             ROBOT_DEPTH,
             Some(context.ui.get_camera()),

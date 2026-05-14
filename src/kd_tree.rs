@@ -72,7 +72,7 @@ impl<Id: Clone> KdTree<Id> {
         Self { positions, ids }
     }
 
-    pub fn find_in_range(&self, query: glm::Vec2, max_dist: f32, output: &mut Vec<Id>) {
+    pub fn find_in_range(&self, query: glm::Vec2, max_dist: f32, output: &mut Vec<(Id, glm::Vec2)>) {
         if self.positions.is_empty() {
             return;
         }
@@ -85,7 +85,7 @@ impl<Id: Clone> KdTree<Id> {
         end: usize,
         query: glm::Vec2,
         max_dist: f32,
-        output: &mut Vec<Id>,
+        output: &mut Vec<(Id, glm::Vec2)>
     ) {
         if start >= end { return; }
 
@@ -94,9 +94,8 @@ impl<Id: Clone> KdTree<Id> {
 
         let dx = (query.x - current_pos.x).abs();
         let dy = (query.y - current_pos.y).abs();
-        
-        if dx + dy <= max_dist {
-            output.push(self.ids[mid].clone());
+        if dx.max(dy) <= max_dist {
+            output.push((self.ids[mid].clone(), self.positions[mid]));
         }
 
         let axis_dist = query.x - current_pos.x;
@@ -120,18 +119,17 @@ impl<Id: Clone> KdTree<Id> {
         end: usize,
         query: glm::Vec2,
         max_dist: f32,
-        output: &mut Vec<Id>,
+        output: &mut Vec<(Id, glm::Vec2)>,
     ) {
         if start >= end { return; }
 
         let mid = start + (end - start) / 2;
         let current_pos = self.positions[mid];
-
+        
         let dx = (query.x - current_pos.x).abs();
         let dy = (query.y - current_pos.y).abs();
-        
-        if dx + dy <= max_dist {
-            output.push(self.ids[mid].clone());
+        if dx.max(dy) <= max_dist {
+            output.push((self.ids[mid].clone(), self.positions[mid]));
         }
 
         let axis_dist = query.y - current_pos.y;

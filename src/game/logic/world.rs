@@ -7,7 +7,7 @@ use crate::open_simplex::{FractalSample, OpenSimplex};
 pub const CHUNK_MAG: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << CHUNK_MAG;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GridPosition {
     None,
     Resource(u8),
@@ -27,7 +27,14 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    fn new(chunk_id: glm::IVec2, noise: &OpenSimplex) -> Self {
+    pub fn new() -> Self {
+        Self {
+            grid: [[GridPosition::None; _]; _],
+            pending_updates: vec![],
+        }
+    }
+
+    pub fn new_proc_generated(chunk_id: glm::IVec2, noise: &OpenSimplex) -> Self {
         let start_position = chunk_id.map(|x| x as f32) * CHUNK_SIZE as f32;
         let grid = array::from_fn(|line| array::from_fn(|column| {
             let current_position = start_position + glm::vec2(column as f32, line as f32);
@@ -66,6 +73,10 @@ impl Chunk {
     pub fn get_grid(&self) -> &[[GridPosition; CHUNK_SIZE]; CHUNK_SIZE] {
         &self.grid
     }
+
+    pub fn get_grid_mut(&mut self) -> &mut [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE] {
+        &mut self.grid
+    }
 }
 
 pub struct World {
@@ -74,23 +85,12 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-        let noise = OpenSimplex::new(0);
-        let positions = [
-            glm::vec2( 0,  0),
-            glm::vec2(-1,  0),
-            glm::vec2( 0, -1),
-            glm::vec2(-1, -1),
-        ];
-
-        let mut chunks = HashMap::new();
-        for position in positions {
-            chunks.insert(
-                position,
-                Chunk::new(position, &noise),
-            );
-        }
-
+        let chunks = HashMap::new();
         return Self { chunks };
+    }
+
+    pub fn set_chunk(&mut self, position: glm::IVec2, chunk: Chunk) {
+        self.chunks.insert(position, chunk);
     }
 
     pub fn get_chunks(&self) -> &HashMap<glm::I32Vec2, Chunk> {

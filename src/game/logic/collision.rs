@@ -1,4 +1,6 @@
-use crate::{game::logic::{GameState, robot::Robot}, graphics::renderer::positioning::RenderBox, kd_tree::KdTree};
+use std::collections::HashMap;
+use nalgebra_glm as glm;
+use crate::{game::logic::{GameState, fabricator::Fabricator, robot::Robot, world::{CHUNK_SIZE, GridPosition}}, graphics::renderer::positioning::RenderBox, kd_tree::KdTree};
 
 fn resolve_static_aabb(locked: &RenderBox, movable: &RenderBox, prev_movable: &RenderBox) -> RenderBox {
     let mut resolved = *movable;
@@ -107,28 +109,29 @@ fn resolve_dynamic_y(r1: &mut RenderBox, r2: &mut RenderBox, p1: &RenderBox, p2:
     }
 }
 
-impl Robot {
-    fn get_collision_bboxes(&self) -> (RenderBox, RenderBox) {
-        let pos = self.movement_module.get_position();
-        let prev = self.movement_module.get_prev_position();
-        (Self::get_render_box(pos), Self::get_render_box(prev))
-    }
-
-    fn update_collision(&mut self, bbox: &RenderBox) {
-        let position = (bbox.min + bbox.max) * 0.5;
-        self.movement_module.set_position(position);
-    }
+#[derive(Debug, Default)]
+struct RobotPositions {
+    ids: Vec<u32>,
+    pos: Vec<glm::Vec2>,
+    prev: Vec<glm::Vec2>,
 }
 
-impl GameState {
-    // const OBSTACLE_ID: u32 = 0;
+#[derive(Debug, Default)]
+struct ChunkElements {
+    robot_positions: RobotPositions,
+    positions: Vec<glm::Vec2>,
+    ids: Vec<u32>,
+}
+
+impl ChunkElements {
+    const OBSTACLE_ID: u32 = 0;
     const ROBOT_ID: u32 = 1;
     const FABRICATOR_ID: u32 = 2;
     const GHOST_ROBOT_ID: u32 = 3;
 
-    // fn pack_obstacle(id: usize) -> u32 {
-    //     (Self::OBSTACLE_ID << 24) | (id as u32 & 0xffffff)
-    // }
+    fn pack_obstacle(id: usize) -> u32 {
+        (Self::OBSTACLE_ID << 24) | (id as u32 & 0xffffff)
+    }
 
     fn pack_robot(id: usize) -> u32 {
         (Self::ROBOT_ID << 24) | (id as u32 & 0xffffff)
@@ -142,72 +145,140 @@ impl GameState {
         (Self::GHOST_ROBOT_ID << 24) | (id as u32 & 0xffffff)
     }
 
-    pub(super) fn handle_collisions(&mut self) {
-        let mut positions = vec![];
-        let mut ids = vec![];
+    fn push(&mut self, position: glm::Vec2, id: u32) {
+        self.positions.push(position);
+        self.ids.push(id);
+    }
+
+    fn push_robot(&mut self, position: glm::Vec2, prev_position: glm::Vec2, id: usize) {
+        let kdtree_id = self.robot_positions.ids.len();
+        self.robot_positions.ids.push(id as u32);
+        self.robot_positions.pos.push(position);
+        self.robot_positions.prev.push(prev_position);
+        self.push(position, Self::pack_robot(kdtree_id));
+    }
+
+    fn push_fabricator(&mut self, position: glm::Vec2, id: usize) {
+        self.push(position, Self::pack_fabricator(id));
+    }
+
+    fn push_ghost_robot(&mut self, position: glm::Vec2, id: usize) {
+        self.push(position, Self::pack_ghost_robot(id));
+    }
+
+    fn push_obstacle(&mut self, position: glm::Vec2, id: usize) {
+        self.push(position, Self::pack_obstacle(id));
+    }
+}
+
+impl GameState {
+    fn separate_chunks(&self) -> HashMap<glm::IVec2, ChunkElements> {
+        let mut chunk_elements: HashMap<glm::IVec2, ChunkElements> = HashMap::new();
 
         for (id, robot) in self.robots.iter_enumerate_unordered() {
-            positions.push(robot.movement_module.get_position());
-            ids.push(Self::pack_robot(id));
+            let position = robot.movement_module.get_position();
+            let prev_position = robot.movement_module.get_prev_position();
+            let chunk_id = position.map(|x| (x.floor() as i32).div_euclid(CHUNK_SIZE as i32));
+            
+            chunk_elements.entry(chunk_id).or_default().push_robot(position, prev_position, id);
         }
 
-        for (id, fabricator) in self.fabricators.iter().enumerate() {
-            positions.push(fabricator.position.map(|x| x as f32));
-            ids.push(Self::pack_fabricator(id));
+        for fabricator in self.fabricators.iter() {
+            let position = fabricator.position;
+            let chunk_id = position.map(|x| x.div_euclid(CHUNK_SIZE as i32));
+
+            let entry = chunk_elements.entry(chunk_id).or_default();
+            entry.push_fabricator(position.map(|x| x as f32), 0);
+
             if let Some(pos) = fabricator.get_ghost_position() {
-                positions.push(pos);
-                ids.push(Self::pack_ghost_robot(id));
+                entry.push_ghost_robot(pos, 0);
             }
         }
 
-        let kd_tree = KdTree::new(positions, ids);
+        for (chunk_id, chunk) in self.world.chunks.iter() {
+            let chunk_pos = chunk_id.map(|x| (x * CHUNK_SIZE as i32) as f32);
+            let entry = chunk_elements.entry(*chunk_id).or_default();
+            for (i, line) in chunk.get_grid().iter().enumerate() {
+                for (j, element) in line.iter().enumerate() {
+                    if *element == GridPosition::Obstacle {
+                        entry.push_obstacle(chunk_pos + glm::vec2(j as f32, i as f32), 0);
+                    }
+                }
+            }
+        }
+
+        chunk_elements
+    }
+
+    pub(super) fn handle_collisions(&mut self) {
+        let chunk_elements = self.separate_chunks();
+
         let mut robot_robot_collisions = vec![];
-        let mut ids = vec![];
-        for (id, robot) in self.robots.iter_enumerate_unordered_mut() {
-            let current_packed = Self::pack_robot(id);
-            ids.clear();
-            kd_tree.find_in_range(robot.movement_module.get_position(), 2.1, &mut ids);
-            for found_id in ids.iter() {
-                if current_packed == *found_id {
-                    continue;
-                }
+        let mut search_ids = vec![];
+        for (_, els) in chunk_elements {
+            let ChunkElements { positions, ids, mut robot_positions } = els;
+            let kd_tree = KdTree::new(positions, ids);
 
-                match found_id >> 24 {
-                    Self::ROBOT_ID => {
-                        if (found_id & 0xffffff) > (current_packed & 0xffffff) {
-                            robot_robot_collisions.push((found_id & 0xffffff, current_packed & 0xffffff));
-                        }
-                    },
-                    Self::FABRICATOR_ID => {
-                        let idx = found_id & 0xffffff;
-                        let fabricator_bbox = self.fabricators[idx as usize].get_bbox();
+            robot_robot_collisions.clear();
+            for (i, (position, prev_position)) in robot_positions.pos.iter_mut().zip(robot_positions.prev.iter_mut()).enumerate() {
+                let packed = ChunkElements::pack_robot(i);
+            
+                search_ids.clear();
+                kd_tree.find_in_range(*position, 2.1, &mut search_ids);
+            
+                for (found_id, found_pos) in search_ids.iter() {
+                    if packed == *found_id {
+                        continue;
+                    }
 
-                        let (cur_bbox, prev_bbox) = robot.get_collision_bboxes();
-                        let resolved = resolve_static_aabb(&fabricator_bbox, &cur_bbox, &prev_bbox);
-                        robot.update_collision(&resolved);
-                    },
-                    Self::GHOST_ROBOT_ID => {
-                        let idx = found_id & 0xffffff;
-                        let ghost_position = self.fabricators[idx as usize].get_possible_ghost_position();
-                        let ghost_bbox = Robot::get_render_box(ghost_position);
+                    match found_id >> 24 {
+                        ChunkElements::ROBOT_ID => {
+                            if (found_id & 0xffffff) > (packed & 0xffffff) {
+                                robot_robot_collisions.push((found_id & 0xffffff, packed & 0xffffff));
+                            }
+                        },
+                        ChunkElements::FABRICATOR_ID | ChunkElements::OBSTACLE_ID => {
+                            let fabricator_bbox = Fabricator::get_bbox(*found_pos);
 
-                        let (cur_bbox, prev_bbox) = robot.get_collision_bboxes();
-                        let resolved = resolve_static_aabb(&ghost_bbox, &cur_bbox, &prev_bbox);
-                        robot.update_collision(&resolved);
-                    },
-                    _ => {},
+                            let (cur_bbox, prev_bbox) = (
+                                Robot::get_render_box(*position),
+                                Robot::get_render_box(*prev_position),
+                            );
+                            let resolved = resolve_static_aabb(&fabricator_bbox, &cur_bbox, &prev_bbox);
+                            *position = (resolved.max + resolved.min) * 0.5;
+                        },
+                        ChunkElements::GHOST_ROBOT_ID => {
+                            let idx = found_id & 0xffffff;
+                            let ghost_position = self.fabricators[idx as usize].get_possible_ghost_position();
+                            let ghost_bbox = Robot::get_render_box(ghost_position);
+
+                            let (cur_bbox, prev_bbox) = (
+                                Robot::get_render_box(*position),
+                                Robot::get_render_box(*prev_position),
+                            );
+                            let resolved = resolve_static_aabb(&ghost_bbox, &cur_bbox, &prev_bbox);
+                            *position = (resolved.max + resolved.min) * 0.5;
+                        },
+                        _ => {},
+                    }
                 }
             }
-        }
 
-        for (id1, id2) in robot_robot_collisions {
-            let (bb1, pbb1) = self.robots[id1 as usize].get_collision_bboxes();
-            let (bb2, pbb2) = self.robots[id2 as usize].get_collision_bboxes();
+            for (idx1, idx2) in robot_robot_collisions.iter() {
+                let (p1, pp1) = (robot_positions.pos[*idx1 as usize], robot_positions.prev[*idx1 as usize]);
+                let (p2, pp2) = (robot_positions.pos[*idx2 as usize], robot_positions.prev[*idx2 as usize]);
+                let (bb1, pbb1) = (Robot::get_render_box(p1), Robot::get_render_box(pp1));
+                let (bb2, pbb2) = (Robot::get_render_box(p2), Robot::get_render_box(pp2));
 
-            let (r1, r2) = resolve_dynamic_aabb(&bb1, &pbb1, &bb2, &pbb2);
+                let (r1, r2) = resolve_dynamic_aabb(&bb1, &pbb1, &bb2, &pbb2);
 
-            self.robots[id1 as usize].update_collision(&r1);
-            self.robots[id2 as usize].update_collision(&r2);
+                robot_positions.pos[*idx1 as usize] = (r1.min + r1.max) * 0.5;
+                robot_positions.pos[*idx2 as usize] = (r2.min + r2.max) * 0.5;
+            }
+
+            for (id, pos) in robot_positions.ids.iter().zip(robot_positions.pos.iter()) {
+                self.robots[*id as usize].movement_module.set_position(*pos);
+            }
         }
     }
 }

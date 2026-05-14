@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
+use crate::{MainContext, game::logic::{INSTRUCTION_PERIOD, compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
 
 const EPS: f32 = 0.0001;
 
@@ -19,7 +19,8 @@ pub struct Robot {
     display_module: DisplayModule,
     pub computer: Computer,
     color: glm::U8Vec3,
-    context: ComputeContext,
+    pub context: ComputeContext,
+    time_to_next_instruction: f32,
 }
 
 impl Robot {
@@ -31,17 +32,26 @@ impl Robot {
             color: get_robot_default_color(),
             context: ComputeContext::Computer,
             display_module: DisplayModule::new(),
+            time_to_next_instruction: INSTRUCTION_PERIOD,
         }
     }
 
     pub fn update(
         &mut self,
-        is_instruction_tick: bool,
         world : &mut World,
         context: &mut MainContext,
     ) {
         let ui = &mut context.ui;
         let delta = ui.get_delta();
+
+        self.time_to_next_instruction -= delta;
+        let is_instruction_tick = if self.time_to_next_instruction <= 0.0 {
+            self.time_to_next_instruction += INSTRUCTION_PERIOD;
+            self.time_to_next_instruction = self.time_to_next_instruction.max(0.0);
+            true
+        } else {
+            false
+        };
 
         match self.context {
             ComputeContext::Computer => {

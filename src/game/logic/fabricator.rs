@@ -71,9 +71,9 @@ impl Fabricator {
         self.time_next_phase = self.time_next_phase.max(0.0);
     }
 
-    pub fn get_bbox(&self) -> RenderBox {
+    pub fn get_bbox(position: glm::Vec2) -> RenderBox {
         RenderBox::new_simple(
-            self.position.map(|x| x as f32),
+            position.map(|x| x as f32),
             PositionMode::Center,
             glm::vec2(1.0, 1.0)
         )

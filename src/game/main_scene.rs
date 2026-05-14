@@ -1,4 +1,4 @@
-use crate::{game::{logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
+use crate::{game::{levels::first::create_first_level, logic::GameState, render::RenderState, scene::Scene}, graphics::renderer::Renderer};
 
 pub struct MainScene<'a> {
     pub logic: GameState,
@@ -7,7 +7,7 @@ pub struct MainScene<'a> {
 
 impl<'a> MainScene<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
-        let logic = GameState::new();
+        let logic = create_first_level();
         let render = RenderState::new(renderer, logic.get_world());
         return Self { logic, render };
     }
