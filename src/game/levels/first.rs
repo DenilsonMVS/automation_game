@@ -6,6 +6,7 @@ pub fn create_first_level() -> GameState {
     let grid = chunk.get_grid_mut();
 
     grid[1][0] = GridPosition::Obstacle;
+    grid[1][5] = GridPosition::Target;
     grid[1][6] = GridPosition::Obstacle;
     for i in 0..7 {
         grid[0][i] = GridPosition::Obstacle;

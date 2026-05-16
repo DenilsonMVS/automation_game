@@ -5,6 +5,7 @@ use crate::game::logic::{instruction::Syscall, world::{GridPosition, World}};
 
 const MINING_TIME: f32 = 10.0;
 const SCAN_TIME: f32 = 1.0;
+const RELEASE_TIME: f32 = 2.0;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiningModule {
@@ -28,6 +29,7 @@ impl MiningModule {
         match self.syscall {
             Syscall::Mine => self.remaining_time = MINING_TIME,
             Syscall::Scan => self.remaining_time = SCAN_TIME,
+            Syscall::Release => self.remaining_time = RELEASE_TIME,
             _ => {},
         }
     }
@@ -60,7 +62,7 @@ impl MiningModule {
                         .unwrap_or(GridPosition::None);
                     match position {
                         GridPosition::Resource(amount) => Some(amount as u8),
-                        _ => None,
+                        _ => Some(0),
                     }
                 } else {
                     self.remaining_time -= delta;

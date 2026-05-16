@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::{game::main_scene::MainScene, graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
+use crate::{graphics::{camera::Camera, renderer::positioning::RenderBox}, ui::{events::Events, multi_area_conflict_resolver::resolve_multi_area_conflict, simple_area::SimpleArea, simple_area_manager::{AreaId, SimpleManager}}};
 use nalgebra_glm as glm;
 use winit::{event::{ElementState, KeyEvent}, keyboard::{KeyCode, PhysicalKey, SmolStr}, window::Window};
 
@@ -24,11 +24,6 @@ pub trait AreaManager {
     fn get(&self, id: usize) -> Option<&SimpleArea>;
     fn push(&mut self, simple_area: SimpleArea) -> usize;
     fn update(&mut self, id: usize, simple_area: SimpleArea);
-}
-
-pub struct UiContext<'a, 'b> {
-    pub window: &'a Window,
-    pub scene: &'a mut MainScene<'b>,
 }
 
 fn map_key_to_index(key: KeyCode) -> Option<usize> {
@@ -146,7 +141,7 @@ impl Ui {
         self.scroll = scroll;
     }
 
-    pub fn on_render_start(&mut self, context: &mut UiContext) {
+    pub fn on_render_start(&mut self, window: &Window) {
         self.previous_frame_time = self.current_time;
         self.current_time = Instant::now();
 
@@ -173,7 +168,7 @@ impl Ui {
         self.events = resolve_multi_area_conflict(
             self.mouse_action,
             &areas_containing_mouse,
-            context.window,
+            window,
             &self.events,
         );
 

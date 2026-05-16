@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::{MainContext, game::logic::{robot::Robot, world::World}, graphics::renderer::positioning::{PositionMode, RenderBox}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{computer::MEMORY_SIZE, instruction::Instruction, robot::Robot, world::World}, graphics::renderer::positioning::{PositionMode, RenderBox}, stable_index_vector::StableIndexVector};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -29,6 +29,7 @@ pub struct Fabricator {
     pub phase: u16,
     time_next_phase: f32,
     pub position: glm::IVec2,
+    pub start_code: [Instruction; MEMORY_SIZE],
 }
 
 impl Fabricator {
@@ -37,7 +38,18 @@ impl Fabricator {
         input: Direction,
         output: Direction,
     ) -> Self {
-        Self { input, output, phase: 0, time_next_phase: PHASE_TIME, position }
+        Self {
+            input, output,
+            phase: 0,
+            time_next_phase: PHASE_TIME,
+            position,
+            start_code: [Instruction::default(); MEMORY_SIZE],
+        }
+    }
+
+    pub fn with_code(mut self, code: [Instruction; MEMORY_SIZE]) -> Self {
+        self.start_code = code;
+        self
     }
 
     pub fn update(&mut self, context: &mut MainContext, world: &mut World, robots: &mut StableIndexVector<Robot>) {
@@ -63,7 +75,7 @@ impl Fabricator {
                 if self.phase == PHASE_AMOUNT {
                     self.phase = 0;
                     
-                    robots.push(Robot::new(output_pos.map(|x| x as f32), [Default::default(); _]));
+                    robots.push(Robot::new(output_pos.map(|x| x as f32), self.start_code));
                 }
             }
         }
@@ -77,6 +89,10 @@ impl Fabricator {
             PositionMode::Center,
             glm::vec2(1.0, 1.0)
         )
+    }
+
+    pub fn get_code(&self) -> &[Instruction; MEMORY_SIZE] {
+        &self.start_code
     }
 
     pub fn get_possible_ghost_position(&self) -> glm::Vec2 {

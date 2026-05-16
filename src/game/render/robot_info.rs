@@ -30,7 +30,7 @@ const BUTTTON_AREA_WIDTH: f32 = 0.4;
 const BUTTON_HEIGHT: f32 = 0.15;
 const BUTTON_WIDTH: f32 = BUTTTON_AREA_WIDTH - 2.0 * CONTAINER_PADDING;
 const INSTRUCTION_WIDTH: f32 = INFO_WIDTH - BUTTTON_AREA_WIDTH - 2.0 * CONTAINER_PADDING;
-const INSTRUCTION_HEIGHT: f32 = (INFO_HEIGHT - (MEMORY_SIZE + 1) as f32 * CONTAINER_PADDING) / MEMORY_SIZE as f32;
+const INSTRUCTION_HEIGHT: f32 = (INFO_HEIGHT - (MEMORY_SIZE + 3) as f32 * CONTAINER_PADDING - ICON_BUTTON_SIZE) / MEMORY_SIZE as f32;
 const ICON_BUTTON_SIZE: f32 = 0.1;
 
 fn get_button_bbox(bbox: &RenderBox, i: usize) -> RenderBox {
@@ -202,18 +202,24 @@ enum RobotInfoMode {
     Edit(RobotEdit),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum EntityId {
+    Robot(u32),
+    Fabricator(u32),
+}
+
 #[derive(Debug)]
 pub struct RobotInfo {
-    pub robot_id: u32,
+    pub id: EntityId,
     outer_container: RenderedArea,
     mode: RobotInfoMode,
     back_button: RenderedButton,
 }
 
 impl RobotInfo {
-    pub fn new(robot_id: u32, instructions: [Instruction; MEMORY_SIZE]) -> Self {
+    pub fn new(id: EntityId, instructions: [Instruction; MEMORY_SIZE]) -> Self {
         Self {
-            robot_id,
+            id,
             outer_container: RenderedArea::new(CursorIcon::Default, get_background_color()),
             mode: RobotInfoMode::View(RobotView::new(instructions)),
             back_button: RenderedButton::new(get_button_bgcolor())
@@ -288,7 +294,7 @@ impl UnpackedInstruction {
 
 pub struct RobotInfoContext<'a, 'b, 'c> {
     pub mc: &'c mut MainContext<'a, 'b>,
-    pub data: &'c [u8; MEMORY_SIZE],
+    pub data: Option<&'c [u8; MEMORY_SIZE]>,
 }
 
 impl<'a, 'b, 'c> UiElement<RobotInfoContext<'a, 'b, 'c>, RobotInfoContext<'a, 'b, 'c>, ()> for RobotInfo {
@@ -314,7 +320,9 @@ impl<'a, 'b, 'c> UiElement<RobotInfoContext<'a, 'b, 'c>, RobotInfoContext<'a, 'b
             },
             RobotInfoMode::View(view) => {
                 view.update(bbox, depth, context.mc);
-                view.update_execution_state((context.data[PROGRAM_COUNTER_IDX] as usize) % MEMORY_SIZE);
+                if let Some(data) = context.data {
+                    view.update_execution_state((data[PROGRAM_COUNTER_IDX] as usize) % MEMORY_SIZE);
+                }
             }
         }
         self.outer_container.update(bbox, depth, context.mc.ui);
@@ -325,21 +333,23 @@ impl<'a, 'b, 'c> UiElement<RobotInfoContext<'a, 'b, 'c>, RobotInfoContext<'a, 'b
         let mut main_context = &mut context.mc;
         self.back_button.send(&mut main_context.get_button_context());
 
-        let executed_instruction = (context.data[PROGRAM_COUNTER_IDX] & 0xf) as usize;
-        let instruction = match &self.mode {
-            RobotInfoMode::Edit(edit) => edit.original_instructions[executed_instruction],
-            RobotInfoMode::View(view) => view.instructions[executed_instruction].get_instruction(),
-        }.unpack();
+        if let Some(data) = context.data {
+            let executed_instruction = (data[PROGRAM_COUNTER_IDX] & 0xf) as usize;
+            let instruction = match &self.mode {
+                RobotInfoMode::Edit(edit) => edit.original_instructions[executed_instruction],
+                RobotInfoMode::View(view) => view.instructions[executed_instruction].get_instruction(),
+            }.unpack();
 
-        memory_visualizer::send(
-            main_context.simple_shape_renderer,
-            main_context.font,
-            main_context.groups,
-            context.data,
-            &Self::get_mem_bbox(&self.outer_container.bbox),
-            self.outer_container.depth - 1,
-            instruction.get_highlights(),
-        );
+            memory_visualizer::send(
+                main_context.simple_shape_renderer,
+                main_context.font,
+                main_context.groups,
+                data,
+                &Self::get_mem_bbox(&self.outer_container.bbox),
+                self.outer_container.depth - 1,
+                instruction.get_highlights(),
+            );
+        }
 
         match &mut self.mode {
             RobotInfoMode::Edit(edit) => edit.send(&mut main_context),

@@ -12,6 +12,7 @@ pub enum GridPosition {
     None,
     Resource(u8),
     Obstacle,
+    Target,
 }
 
 impl Default for GridPosition {
@@ -79,6 +80,7 @@ impl Chunk {
     }
 }
 
+#[derive(Debug)]
 pub struct World {
     pub chunks: HashMap<glm::I32Vec2, Chunk>,
 }

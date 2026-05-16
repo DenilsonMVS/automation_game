@@ -10,7 +10,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_scene::MainScene, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, UiContext, rendered_button::RenderedButtonContext}};
+use crate::{game::{main_menu::MainMenu, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -55,7 +55,7 @@ pub struct State<'a> {
     ui: Ui,
     gl_context: PossiblyCurrentContext,
     gl_surface: Surface<WindowSurface>,
-    scene: MainScene<'a>,
+    scene: Box<dyn Scene + 'a>,
     renderer: &'a Renderer,
     fence: Option<Fence>,
     fonts: Fonts<'a>,
@@ -80,7 +80,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
         let ui = Ui::new(Self::get_window_size());
-        let scene = MainScene::new(renderer);
+        let scene = Box::new(MainMenu::new(renderer));
 
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
@@ -161,11 +161,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
 impl<'a> State<'a> {
     fn redraw(&mut self) {
-        let mut context= UiContext {
-            window: &self.window,
-            scene: &mut self.scene,
-        };
-        self.ui.on_render_start(&mut context);
+        self.ui.on_render_start(&self.window);
         self.groups.reset();
 
         {

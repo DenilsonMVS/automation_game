@@ -24,6 +24,7 @@ impl GridPosition {
                 id: 1,
             },
             Self::Obstacle => ChunkPosition { id: 2, size: 255 },
+            Self::Target => ChunkPosition { id: 3, size: 220 },
         }
     }
 }

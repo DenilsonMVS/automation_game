@@ -73,26 +73,26 @@ impl Computer {
         match unpacked_instruction {
             UnpackedInstruction::Lui(rd, imm) =>
                 self.registers.write(rd, imm),
-            UnpackedInstruction::Addi(rs, rd, imm) =>
+            UnpackedInstruction::Addi(rd, rs, imm) =>
                 self.registers.inst1(rs, rd, |x| x.wrapping_add(imm)),
-            UnpackedInstruction::Subi(rs, rd, imm) =>
+            UnpackedInstruction::Subi(rd, rs, imm) =>
                 self.registers.inst1(rs, rd, |x| x.wrapping_sub(imm)),
-            UnpackedInstruction::Add(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| a.wrapping_add(b)),
-            UnpackedInstruction::Sub(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| a.wrapping_sub(b)),
-            UnpackedInstruction::Mul(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| a.wrapping_mul(b)),
-            UnpackedInstruction::Div(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| a / replace_zero(b, 1)),
-            UnpackedInstruction::Rem(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| a % replace_zero(b, 1)),
-            UnpackedInstruction::Seq(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| (a == b) as u8),
-            UnpackedInstruction::Slt(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| (a < b) as u8),
-            UnpackedInstruction::Sle(r1, r2, rd) =>
-                self.registers.inst2(r1, r2, rd, |a, b| (a <= b) as u8),
+            UnpackedInstruction::Add(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| a.wrapping_add(b)),
+            UnpackedInstruction::Sub(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| a.wrapping_sub(b)),
+            UnpackedInstruction::Mul(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| a.wrapping_mul(b)),
+            UnpackedInstruction::Div(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| a / replace_zero(b, 1)),
+            UnpackedInstruction::Rem(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| a % replace_zero(b, 1)),
+            UnpackedInstruction::Seq(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| (a == b) as u8),
+            UnpackedInstruction::Slt(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| (a < b) as u8),
+            UnpackedInstruction::Sle(rd, r1, r2) =>
+                self.registers.inst2(rd, r1, r2, |a, b| (a <= b) as u8),
             UnpackedInstruction::Beq(r1, r2, imm) =>
                 self.registers.inst3(r1, r2, PC, PC, |a, b, c| if a == b { c.wrapping_add(imm) } else { c }),
             UnpackedInstruction::Bne(r1, r2, imm) =>

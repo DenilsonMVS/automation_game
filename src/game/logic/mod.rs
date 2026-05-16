@@ -15,6 +15,7 @@ pub mod collision;
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
+#[derive(Debug)]
 pub struct GameState {
     world: World,
     robots: StableIndexVector<Robot>,
