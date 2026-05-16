@@ -2,7 +2,7 @@ use std::{array, collections::HashMap};
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 
-use crate::{game::logic::world::{CHUNK_MAG, CHUNK_SIZE, Chunk, GridPosition, World}, graphics::renderer::{Renderer, buffer::DynamicUnitBuffer, drawable::DrawMode, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
+use crate::{game::logic::{GameState, world::{CHUNK_MAG, CHUNK_SIZE, Chunk, GridPosition}}, graphics::renderer::{Renderer, buffer::DynamicUnitBuffer, drawable::DrawMode, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
 
 #[derive(Debug, Clone, Copy, GlVertex)]
 #[vertex(divisor = 1)]
@@ -76,9 +76,8 @@ pub struct ViewWorld<'a> {
 }
 
 impl<'a> ViewWorld<'a> {
-    pub fn new(renderer: &'a Renderer, logic_world: &World) -> Self {
-        let chunks: HashMap<glm::IVec2, ViewChunk> = logic_world
-            .get_chunks()
+    pub fn new(renderer: &'a Renderer, logic_state: &GameState) -> Self {
+        let chunks: HashMap<glm::IVec2, ViewChunk> = logic_state.chunks
             .iter()
             .map(|(position, chunk)|
                 (*position, ViewChunk::new(renderer, chunk.get_grid())))
@@ -90,8 +89,8 @@ impl<'a> ViewWorld<'a> {
         return Self { chunks, chunk_program };
     }
 
-    pub fn send(&mut self, world: &World) {
-        for (position, logic_chunk) in world.get_chunks().iter() {
+    pub fn send(&mut self, logic_state: &GameState) {
+        for (position, logic_chunk) in logic_state.chunks.iter() {
             if let Some(view_chunk) = self.chunks.get_mut(position) {
                 view_chunk.send_updates(logic_chunk);
             }

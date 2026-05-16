@@ -1,4 +1,6 @@
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::MEMORY_SIZE, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::World}, stable_index_vector::StableIndexVector};
+use std::collections::HashMap;
+use nalgebra_glm as glm;
+use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::MEMORY_SIZE, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::Chunk}};
 
 
 pub mod world;
@@ -17,47 +19,41 @@ const INSTRUCTION_PERIOD: f32 = 0.25;
 
 #[derive(Debug)]
 pub struct GameState {
-    world: World,
-    robots: StableIndexVector<Robot>,
-    pub fabricators: Vec<Fabricator>,
-    pub robot_info_opened: Option<usize>,
+    pub chunks: HashMap<glm::I32Vec2, Chunk>,
 }
 
 impl GameState {
-    pub fn new(world: World, fabricators: Vec<Fabricator>, robots: StableIndexVector<Robot>) -> Self {
-        Self {
-            world,
-            fabricators,
-            robot_info_opened: None,
-            robots,
-        }
+    pub fn new(chunks: HashMap<glm::I32Vec2, Chunk>) -> Self {
+        Self { chunks }
     }
 
     pub fn update(&mut self, context: &mut MainContext) {
-        for robot in self.robots.iter_unordered_mut() {
-            robot.update(&mut self.world, context);
+        for (chunk_id, chunk) in self.chunks.iter_mut() {
+            chunk.update(context, *chunk_id);
         }
-
-        for fabricator in self.fabricators.iter_mut() {
-            fabricator.update(context, &mut self.world, &mut self.robots);
-        }
-
-        self.handle_collisions();
     }
 
-    pub fn write_code(&mut self, robot_id: usize, code: [Instruction; MEMORY_SIZE]) {
-        if let Some(robot) = self.robots.get_mut(robot_id) {
+    pub fn write_code(&mut self, chunk_id: glm::IVec2, robot_id: u32, code: [Instruction; MEMORY_SIZE]) {
+        if let Some(robot) = self.get_robot_mut(chunk_id, robot_id) {
             robot.computer.instructions = InstructionMemory::new(code);
             robot.computer.registers = RegisterMemory::new([0; MEMORY_SIZE]);
             robot.context = ComputeContext::Computer;
         }
     }
 
-    pub fn get_robots(&self) -> &StableIndexVector<Robot> {
-        &self.robots
+    pub fn get_robot(&self, chunk_id: glm::IVec2, robot_id: u32) -> Option<&Robot> {
+        self.chunks.get(&chunk_id).and_then(|chunk| chunk.robots.get(robot_id as usize))
     }
 
-    pub fn get_world(&self) -> &World {
-        &self.world
+    pub fn get_robot_mut(&mut self, chunk_id: glm::IVec2, robot_id: u32) -> Option<&mut Robot> {
+        self.chunks.get_mut(&chunk_id).and_then(|chunk| chunk.robots.get_mut(robot_id as usize))
+    }
+
+    pub fn get_fabricator(&self, chunk_id: glm::IVec2, fabricator_idx: u32) -> Option<&Fabricator> {
+        self.chunks.get(&chunk_id).and_then(|chunk| chunk.fabricators.get(fabricator_idx as usize))
+    }
+
+    pub fn get_fabricator_mut(&mut self, chunk_id: glm::IVec2, fabricator_idx: u32) -> Option<&mut Fabricator> {
+        self.chunks.get_mut(&chunk_id).and_then(|chunk| chunk.fabricators.get_mut(fabricator_idx as usize))
     }
 }

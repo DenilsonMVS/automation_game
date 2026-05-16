@@ -8,7 +8,7 @@ pub struct MainScene<'a> {
 impl<'a> MainScene<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let logic = create_first_level();
-        let render = RenderState::new(renderer, logic.get_world());
+        let render = RenderState::new(renderer, &logic);
         return Self { logic, render };
     }
 }

@@ -1,6 +1,5 @@
-use std::collections::HashMap;
 use nalgebra_glm as glm;
-use crate::{game::logic::{GameState, fabricator::Fabricator, robot::Robot, world::{CHUNK_SIZE, GridPosition}}, graphics::renderer::positioning::{PositionMode, RenderBox}, kd_tree::KdTree};
+use crate::{game::logic::{fabricator::Fabricator, robot::Robot, world::{CHUNK_SIZE, Chunk, GridPosition}}, graphics::renderer::positioning::{PositionMode, RenderBox}, kd_tree::KdTree};
 
 fn resolve_static_aabb(locked: &RenderBox, movable: &RenderBox, prev_movable: &RenderBox) -> RenderBox {
     let mut resolved = *movable;
@@ -65,31 +64,43 @@ fn resolve_dynamic_aabb(
     (res1, res2)
 }
 
-fn apply_static_x(res: &mut RenderBox, locked: &RenderBox, mov: &RenderBox, prev: &RenderBox) {
+fn apply_static_x(res: &mut RenderBox, locked: &RenderBox, mov: &RenderBox, _prev: &RenderBox) {
     let width = res.max.x - res.min.x;
-    if mov.min.x > prev.min.x {
-        res.max.x = locked.min.x;
-        res.min.x = res.max.x - width;
-    } else {
+    
+    let locked_center_x = (locked.min.x + locked.max.x) * 0.5;
+    let mov_center_x = (mov.min.x + mov.max.x) * 0.5;
+
+    if mov_center_x > locked_center_x {
         res.min.x = locked.max.x;
         res.max.x = res.min.x + width;
+    } else {
+        res.max.x = locked.min.x;
+        res.min.x = res.max.x - width;
     }
 }
 
-fn apply_static_y(res: &mut RenderBox, locked: &RenderBox, mov: &RenderBox, prev: &RenderBox) {
+fn apply_static_y(res: &mut RenderBox, locked: &RenderBox, mov: &RenderBox, _prev: &RenderBox) {
     let height = res.max.y - res.min.y;
-    if mov.min.y > prev.min.y {
-        res.max.y = locked.min.y;
-        res.min.y = res.max.y - height;
-    } else {
+    
+    let locked_center_y = (locked.min.y + locked.max.y) * 0.5;
+    let mov_center_y = (mov.min.y + mov.max.y) * 0.5;
+
+    if mov_center_y > locked_center_y {
         res.min.y = locked.max.y;
         res.max.y = res.min.y + height;
+    } else {
+        res.max.y = locked.min.y;
+        res.min.y = res.max.y - height;
     }
 }
 
 fn resolve_dynamic_x(r1: &mut RenderBox, r2: &mut RenderBox, p1: &RenderBox, p2: &RenderBox, overlap: f32) {
     let sep = overlap * 0.5;
-    if p1.min.x < p2.min.x {
+    
+    let c1 = (p1.min.x + p1.max.x) * 0.5;
+    let c2 = (p2.min.x + p2.max.x) * 0.5;
+
+    if c1 < c2 {
         r1.min.x -= sep; r1.max.x -= sep;
         r2.min.x += sep; r2.max.x += sep;
     } else {
@@ -100,7 +111,11 @@ fn resolve_dynamic_x(r1: &mut RenderBox, r2: &mut RenderBox, p1: &RenderBox, p2:
 
 fn resolve_dynamic_y(r1: &mut RenderBox, r2: &mut RenderBox, p1: &RenderBox, p2: &RenderBox, overlap: f32) {
     let sep = overlap * 0.5;
-    if p1.min.y < p2.min.y {
+    
+    let c1 = (p1.min.y + p1.max.y) * 0.5;
+    let c2 = (p2.min.y + p2.max.y) * 0.5;
+
+    if c1 < c2 {
         r1.min.y -= sep; r1.max.y -= sep;
         r2.min.y += sep; r2.max.y += sep;
     } else {
@@ -118,20 +133,7 @@ impl GridPosition {
     }
 }
 
-#[derive(Debug, Default)]
-struct ChunkElements {
-    dynamic_global_ids: Vec<u32>,
-    dynamic_updated_position: Vec<glm::Vec2>,
-    dynamic_prev_position: Vec<glm::Vec2>,
-
-    dynamic_kd_tree_positions: Vec<glm::Vec2>,
-    dynamic_kd_tree_update_idx: Vec<u32>,
-
-    static_kd_tree_positions: Vec<glm::Vec2>,
-    static_kd_tree_id: Vec<StaticId>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum StaticId {
     Fabricator,
     Ghost,
@@ -146,27 +148,58 @@ impl StaticId {
     }
 }
 
-fn get_bbox_from_dynamic_id(id: u32, position: glm::Vec2) -> RenderBox {
-    match id >> 24 {
-        _ => Robot::get_render_box(position),
+#[derive(Debug, Clone, Copy)]
+struct DynamicId {
+    value: u32,
+}
+
+impl DynamicId {
+    const ROBOT_ID: u32 = 0;
+
+    fn new_robot(id: usize) -> Self {
+        Self { value: (Self::ROBOT_ID << 24) | (id as u32 & 0xffffff) }
+    }
+
+    fn get_bbox(&self, chunk: &Chunk) -> Option<(RenderBox, RenderBox)> {
+        match self.value >> 24 {
+            DynamicId::ROBOT_ID => {
+                let robot = chunk.robots.get(self.value as usize & 0xffffff)?;
+                let cur_pos = robot.movement_module.get_position();
+                let prev_pos = robot.movement_module.get_prev_position();
+                Some((
+                    Robot::get_render_box(cur_pos),
+                    Robot::get_render_box(prev_pos),
+                ))
+            },
+            _ => None,
+        }
+    }
+
+    fn on_resolved(&self, chunk: &mut Chunk, bbox: &RenderBox) -> Option<()> {
+        match self.value >> 24 {
+            DynamicId::ROBOT_ID => {
+                let robot = chunk.robots.get_mut(self.value as usize & 0xffffff)?;
+                robot.movement_module.set_position((bbox.min + bbox.max) * 0.5);
+                Some(())
+            },
+            _ => None,
+        }
     }
 }
 
+#[derive(Debug, Default)]
+struct ChunkElements {
+    dynamic_kd_tree_positions: Vec<glm::Vec2>,
+    dynamic_kd_tree_id: Vec<DynamicId>,
+
+    static_kd_tree_positions: Vec<glm::Vec2>,
+    static_kd_tree_id: Vec<StaticId>,
+}
+
 impl ChunkElements {
-    const ROBOT_ID: u32 = 0;
-
-    fn pack_robot(id: usize) -> u32 {
-        (Self::ROBOT_ID << 24) | (id as u32 & 0xffffff)
-    }
-
-    fn push_robot(&mut self, position: glm::Vec2, prev_position: glm::Vec2, id: usize) {
-        self.dynamic_global_ids.push(Self::pack_robot(id));
-        self.dynamic_updated_position.push(position);
-        self.dynamic_prev_position.push(prev_position);
-
-        let idx = self.dynamic_kd_tree_positions.len() as u32;
+    fn push_robot(&mut self, position: glm::Vec2, id: usize) {
         self.dynamic_kd_tree_positions.push(position);
-        self.dynamic_kd_tree_update_idx.push(idx);
+        self.dynamic_kd_tree_id.push(DynamicId::new_robot(id));
     }
 
     fn push_fabricator(&mut self, position: glm::Vec2) {
@@ -180,134 +213,93 @@ impl ChunkElements {
     }
 }
 
-impl GameState {
-    fn separate_chunks(&self) -> HashMap<glm::IVec2, ChunkElements> {
-        let mut chunk_elements: HashMap<glm::IVec2, ChunkElements> = HashMap::new();
+impl Chunk {
+    fn get_elements(&self) -> ChunkElements {
+        let mut elements = ChunkElements::default();
 
         for (id, robot) in self.robots.iter_enumerate_unordered() {
             let position = robot.movement_module.get_position();
-            let prev_position = robot.movement_module.get_prev_position();
-            let chunk_id = position.map(|x| (x.floor() as i32).div_euclid(CHUNK_SIZE as i32));
-            
-            chunk_elements.entry(chunk_id).or_default().push_robot(position, prev_position, id);
+            elements.push_robot(position, id);
         }
 
         for fabricator in self.fabricators.iter() {
-            let position = fabricator.position;
-            let chunk_id = position.map(|x| x.div_euclid(CHUNK_SIZE as i32));
-
-            let entry = chunk_elements.entry(chunk_id).or_default();
-            entry.push_fabricator(position.map(|x| x as f32));
+            let position = fabricator.position.map(|x| x as f32);
+            elements.push_fabricator(position);
 
             if let Some(pos) = fabricator.get_ghost_position() {
-                entry.push_ghost_robot(pos);
+                elements.push_ghost_robot(pos);
             }
         }
 
-        for (chunk_id, _) in self.world.chunks.iter() {
-            chunk_elements.entry(*chunk_id).or_default();
-        }
-
-        chunk_elements
+        elements
     }
 
-    pub(super) fn handle_collisions(&mut self) {
-        let chunk_elements = self.separate_chunks();
+    pub(super) fn handle_collisions(&mut self, chunk_id: glm::IVec2) {
+        let ChunkElements {
+            dynamic_kd_tree_id,
+            dynamic_kd_tree_positions,
+            static_kd_tree_id,
+            static_kd_tree_positions,
+        } = self.get_elements();
 
         let mut dyn_dyn_collisions = vec![];
         let mut dyn_search_ids = vec![];
         let mut static_search_ids = vec![];
-        for (chunk_id, els) in chunk_elements {
-            let Some(chunk) = self.world.get_chunks().get(&chunk_id) else { continue };
-            let ChunkElements {
-                dynamic_global_ids,
-                mut dynamic_updated_position,
-                dynamic_prev_position,
 
-                dynamic_kd_tree_positions,
-                dynamic_kd_tree_update_idx,
+        let dynamic_kd_tree = KdTree::new(dynamic_kd_tree_positions, dynamic_kd_tree_id);
+        let static_kd_tree = KdTree::new(static_kd_tree_positions, static_kd_tree_id);
 
-                static_kd_tree_positions,
-                static_kd_tree_id,
-            } = els;
+        for (id, pos) in dynamic_kd_tree.iter() {
 
-            let dynamic_kd_tree = KdTree::new(dynamic_kd_tree_positions, dynamic_kd_tree_update_idx);
-            let static_kd_tree = KdTree::new(static_kd_tree_positions, static_kd_tree_id);
+            static_search_ids.clear();
+            static_kd_tree.find_in_range(pos, 1.5, &mut static_search_ids);
+            for (near_id, near_pos) in static_search_ids.iter() {
+                let bbox = near_id.get_bbox(*near_pos);
+                let Some((cur_bbox, prev_bbox)) = id.get_bbox(self) else { continue };
+                let resolved = resolve_static_aabb(&bbox, &cur_bbox, &prev_bbox);
+                id.on_resolved(self, &resolved);
+            }
 
-            dyn_dyn_collisions.clear();
-            for (i, (id, (position, prev_position))) in
-                dynamic_global_ids
-                .iter()
-                .zip(dynamic_updated_position.iter_mut()
-                .zip(dynamic_prev_position.iter()))
-                .enumerate()
-            {
-                static_search_ids.clear();
-                static_kd_tree.find_in_range(*position, 1.1, &mut static_search_ids);
-                for (near_id, near_pos) in static_search_ids.iter() {
-                    let bbox = near_id.get_bbox(*near_pos);
-                    let (cur_bbox, prev_bbox) = (
-                        get_bbox_from_dynamic_id(*id, *position),
-                        get_bbox_from_dynamic_id(*id, *prev_position),
-                    );
+            dyn_search_ids.clear();
+            dynamic_kd_tree.find_in_range(pos, 1.5, &mut dyn_search_ids);
+            for (near_idx, _) in dyn_search_ids.iter() {
+                if near_idx.value < id.value {
+                    dyn_dyn_collisions.push((id, *near_idx));
+                }
+            }
+
+            let rounded_pos = pos.map(|x| x.round() as i32);
+            let chunk_pos = rounded_pos.map(|x| (x.rem_euclid(CHUNK_SIZE as i32)) as u8);
+            let offsets: [glm::U8Vec2; _] = [
+                glm::vec2(255,   1), glm::vec2(0,   1), glm::vec2(1,   1),
+                glm::vec2(255,   0), glm::vec2(0,   0), glm::vec2(1,   0),
+                glm::vec2(255, 255), glm::vec2(0, 255), glm::vec2(1, 255),
+            ];
+
+            for offset in offsets {
+                let check_pos = glm::vec2(
+                    chunk_pos.x.wrapping_add(offset.x),
+                    chunk_pos.y.wrapping_add(offset.y),
+                );
+                let quad_pos = (chunk_id * (CHUNK_SIZE as i32) + check_pos.map(|x| x as i32))
+                    .map(|x| x as f32);
+
+                if let Some(bbox) = self.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(quad_pos) {
+                    let Some((cur_bbox, prev_bbox)) = id.get_bbox(self) else { continue };
                     let resolved = resolve_static_aabb(&bbox, &cur_bbox, &prev_bbox);
-                    *position = (resolved.max + resolved.min) * 0.5;
-                }
-
-                dyn_search_ids.clear();
-                dynamic_kd_tree.find_in_range(*position, 1.1, &mut dyn_search_ids);
-                for (near_idx, _) in dyn_search_ids.iter() {
-                    if (i as u32) < *near_idx {
-                        dyn_dyn_collisions.push((i as u32, *near_idx));
-                    }
-                }
-
-                let rounded_pos = position.map(|x| x.round() as i32);
-                let chunk_pos = rounded_pos.map(|x| (x.rem_euclid(CHUNK_SIZE as i32)) as u8);
-                
-                let offsets: [glm::U8Vec2; _] = [
-                    glm::vec2(255,   1), glm::vec2(0,   1), glm::vec2(1,   1),
-                    glm::vec2(255,   0), glm::vec2(0,   0), glm::vec2(1,   0),
-                    glm::vec2(255, 255), glm::vec2(0, 255), glm::vec2(1, 255),
-                ];
-
-                for offset in offsets {
-                    let check_pos = glm::vec2(
-                        chunk_pos.x.wrapping_add(offset.x),
-                        chunk_pos.y.wrapping_add(offset.y),
-                    );
-                    let quad_pos = (chunk_id * (CHUNK_SIZE as i32) + check_pos.map(|x| x as i32))
-                        .map(|x| x as f32);
-
-                    if let Some(bbox) = chunk.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(quad_pos) {
-                        let (cur_bbox, prev_bbox) = (
-                            get_bbox_from_dynamic_id(*id, *position),
-                            get_bbox_from_dynamic_id(*id, *prev_position),
-                        );
-                        let resolved = resolve_static_aabb(&bbox, &cur_bbox, &prev_bbox);
-                        *position = (resolved.max + resolved.min) * 0.5;
-                    }
+                    id.on_resolved(self, &resolved);
                 }
             }
+        }
 
-            for (idx1, idx2) in dyn_dyn_collisions.iter() {
-                let (p1, pp1) = (dynamic_updated_position[*idx1 as usize], dynamic_prev_position[*idx1 as usize]);
-                let (p2, pp2) = (dynamic_updated_position[*idx2 as usize], dynamic_prev_position[*idx2 as usize]);
-                let (bb1, pbb1) = (Robot::get_render_box(p1), Robot::get_render_box(pp1));
-                let (bb2, pbb2) = (Robot::get_render_box(p2), Robot::get_render_box(pp2));
+        for (id1, id2) in dyn_dyn_collisions.iter() {
+            let Some((bb1, pbb1)) = id1.get_bbox(self) else { continue };
+            let Some((bb2, pbb2)) = id2.get_bbox(self) else { continue };
 
-                let (r1, r2) = resolve_dynamic_aabb(&bb1, &pbb1, &bb2, &pbb2);
+            let (r1, r2) = resolve_dynamic_aabb(&bb1, &pbb1, &bb2, &pbb2);
 
-                dynamic_updated_position[*idx1 as usize] = (r1.min + r1.max) * 0.5;
-                dynamic_updated_position[*idx2 as usize] = (r2.min + r2.max) * 0.5;
-            }
-
-            for (id, pos) in dynamic_global_ids.iter().zip(dynamic_updated_position) {
-                match id >> 24 {
-                    ChunkElements::ROBOT_ID => self.robots[(id & 0xffffff) as usize].movement_module.set_position(pos),
-                    _ => unreachable!(),
-                }
-            }
+            id1.on_resolved(self, &r1);
+            id2.on_resolved(self, &r2);
         }
     }
 }

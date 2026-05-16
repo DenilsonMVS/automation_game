@@ -350,4 +350,9 @@ impl<Id: Clone> KdTree<Id> {
 
         slice.split(position)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Id, glm::Vec2)> {
+        self.ids.iter().zip(self.positions.iter())
+            .map(|(id, pos)| (id.clone(), *pos))
+    }
 }

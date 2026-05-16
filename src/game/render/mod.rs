@@ -1,4 +1,4 @@
-use crate::{MainContext, game::{logic::{GameState, fabricator::Fabricator, robot::Robot, world::World}, render::{robot::ROBOT_DEPTH, robot_info::{EntityId, RobotInfo, RobotInfoContext}, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{GameState, fabricator::Fabricator, robot::Robot}, render::{robot::ROBOT_DEPTH, robot_info::{EntityId, RobotInfo, RobotInfoContext}, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
 
@@ -25,9 +25,9 @@ pub struct RenderState<'a> {
 }
 
 impl<'a> RenderState<'a> {
-    pub fn new(renderer: &'a Renderer, logic_world: &World) -> Self {
+    pub fn new(renderer: &'a Renderer, logic_state: &GameState) -> Self {
         Self {
-            world: ViewWorld::new(renderer, logic_world),
+            world: ViewWorld::new(renderer, logic_state),
             robot_info: None,
             buttons: vec![],
         }
@@ -52,13 +52,16 @@ impl<'a> RenderState<'a> {
                         self.robot_info.as_ref().map(|r| r.id) != Some(*entity)
                     {
                         let instructions = match entity {
-                            EntityId::Robot(id) => logic_state.get_robots()[*id as usize].get_computer().instructions.get(),
-                            EntityId::Fabricator(idx) => logic_state.fabricators[*idx as usize].get_code(),
+                            EntityId::Robot(chunk_id, id) => logic_state.get_robot(*chunk_id, *id).map(|robot| robot.computer.instructions.get()),
+                            EntityId::Fabricator(chunk_id, idx) => logic_state.get_fabricator(*chunk_id, *idx).map(|fabricator| fabricator.get_code()),
                         };
-                        self.robot_info = Some(RobotInfo::new(
-                            *entity,
-                            *instructions,
-                        ));
+
+                        if let Some(instructions) = instructions {
+                            self.robot_info = Some(RobotInfo::new(
+                                *entity,
+                                *instructions,
+                            ));
+                        }
                     }
                 }
             },
@@ -67,8 +70,8 @@ impl<'a> RenderState<'a> {
 
         if let Some(robot_info) = &mut self.robot_info {
             match robot_info.id {
-                EntityId::Robot(id) => {
-                    if let Some(robot) = logic_state.get_robots().get(id as usize) {
+                EntityId::Robot(chunk_id, id) => {
+                    if let Some(robot) = logic_state.get_robot(chunk_id, id) {
                         let context = &mut RobotInfoContext {
                             mc: context,
                             data: Some(robot.computer.registers.get()),
@@ -77,12 +80,12 @@ impl<'a> RenderState<'a> {
                         let ndc_bbox = context.mc.ui.get_ndc_render_box();
                         robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
                         if let Some(code) = robot_info.finished() {
-                            logic_state.write_code(id as usize, code);
+                            logic_state.write_code(chunk_id, id, code);
                             self.robot_info = None;
                         }
                     }
                 },
-                EntityId::Fabricator(idx) => {
+                EntityId::Fabricator(chunk_id, id) => {
                     let context = &mut RobotInfoContext {
                         mc: context,
                         data: None,
@@ -92,7 +95,7 @@ impl<'a> RenderState<'a> {
                     robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
                     if
                         let Some(code) = robot_info.finished() &&
-                        let Some(fabricator) = logic_state.fabricators.get_mut(idx as usize)
+                        let Some(fabricator) = logic_state.get_fabricator_mut(chunk_id, id)
                     {
                         fabricator.start_code = code;
                         self.robot_info = None;
@@ -102,26 +105,34 @@ impl<'a> RenderState<'a> {
         }
 
         self.buttons.clear();
-        for (i, robot) in logic_state.get_robots().iter_enumerate_unordered() {
-            self.buttons.push((EntityId::Robot(i as u32), context.ui.simple_area_manager.push(SimpleArea::new(
-                Robot::get_render_box(robot.movement_module.get_position()).world_to_ndc_pos(&context.ui.camera),
-                ROBOT_DEPTH,
-            ).with_cursor(CursorIcon::Pointer))));
-        }
+        for (chunk_id, chunk) in logic_state.chunks.iter() {
+            for (i, robot) in chunk.robots.iter_enumerate_unordered() {
+                self.buttons.push((
+                    EntityId::Robot(*chunk_id, i as u32),
+                    context.ui.simple_area_manager.push(SimpleArea::new(
+                        Robot::get_render_box(robot.movement_module.get_position()).world_to_ndc_pos(&context.ui.camera),
+                        ROBOT_DEPTH,
+                    ).with_cursor(CursorIcon::Pointer))
+                ));
+            }
 
-        for (i, fabricator) in logic_state.fabricators.iter().enumerate() {
-            self.buttons.push((EntityId::Fabricator(i as u32), context.ui.simple_area_manager.push(SimpleArea::new(
-                Fabricator::get_bbox(fabricator.position.map(|x| x as f32)).world_to_ndc_pos(&context.ui.camera),
-                ROBOT_DEPTH,
-            ).with_cursor(CursorIcon::Pointer))));
+            for (i, fabricator) in chunk.fabricators.iter().enumerate() {
+                self.buttons.push((
+                    EntityId::Robot(*chunk_id, i as u32),
+                    context.ui.simple_area_manager.push(SimpleArea::new(
+                        Fabricator::get_bbox(fabricator.position.map(|x| x as f32)).world_to_ndc_pos(&context.ui.camera),
+                        ROBOT_DEPTH,
+                    ).with_cursor(CursorIcon::Pointer))
+                ));
+            }
         }
     }
 
     pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
         if let Some(robot_info) = &mut self.robot_info {
             match robot_info.id {
-                EntityId::Robot(id) => {
-                    if let Some(robot) = logic_state.get_robots().get(id as usize) {
+                EntityId::Robot(chunk_id, id) => {
+                    if let Some(robot) = logic_state.get_robot(chunk_id, id) {
                         let context = &mut RobotInfoContext {
                             mc: context,
                             data: Some(robot.computer.registers.get()),
@@ -129,7 +140,7 @@ impl<'a> RenderState<'a> {
                         robot_info.send(context);
                     }
                 },
-                EntityId::Fabricator(_) => {
+                EntityId::Fabricator(..) => {
                     let context = &mut RobotInfoContext {
                         mc: context,
                         data: None,
@@ -139,15 +150,17 @@ impl<'a> RenderState<'a> {
             }
         }
 
-        for robot in logic_state.get_robots().iter_unordered() {
-            robot.send(context);
+        for (_, chunk) in logic_state.chunks.iter() {
+            for robot in chunk.robots.iter_unordered() {
+                robot.send(context);
+            }
+
+            for fabricator in chunk.fabricators.iter() {
+                fabricator.send(context);
+            }
         }
 
-        for fabricator in logic_state.fabricators.iter() {
-            fabricator.send(context);
-        }
-
-        self.world.send(logic_state.get_world());
+        self.world.send(logic_state);
     }
 
     pub fn draw(&self, proj_matrix: &glm::Mat4) {

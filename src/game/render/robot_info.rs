@@ -204,8 +204,8 @@ enum RobotInfoMode {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EntityId {
-    Robot(u32),
-    Fabricator(u32),
+    Robot(glm::IVec2, u32),
+    Fabricator(glm::IVec2, u32),
 }
 
 #[derive(Debug)]

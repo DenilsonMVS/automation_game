@@ -1,13 +1,12 @@
-use crate::{game::logic::{GameState, computer::{PC, X0, X2, X3, X4, X15}, fabricator::Fabricator, instruction::{Instruction, Syscall}, robot::Robot, world::{Chunk, World}}, open_simplex::OpenSimplex, stable_index_vector::StableIndexVector};
+use std::collections::HashMap;
+
+use crate::{game::logic::{GameState, computer::{PC, X0, X2, X3, X4, X15}, fabricator::Fabricator, instruction::{Instruction, Syscall}, robot::Robot, world::Chunk}, open_simplex::OpenSimplex, stable_index_vector::StableIndexVector};
 use nalgebra_glm as glm;
 use crate::game::logic::fabricator::Direction;
 
 pub fn create_main_menu_back_view() -> GameState {
     let noise = OpenSimplex::new(0);
-    let chunk = Chunk::new_proc_generated(glm::vec2(0, 0), &noise);
-
-    let mut world = World::new();
-    world.set_chunk(glm::vec2(0, 0), chunk);
+    let mut chunk = Chunk::new_proc_generated(glm::vec2(0, 0), &noise);
 
     /*
     x3 = MaxStorage;
@@ -85,5 +84,10 @@ pub fn create_main_menu_back_view() -> GameState {
             ).with_code(run_code))
         .collect();
 
-    GameState::new(world, fabricators, robots)
+    chunk.robots = robots;
+    chunk.fabricators = fabricators;
+
+    let mut chunks = HashMap::new();
+    chunks.insert(glm::vec2(0, 0), chunk);
+    GameState::new(chunks)
 }

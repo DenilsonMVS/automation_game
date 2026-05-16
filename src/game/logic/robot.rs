@@ -1,7 +1,7 @@
 
 use nalgebra_glm::{self as glm};
 
-use crate::{MainContext, game::logic::{INSTRUCTION_PERIOD, compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::World}};
+use crate::{MainContext, game::logic::{INSTRUCTION_PERIOD, compute_context::ComputeContext, computer::{Computer, MEMORY_SIZE, X14, X15}, display_module::DisplayModule, instruction::{Instruction, Syscall}, mining_module::MiningModule, movement_module::MovementModule, world::MinableGrid}};
 
 const EPS: f32 = 0.0001;
 
@@ -38,7 +38,7 @@ impl Robot {
 
     pub fn update(
         &mut self,
-        world : &mut World,
+        grid: &mut MinableGrid,
         context: &mut MainContext,
     ) {
         let ui = &mut context.ui;
@@ -91,7 +91,7 @@ impl Robot {
             ComputeContext::MiningComputer => {
                 if let Some(ret) = self.mining_module.update(
                     self.movement_module.get_position(),
-                    world, delta, is_instruction_tick,
+                    grid, delta, is_instruction_tick,
                 ) {
                     self.context = ComputeContext::Computer;
                     self.computer.write_reg(X15, ret);

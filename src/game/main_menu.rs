@@ -9,13 +9,13 @@ pub struct MainMenu<'a> {
 impl<'a> MainMenu<'a> {
     pub fn new(renderer: &'a Renderer) -> Self {
         let logic = create_main_menu_back_view();
-        let render = RenderState::new(renderer, logic.get_world());
+        let render = RenderState::new(renderer, &logic);
         return Self { logic, render };
     }
 }
 
 fn get_camera() -> Camera {
-    Camera::new(glm::vec2(99.5, 100.0), 0.1)
+    Camera::new(glm::vec2(99.0, 100.0), 0.1)
 }
 
 impl<'a> Scene for MainMenu<'a> {

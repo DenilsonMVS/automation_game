@@ -1,8 +1,8 @@
 
-use std::{array, collections::HashMap};
+use std::array;
 use nalgebra_glm as glm;
 
-use crate::open_simplex::{FractalSample, OpenSimplex};
+use crate::{MainContext, game::logic::{fabricator::Fabricator, robot::Robot}, open_simplex::{FractalSample, OpenSimplex}, stable_index_vector::StableIndexVector};
 
 pub const CHUNK_MAG: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << CHUNK_MAG;
@@ -25,13 +25,64 @@ impl Default for GridPosition {
 pub struct Chunk {
     grid: [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE],
     pending_updates: Vec<glm::U8Vec2>,
+    pub fabricators: Vec<Fabricator>,
+    pub robots: StableIndexVector<Robot>,
+}
+
+pub struct MinableGrid<'a> {
+    grid: &'a mut [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE],
+    pending_updates: &'a mut Vec<glm::U8Vec2>,
+}
+
+impl<'a> MinableGrid<'a> {
+    pub fn try_mine(&mut self, chunk_position: glm::U8Vec2) -> bool {
+        let position = &mut self.grid[chunk_position.y as usize][chunk_position.x as usize];
+        return match position {
+            GridPosition::Resource(quantity) => {
+                if *quantity == 1 {
+                    *position = GridPosition::None;
+                } else {
+                    *quantity -= 1;
+                }
+                self.pending_updates.push(chunk_position);
+                return true;
+            },
+            _ => false,
+        };
+    }
+
+    pub fn try_release(&mut self, chunk_position: glm::U8Vec2) -> bool {
+        let position = &mut self.grid[chunk_position.y as usize][chunk_position.x as usize];
+        match position {
+            GridPosition::Resource(quantity) => {
+                if *quantity == u8::MAX {
+                    false
+                } else {
+                    *quantity += 1;
+                    self.pending_updates.push(chunk_position);
+                    true
+                }
+            },
+            GridPosition::None => {
+                *position = GridPosition::Resource(1);
+                self.pending_updates.push(chunk_position);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn get(&self, chunk_position: glm::U8Vec2) -> GridPosition {
+        self.grid[chunk_position.y as usize][chunk_position.x as usize]
+    }
 }
 
 impl Chunk {
-    pub fn new() -> Self {
+    pub fn new(fabricators: Vec<Fabricator>, robots: StableIndexVector<Robot>) -> Self {
         Self {
             grid: [[GridPosition::None; _]; _],
             pending_updates: vec![],
+            fabricators, robots,
         }
     }
 
@@ -50,21 +101,13 @@ impl Chunk {
         return Self {
             grid,
             pending_updates: vec![],
+            fabricators: vec![],
+            robots: StableIndexVector::new(),
         };
     }
 
     pub fn get_pending_updates(&self) -> &[glm::U8Vec2] {
         &self.pending_updates
-    }
-
-    fn get_position(&self, global_position: glm::IVec2) -> GridPosition {
-        let chunk_pos = global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as usize);
-        return self.grid[chunk_pos.y][chunk_pos.x];
-    }
-
-    fn get_position_mut(&mut self, global_position: glm::IVec2) -> &mut GridPosition {
-        let chunk_pos = global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as usize);
-        return &mut self.grid[chunk_pos.y][chunk_pos.x];
     }
 
     pub fn get_local_position(&self, position: glm::U8Vec2) -> GridPosition {
@@ -78,78 +121,23 @@ impl Chunk {
     pub fn get_grid_mut(&mut self) -> &mut [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE] {
         &mut self.grid
     }
-}
 
-#[derive(Debug)]
-pub struct World {
-    pub chunks: HashMap<glm::I32Vec2, Chunk>,
-}
+    pub fn update(&mut self, context: &mut MainContext, chunk_id: glm::IVec2) {
+        self.pending_updates.clear();
 
-impl World {
-    pub fn new() -> Self {
-        let chunks = HashMap::new();
-        return Self { chunks };
-    }
-
-    pub fn set_chunk(&mut self, position: glm::IVec2, chunk: Chunk) {
-        self.chunks.insert(position, chunk);
-    }
-
-    pub fn get_chunks(&self) -> &HashMap<glm::I32Vec2, Chunk> {
-        &self.chunks
-    }
-
-    pub fn get_position(&self, global_position: glm::IVec2) -> Option<GridPosition> {
-        let chunk = self.get_chunk(global_position)?;
-        return Some(chunk.get_position(global_position));
-    }
-
-    pub fn get_chunk(&self, global_position: glm::IVec2) -> Option<&Chunk> {
-        let chunk_id = global_position.map(|x| x.div_euclid(CHUNK_SIZE as i32));
-        return self.chunks.get(&chunk_id);
-    }
-
-    fn get_chunk_mut(&mut self, global_position: glm::IVec2) -> Option<&mut Chunk> {
-        let chunk_id = global_position.map(|x| x.div_euclid(CHUNK_SIZE as i32));
-        return self.chunks.get_mut(&chunk_id);
-    }
-
-    pub fn try_mine(&mut self, global_position: glm::IVec2) -> bool {
-        let Some(chunk) = self.get_chunk_mut(global_position) else { return false };
-        let position = chunk.get_position_mut(global_position);
-        return match position {
-            GridPosition::Resource(quantity) => {
-                if *quantity == 1 {
-                    *position = GridPosition::None;
-                } else {
-                    *quantity -= 1;
-                }
-                chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
-                return true;
-            },
-            _ => false,
+        let mut minable_grid = MinableGrid {
+            grid: &mut self.grid,
+            pending_updates: &mut self.pending_updates,
         };
-    }
 
-    pub fn try_release(&mut self, global_position: glm::IVec2) -> bool {
-        let Some(chunk) = self.get_chunk_mut(global_position) else { return false };
-        let position = chunk.get_position_mut(global_position);
-        match position {
-            GridPosition::Resource(quantity) => {
-                if *quantity == u8::MAX {
-                    false
-                } else {
-                    *quantity += 1;
-                    chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
-                    true
-                }
-            },
-            GridPosition::None => {
-                *position = GridPosition::Resource(1);
-                chunk.pending_updates.push(global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8));
-                true
-            }
-            _ => false,
+        for robot in self.robots.iter_unordered_mut() {
+            robot.update(&mut minable_grid, context);
         }
+
+        for fabricator in self.fabricators.iter_mut() {
+            fabricator.update(context, &mut minable_grid, &mut self.robots);
+        }
+
+        self.handle_collisions(chunk_id);
     }
 }

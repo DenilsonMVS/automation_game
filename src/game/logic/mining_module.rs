@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::game::logic::{instruction::Syscall, world::{GridPosition, World}};
+use crate::game::logic::{instruction::Syscall, world::{CHUNK_SIZE, GridPosition, MinableGrid}};
 
 const MINING_TIME: f32 = 10.0;
 const SCAN_TIME: f32 = 1.0;
@@ -34,14 +34,15 @@ impl MiningModule {
         }
     }
 
-    pub fn update(&mut self, position: glm::Vec2, world: &mut World, delta: f32, is_instruction_tick: bool) -> Option<u8> {
+    pub fn update(&mut self, position: glm::Vec2, grid: &mut MinableGrid, delta: f32, is_instruction_tick: bool) -> Option<u8> {
+        let chunk_pos = position.map(|x| (x.round() as i32).rem_euclid(CHUNK_SIZE as i32) as u8);
         match self.syscall {
             Syscall::Mine => {
                 if self.stored == self.max_storage {
                     is_instruction_tick.then_some(0)
                 } else if delta >= self.remaining_time {
                     self.remaining_time = 0.0;
-                    if world.try_mine(position.map(|x| x.round() as i32)) {
+                    if grid.try_mine(chunk_pos) {
                         self.stored += 1;
                         Some(1)
                     } else {
@@ -57,9 +58,7 @@ impl MiningModule {
             Syscall::Scan => {
                 if delta >= self.remaining_time {
                     self.remaining_time = 0.0;
-                    let position = 
-                        world.get_position(position.map(|x| x.round() as i32))
-                        .unwrap_or(GridPosition::None);
+                    let position = grid.get(chunk_pos);
                     match position {
                         GridPosition::Resource(amount) => Some(amount as u8),
                         _ => Some(0),
@@ -76,7 +75,7 @@ impl MiningModule {
                         return Some(0);
                     }
 
-                    if world.try_release(position.map(|x| x.round() as i32)) {
+                    if grid.try_release(chunk_pos) {
                         self.stored -= 1;
                         Some(1)
                     } else {
