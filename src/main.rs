@@ -10,7 +10,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_menu::MainMenu, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
+use crate::{game::{main_menu::MainMenu, save::Save, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -18,6 +18,7 @@ pub struct MainContext<'a, 'b> {
     pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
     pub font: &'a mut Font<'b>,
     pub ui: &'a mut Ui,
+    pub save: &'a mut Save,
 }
 
 impl<'a, 'b> MainContext<'a, 'b> {
@@ -62,6 +63,7 @@ pub struct State<'a> {
     font: Font<'a>,
     simple_shape_renderer: SimpleShapeRenderer<'a>,
     groups: ScissorStack<'a>,
+    save: Save,
 }
 
 impl<'a> ApplicationState<'a> for State<'a> {
@@ -85,8 +87,10 @@ impl<'a> ApplicationState<'a> for State<'a> {
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
         let simple_shape_renderer = SimpleShapeRenderer::new(renderer);
+        let save = Save::load().unwrap_or_default();
 
         Self {
+            save,
             window,
             gl_context,
             gl_surface,
@@ -102,7 +106,10 @@ impl<'a> ApplicationState<'a> for State<'a> {
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
         match &event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+                self.save.save();
+            },
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::Resized(new_size) => {
                 self.ui.update_window_size(glm::vec2(
@@ -170,6 +177,7 @@ impl<'a> State<'a> {
                 font: &mut self.font,
                 ui: &mut self.ui,
                 groups: &mut self.groups,
+                save: &mut self.save,
             };
 
             main_context.simple_shape_renderer.reset();
