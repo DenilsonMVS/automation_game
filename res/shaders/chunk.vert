@@ -17,11 +17,10 @@ const vec2 OFFSETS[4] = vec2[](
     vec2( 0.5,  0.5)
 );
 
-const vec3 COLORS[4] = vec3[](
+const vec3 COLORS[3] = vec3[](
     vec3(0.0,   0.0,  0.0),
     vec3(0.078, 0.59, 0.078),
-    vec3(0.1, 0.1, 0.2),
-    vec3(0.2, 0.2, 0.7)
+    vec3(0.1, 0.1, 0.2)
 );
 
 void main() {

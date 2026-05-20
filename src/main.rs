@@ -10,7 +10,7 @@ use std::num::{NonZeroU32};
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
 use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
 
-use crate::{game::{main_menu::MainMenu, save::Save, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
+use crate::{game::{levels::{SceneOption, SceneOptionId, main_menu::MainMenu}, save::Save, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
 use nalgebra_glm as glm;
 
 pub struct MainContext<'a, 'b> {
@@ -19,6 +19,7 @@ pub struct MainContext<'a, 'b> {
     pub font: &'a mut Font<'b>,
     pub ui: &'a mut Ui,
     pub save: &'a mut Save,
+    pub next_scene: &'a mut Option<SceneOptionId>,
 }
 
 impl<'a, 'b> MainContext<'a, 'b> {
@@ -56,7 +57,7 @@ pub struct State<'a> {
     ui: Ui,
     gl_context: PossiblyCurrentContext,
     gl_surface: Surface<WindowSurface>,
-    scene: Box<dyn Scene + 'a>,
+    scene: SceneOption<'a>,
     renderer: &'a Renderer,
     fence: Option<Fence>,
     fonts: Fonts<'a>,
@@ -82,7 +83,7 @@ impl<'a> ApplicationState<'a> for State<'a> {
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
 
         let ui = Ui::new(Self::get_window_size());
-        let scene = Box::new(MainMenu::new(renderer));
+        let scene = MainMenu::new(renderer).into();
 
         let fonts = Fonts::new(renderer);
         let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
@@ -172,12 +173,14 @@ impl<'a> State<'a> {
         self.groups.reset();
 
         {
+            let mut next_scene = None;
             let mut main_context = MainContext {
                 simple_shape_renderer: &mut self.simple_shape_renderer,
                 font: &mut self.font,
                 ui: &mut self.ui,
                 groups: &mut self.groups,
                 save: &mut self.save,
+                next_scene: &mut next_scene,
             };
 
             main_context.simple_shape_renderer.reset();
@@ -196,6 +199,10 @@ impl<'a> State<'a> {
             self.renderer.clear(&[ClearField::Color, ClearField::Depth]);
             
             self.scene.generate_output(&mut main_context);
+
+            if let Some(scene) = main_context.next_scene.take() {
+                self.scene = scene.create_scene(self.renderer);
+            }
         }
 
         self.groups.finish();

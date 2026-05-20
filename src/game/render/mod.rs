@@ -42,7 +42,7 @@ impl<'a> RenderState<'a> {
         )
     }
 
-    pub fn update(&mut self, logic_state: &mut GameState, context: &mut MainContext) {
+    pub fn update(&mut self, logic_state: &mut GameState, context: &mut MainContext, update_buttons: bool) {
         match context.ui.events.mouse_actions {
             ActionType::NonePress => self.robot_info = None,
             ActionType::AreaPress(id, _) => {
@@ -105,6 +105,10 @@ impl<'a> RenderState<'a> {
         }
 
         self.buttons.clear();
+        if !update_buttons {
+            return;
+        }
+        
         for (chunk_id, chunk) in logic_state.chunks.iter() {
             for (i, robot) in chunk.robots.iter_enumerate_unordered() {
                 self.buttons.push((

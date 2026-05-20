@@ -12,7 +12,6 @@ pub enum GridPosition {
     None,
     Resource(u8),
     Obstacle,
-    Target,
 }
 
 impl Default for GridPosition {
