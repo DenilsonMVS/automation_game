@@ -18,7 +18,8 @@ impl Fabricator {
 
         if self.phase > 0 {
             let alpha = self.phase * 16;
-            let robot_pos = self.position + self.output.get_offset();
+            let (_, output) = self.io_dirs.separate();
+            let robot_pos = self.position + output.get_offset();
             send_ghost(robot_pos.map(|x| x as f32), get_robot_default_color(), alpha as u8, context);
         }
 

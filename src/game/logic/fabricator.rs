@@ -19,14 +19,44 @@ impl Direction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputOutputDirection {
+    BottomTop, LeftTop, RightTop,
+    TopBottom, LeftBottom, RightBottom,
+    TopLeft, BottomLeft, RightLeft,
+    TopRight, BottomRight, LeftRight,
+}
+
+impl InputOutputDirection {
+    pub fn separate(&self) -> (Direction, Direction) {
+        match self {
+            Self::BottomTop    => (Direction::Bottom, Direction::Top),
+            Self::LeftTop      => (Direction::Left,   Direction::Top),
+            Self::RightTop     => (Direction::Right,  Direction::Top),
+            
+            Self::TopBottom    => (Direction::Top,    Direction::Bottom),
+            Self::LeftBottom   => (Direction::Left,   Direction::Bottom),
+            Self::RightBottom  => (Direction::Right,  Direction::Bottom),
+            
+            Self::TopLeft      => (Direction::Top,    Direction::Left),
+            Self::BottomLeft   => (Direction::Bottom, Direction::Left),
+            Self::RightLeft    => (Direction::Right,  Direction::Left),
+            
+            Self::TopRight     => (Direction::Top,    Direction::Right),
+            Self::BottomRight  => (Direction::Bottom, Direction::Right),
+            Self::LeftRight    => (Direction::Left,   Direction::Right),
+        }
+    }
+}
+
+
 const PHASE_TIME: f32 = 5.0;
-pub const PHASE_AMOUNT: u16 = 16;
+pub const PHASE_AMOUNT: u8 = 16;
 
 #[derive(Debug)]
 pub struct Fabricator {
-    pub input: Direction,
-    pub output: Direction,
-    pub phase: u16,
+    pub io_dirs: InputOutputDirection,
+    pub phase: u8,
     time_next_phase: f32,
     pub position: glm::IVec2,
     pub start_code: [Instruction; MEMORY_SIZE],
@@ -35,11 +65,10 @@ pub struct Fabricator {
 impl Fabricator {
     pub fn new(
         position: glm::IVec2,
-        input: Direction,
-        output: Direction,
+        io_dirs: InputOutputDirection,
     ) -> Self {
         Self {
-            input, output,
+            io_dirs,
             phase: 0,
             time_next_phase: PHASE_TIME,
             position,
@@ -57,8 +86,9 @@ impl Fabricator {
         
         self.time_next_phase -= delta;
         if self.time_next_phase <= 0.0 {
-            let input_pos = self.position + self.input.get_offset();
-            let output_pos = self.position + self.output.get_offset();
+            let (input, output) = self.io_dirs.separate();
+            let input_pos = self.position + input.get_offset();
+            let output_pos = self.position + output.get_offset();
             let output_bbox = Robot::get_render_box(output_pos.map(|x| x as f32));
 
             if self.phase != 0 || robots.iter_unordered()
@@ -97,7 +127,8 @@ impl Fabricator {
     }
 
     pub fn get_possible_ghost_position(&self) -> glm::Vec2 {
-        (self.position + self.output.get_offset()).map(|x| x as f32)
+        let (_, output) = self.io_dirs.separate();
+        (self.position + output.get_offset()).map(|x| x as f32)
     }
 
     pub fn get_ghost_position(&self) -> Option<glm::Vec2> {
