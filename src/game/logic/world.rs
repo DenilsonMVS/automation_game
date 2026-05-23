@@ -121,7 +121,7 @@ impl Chunk {
         &mut self.grid
     }
 
-    pub fn update(&mut self, context: &mut MainContext, chunk_id: glm::IVec2) {
+    pub fn update(&mut self, context: &mut MainContext) {
         self.pending_updates.clear();
 
         let mut minable_grid = MinableGrid {
@@ -137,6 +137,6 @@ impl Chunk {
             fabricator.update(context, &mut minable_grid, &mut self.robots);
         }
 
-        self.handle_collisions(chunk_id);
+        self.handle_collisions();
     }
 }

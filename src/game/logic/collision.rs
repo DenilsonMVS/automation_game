@@ -234,7 +234,7 @@ impl Chunk {
         elements
     }
 
-    pub(super) fn handle_collisions(&mut self, chunk_id: glm::IVec2) {
+    pub(super) fn handle_collisions(&mut self) {
         let ChunkElements {
             dynamic_kd_tree_id,
             dynamic_kd_tree_positions,
@@ -281,10 +281,8 @@ impl Chunk {
                     chunk_pos.x.wrapping_add(offset.x),
                     chunk_pos.y.wrapping_add(offset.y),
                 );
-                let quad_pos = (chunk_id * (CHUNK_SIZE as i32) + check_pos.map(|x| x as i32))
-                    .map(|x| x as f32);
 
-                if let Some(bbox) = self.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(quad_pos) {
+                if let Some(bbox) = self.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(check_pos.map(|x| x as f32)) {
                     let Some((cur_bbox, prev_bbox)) = id.get_bbox(self) else { continue };
                     let resolved = resolve_static_aabb(&bbox, &cur_bbox, &prev_bbox);
                     id.on_resolved(self, &resolved);

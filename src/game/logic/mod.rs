@@ -28,8 +28,8 @@ impl GameState {
     }
 
     pub fn update(&mut self, context: &mut MainContext) {
-        for (chunk_id, chunk) in self.chunks.iter_mut() {
-            chunk.update(context, *chunk_id);
+        for (_, chunk) in self.chunks.iter_mut() {
+            chunk.update(context);
         }
     }
 
