@@ -1,103 +1,11 @@
 
-use std::{array, marker::PhantomData, ops::{Add, Deref, Sub}};
-use nalgebra_glm::{self as glm, Scalar};
+use std::array;
+use nalgebra_glm as glm;
 
 use crate::{MainContext, game::logic::{fabricator::Fabricator, robot::Robot}, open_simplex::{FractalSample, OpenSimplex}, stable_index_vector::StableIndexVector};
 
 pub const CHUNK_MAG: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << CHUNK_MAG;
-
-
-pub trait SpaceIdentifier {}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct GenericPosition<T: Clone + Copy + Scalar, Label: SpaceIdentifier> {
-    pub position: glm::TVec2<T>,
-    phantom: PhantomData<Label>,
-}
-
-impl<T: Clone + Copy + Scalar, Label: SpaceIdentifier> Deref for GenericPosition<T, Label> {
-    type Target = glm::TVec2<T>;
-    fn deref(&self) -> &Self::Target {
-        &self.position
-    }
-}
-
-impl<T: Clone + Copy + Scalar, Label: SpaceIdentifier> GenericPosition<T, Label> {
-    pub fn new(x: T, y: T) -> Self {
-        Self {
-            position: glm::vec2(x, y),
-            phantom: PhantomData,
-        }
-    }
-
-    pub fn map<O, F>(&self, f: F) -> GenericPosition<O, Label>
-    where
-        O: Clone + Copy + Scalar,
-        F: FnMut(T) -> O,
-    {
-        GenericPosition {
-            position: self.position.map(f),
-            phantom: PhantomData,
-        }
-    }
-}
-
-macro_rules! impl_op {
-    ($trait:ident, $func:ident) => {
-        impl<T, Label: SpaceIdentifier> $trait<GenericPosition<T, Label>> for GenericPosition<T, Label>
-        where
-            T: Scalar + Copy,
-            glm::TVec2<T>: $trait<Output = glm::TVec2<T>>,
-        {
-            type Output = Self;
-
-            fn $func(self, rhs: Self) -> Self::Output {
-                GenericPosition {
-                    position: $trait::$func(self.position, rhs.position),
-                    phantom: PhantomData,
-                }
-            }
-        }
-    };
-}
-
-impl_op!(Add, add);
-impl_op!(Sub, sub);
-
-pub enum Spaces {
-    Chunk,
-    Global,
-}
-
-pub mod spaces {
-    use crate::game::logic::world::SpaceIdentifier;
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct Chunk;
-    impl SpaceIdentifier for Chunk {}
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct ChunkId;
-    impl SpaceIdentifier for ChunkId {}
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct Global;
-    impl SpaceIdentifier for Global {}
-}
-
-pub type ChunkPosition<T> = GenericPosition<T, spaces::Chunk>;
-pub type ChunkId = GenericPosition<i32, spaces::Chunk>;
-pub type GlobalPosition<T> = GenericPosition<T, spaces::Global>;
-
-impl ChunkId {
-    fn to_global(&self) -> GlobalPosition<i32> {
-        GlobalPosition {
-            position: self.position * CHUNK_SIZE as i32,
-            phantom: PhantomData,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GridPosition {
@@ -115,56 +23,56 @@ impl Default for GridPosition {
 #[derive(Debug)]
 pub struct Chunk {
     grid: [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE],
-    pending_updates: Vec<ChunkPosition<u8>>,
+    pending_updates: Vec<glm::U8Vec2>,
     pub fabricators: Vec<Fabricator>,
     pub robots: StableIndexVector<Robot>,
 }
 
 pub struct MinableGrid<'a> {
     grid: &'a mut [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE],
-    pending_updates: &'a mut Vec<ChunkPosition<u8>>,
+    pending_updates: &'a mut Vec<glm::U8Vec2>,
 }
 
 impl<'a> MinableGrid<'a> {
-    pub fn try_mine(&mut self, position: ChunkPosition<u8>) -> bool {
-        let el = &mut self.grid[position.y as usize][position.x as usize];
-        return match el {
+    pub fn try_mine(&mut self, chunk_position: glm::U8Vec2) -> bool {
+        let position = &mut self.grid[chunk_position.y as usize][chunk_position.x as usize];
+        return match position {
             GridPosition::Resource(quantity) => {
                 if *quantity == 1 {
-                    *el = GridPosition::None;
+                    *position = GridPosition::None;
                 } else {
                     *quantity -= 1;
                 }
-                self.pending_updates.push(position);
+                self.pending_updates.push(chunk_position);
                 return true;
             },
             _ => false,
         };
     }
 
-    pub fn try_release(&mut self, position: ChunkPosition<u8>) -> bool {
-        let el = &mut self.grid[position.y as usize][position.x as usize];
-        match el {
+    pub fn try_release(&mut self, chunk_position: glm::U8Vec2) -> bool {
+        let position = &mut self.grid[chunk_position.y as usize][chunk_position.x as usize];
+        match position {
             GridPosition::Resource(quantity) => {
                 if *quantity == u8::MAX {
                     false
                 } else {
                     *quantity += 1;
-                    self.pending_updates.push(position);
+                    self.pending_updates.push(chunk_position);
                     true
                 }
             },
             GridPosition::None => {
-                *el = GridPosition::Resource(1);
-                self.pending_updates.push(position);
+                *position = GridPosition::Resource(1);
+                self.pending_updates.push(chunk_position);
                 true
             }
             _ => false,
         }
     }
 
-    pub fn get(&self, position: ChunkPosition<u8>) -> GridPosition {
-        self.grid[position.y as usize][position.x as usize]
+    pub fn get(&self, chunk_position: glm::U8Vec2) -> GridPosition {
+        self.grid[chunk_position.y as usize][chunk_position.x as usize]
     }
 }
 
@@ -177,11 +85,11 @@ impl Chunk {
         }
     }
 
-    pub fn new_proc_generated(chunk_id: ChunkId, noise: &OpenSimplex) -> Self {
-        let start_position = chunk_id.to_global().map(|x| x as f32);
+    pub fn new_proc_generated(chunk_id: glm::IVec2, noise: &OpenSimplex) -> Self {
+        let start_position = chunk_id.map(|x| x as f32) * CHUNK_SIZE as f32;
         let grid = array::from_fn(|line| array::from_fn(|column| {
-            let current_position = start_position + GlobalPosition::new(column as f32, line as f32);
-            let value = noise.fractal_sample(current_position.position, &FractalSample::new_harmonic::<6>(255.0, 0.05, 0.5, 2.0));
+            let current_position = start_position + glm::vec2(column as f32, line as f32);
+            let value = noise.fractal_sample(current_position, &FractalSample::new_harmonic::<6>(255.0, 0.05, 0.5, 2.0));
             if value <= 0.0 {
                 GridPosition::None
             } else {
@@ -197,11 +105,11 @@ impl Chunk {
         };
     }
 
-    pub fn get_pending_updates(&self) -> &[ChunkPosition<u8>] {
+    pub fn get_pending_updates(&self) -> &[glm::U8Vec2] {
         &self.pending_updates
     }
 
-    pub fn get_local_position(&self, position: ChunkPosition<u8>) -> GridPosition {
+    pub fn get_local_position(&self, position: glm::U8Vec2) -> GridPosition {
         return self.grid[position.y as usize][position.x as usize];
     }
 
@@ -213,7 +121,7 @@ impl Chunk {
         &mut self.grid
     }
 
-    pub fn update(&mut self, context: &mut MainContext) {
+    pub fn update(&mut self, context: &mut MainContext, chunk_id: glm::IVec2) {
         self.pending_updates.clear();
 
         let mut minable_grid = MinableGrid {
@@ -229,6 +137,6 @@ impl Chunk {
             fabricator.update(context, &mut minable_grid, &mut self.robots);
         }
 
-        self.handle_collisions();
+        self.handle_collisions(chunk_id);
     }
 }

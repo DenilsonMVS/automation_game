@@ -1,15 +1,15 @@
 
-use crate::game::logic::world::ChunkPosition;
+use nalgebra_glm as glm;
 
 #[derive(Debug)]
 pub struct KdTree<Id> {
-    positions: Vec<ChunkPosition<f32>>,
+    positions: Vec<glm::Vec2>,
     ids: Vec<Id>,
 }
 
 #[derive(Debug)]
 struct Slice<'a, Id: Clone> {
-    positions: &'a mut [ChunkPosition<f32>],
+    positions: &'a mut [glm::Vec2],
     ids: &'a mut [Id],
 }
 
@@ -63,7 +63,7 @@ impl<'a, Id: Clone> Slice<'a, Id> {
 }
 
 impl<Id: Clone> KdTree<Id> {
-    pub fn new(mut positions: Vec<ChunkPosition<f32>>, mut ids: Vec<Id>) -> Self {
+    pub fn new(mut positions: Vec<glm::Vec2>, mut ids: Vec<Id>) -> Self {
         let slice = Slice {
             positions: &mut positions,
             ids: &mut ids,
@@ -72,7 +72,7 @@ impl<Id: Clone> KdTree<Id> {
         Self { positions, ids }
     }
 
-    pub fn find_in_range(&self, query: ChunkPosition<f32>, max_dist: f32, output: &mut Vec<(Id, ChunkPosition<f32>)>) {
+    pub fn find_in_range(&self, query: glm::Vec2, max_dist: f32, output: &mut Vec<(Id, glm::Vec2)>) {
         if self.positions.is_empty() {
             return;
         }
@@ -83,9 +83,9 @@ impl<Id: Clone> KdTree<Id> {
         &self,
         start: usize,
         end: usize,
-        query: ChunkPosition<f32>,
+        query: glm::Vec2,
         max_dist: f32,
-        output: &mut Vec<(Id, ChunkPosition<f32>)>
+        output: &mut Vec<(Id, glm::Vec2)>
     ) {
         if start >= end { return; }
 
@@ -117,9 +117,9 @@ impl<Id: Clone> KdTree<Id> {
         &self,
         start: usize,
         end: usize,
-        query: ChunkPosition<f32>,
+        query: glm::Vec2,
         max_dist: f32,
-        output: &mut Vec<(Id, ChunkPosition<f32>)>,
+        output: &mut Vec<(Id, glm::Vec2)>,
     ) {
         if start >= end { return; }
 
@@ -351,7 +351,7 @@ impl<Id: Clone> KdTree<Id> {
         slice.split(position)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Id, ChunkPosition<f32>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Id, glm::Vec2)> {
         self.ids.iter().zip(self.positions.iter())
             .map(|(id, pos)| (id.clone(), *pos))
     }

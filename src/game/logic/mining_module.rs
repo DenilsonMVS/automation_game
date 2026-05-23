@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::game::logic::{instruction::Syscall, world::{CHUNK_SIZE, ChunkPosition, GridPosition, MinableGrid}};
+use crate::game::logic::{instruction::Syscall, world::{CHUNK_SIZE, GridPosition, MinableGrid}};
 
 const MINING_TIME: f32 = 10.0;
 const SCAN_TIME: f32 = 1.0;
@@ -42,7 +42,7 @@ impl MiningModule {
                     is_instruction_tick.then_some(0)
                 } else if delta >= self.remaining_time {
                     self.remaining_time = 0.0;
-                    if grid.try_mine(ChunkPosition::new(chunk_pos.x, chunk_pos.y)) {
+                    if grid.try_mine(chunk_pos) {
                         self.stored += 1;
                         Some(1)
                     } else {
@@ -58,7 +58,7 @@ impl MiningModule {
             Syscall::Scan => {
                 if delta >= self.remaining_time {
                     self.remaining_time = 0.0;
-                    let position = grid.get(ChunkPosition::new(chunk_pos.x, chunk_pos.y));
+                    let position = grid.get(chunk_pos);
                     match position {
                         GridPosition::Resource(amount) => Some(amount as u8),
                         _ => Some(0),
@@ -75,7 +75,7 @@ impl MiningModule {
                         return Some(0);
                     }
 
-                    if grid.try_release(ChunkPosition::new(chunk_pos.x, chunk_pos.y)) {
+                    if grid.try_release(chunk_pos) {
                         self.stored -= 1;
                         Some(1)
                     } else {

@@ -1,12 +1,12 @@
 use std::{array, collections::HashMap};
 
-use crate::{MainContext, game::{logic::{GameState, computer::{PC, X0, X2, X3, X4, X15}, fabricator::Fabricator, instruction::{Instruction, Syscall}, robot::Robot, world::{Chunk, ChunkId}}, render::{RenderState, UI_BASE_DEPTH, robot_info::{get_button_bgcolor, get_button_color}}, scene::Scene}, graphics::{camera::Camera, renderer::{Renderer, positioning::{PositionMode, RenderBox}}}, open_simplex::OpenSimplex, stable_index_vector::StableIndexVector, ui::{HasUi, events::ActionType, rendered_button::{Content, RenderedButton}, ui_element::UiElement}};
+use crate::{MainContext, game::{logic::{GameState, computer::{PC, X0, X2, X3, X4, X15}, fabricator::Fabricator, instruction::{Instruction, Syscall}, robot::Robot, world::Chunk}, render::{RenderState, UI_BASE_DEPTH, robot_info::{get_button_bgcolor, get_button_color}}, scene::Scene}, graphics::{camera::Camera, renderer::{Renderer, positioning::{PositionMode, RenderBox}}}, open_simplex::OpenSimplex, stable_index_vector::StableIndexVector, ui::{HasUi, events::ActionType, rendered_button::{Content, RenderedButton}, ui_element::UiElement}};
 use nalgebra_glm as glm;
 use crate::game::logic::fabricator::Direction;
 
 fn create_main_menu_back_view() -> GameState {
     let noise = OpenSimplex::new(0);
-    let mut chunk = Chunk::new_proc_generated(ChunkId::new(0, 0), &noise);
+    let mut chunk = Chunk::new_proc_generated(glm::vec2(0, 0), &noise);
 
     /*
     x3 = MaxStorage;
