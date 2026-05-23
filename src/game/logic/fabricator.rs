@@ -1,7 +1,7 @@
 
 use nalgebra_glm as glm;
 
-use crate::{MainContext, game::logic::{computer::MEMORY_SIZE, instruction::Instruction, robot::Robot, world::{CHUNK_SIZE, MinableGrid}}, graphics::renderer::positioning::{PositionMode, RenderBox}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{computer::MEMORY_SIZE, instruction::Instruction, robot::Robot, world::{CHUNK_SIZE, ChunkPosition, MinableGrid}}, graphics::renderer::positioning::{PositionMode, RenderBox}, stable_index_vector::StableIndexVector};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -68,7 +68,7 @@ impl Fabricator {
                 })
             {
                 let input_chunk_pos = input_pos.map(|x| x.rem_euclid(CHUNK_SIZE as i32) as u8);
-                if grid.try_mine(input_chunk_pos) {
+                if grid.try_mine(ChunkPosition::new(input_chunk_pos.x, input_chunk_pos.y)) {
                     self.phase += 1;
                     self.time_next_phase += PHASE_TIME;                
                 }

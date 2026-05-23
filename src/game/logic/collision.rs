@@ -1,5 +1,5 @@
 use nalgebra_glm as glm;
-use crate::{game::logic::{fabricator::Fabricator, robot::Robot, world::{CHUNK_SIZE, Chunk, GridPosition}}, graphics::renderer::positioning::{PositionMode, RenderBox}, kd_tree::KdTree};
+use crate::{game::logic::{fabricator::Fabricator, robot::Robot, world::{Chunk, ChunkPosition, GridPosition}}, graphics::renderer::positioning::{PositionMode, RenderBox}, kd_tree::KdTree};
 
 fn resolve_static_aabb(locked: &RenderBox, movable: &RenderBox, prev_movable: &RenderBox) -> RenderBox {
     let mut resolved = *movable;
@@ -125,9 +125,9 @@ fn resolve_dynamic_y(r1: &mut RenderBox, r2: &mut RenderBox, p1: &RenderBox, p2:
 }
 
 impl GridPosition {
-    fn get_bbox(&self, position: glm::Vec2) -> Option<RenderBox> {
+    fn get_bbox(&self, position: ChunkPosition<f32>) -> Option<RenderBox> {
         match self {
-            Self::Obstacle => Some(RenderBox::new_simple(position, PositionMode::Center, glm::vec2(1.0, 1.0))),
+            Self::Obstacle => Some(RenderBox::new_simple(position.position, PositionMode::Center, glm::vec2(1.0, 1.0))),
             _ => None,
         }
     }
@@ -140,10 +140,10 @@ enum StaticId {
 }
 
 impl StaticId {
-    fn get_bbox(&self, position: glm::Vec2) -> RenderBox {
+    fn get_bbox(&self, position: ChunkPosition<f32>) -> RenderBox {
         match self {
-            Self::Fabricator => Fabricator::get_bbox(position),
-            Self::Ghost => Robot::get_render_box(position),
+            Self::Fabricator => Fabricator::get_bbox(position.position),
+            Self::Ghost => Robot::get_render_box(position.position),
         }
     }
 }
@@ -189,25 +189,25 @@ impl DynamicId {
 
 #[derive(Debug, Default)]
 struct ChunkElements {
-    dynamic_kd_tree_positions: Vec<glm::Vec2>,
+    dynamic_kd_tree_positions: Vec<ChunkPosition<f32>>,
     dynamic_kd_tree_id: Vec<DynamicId>,
 
-    static_kd_tree_positions: Vec<glm::Vec2>,
+    static_kd_tree_positions: Vec<ChunkPosition<f32>>,
     static_kd_tree_id: Vec<StaticId>,
 }
 
 impl ChunkElements {
-    fn push_robot(&mut self, position: glm::Vec2, id: usize) {
+    fn push_robot(&mut self, position: ChunkPosition<f32>, id: usize) {
         self.dynamic_kd_tree_positions.push(position);
         self.dynamic_kd_tree_id.push(DynamicId::new_robot(id));
     }
 
-    fn push_fabricator(&mut self, position: glm::Vec2) {
+    fn push_fabricator(&mut self, position: ChunkPosition<f32>) {
         self.static_kd_tree_positions.push(position);
         self.static_kd_tree_id.push(StaticId::Fabricator);
     }
 
-    fn push_ghost_robot(&mut self, position: glm::Vec2) {
+    fn push_ghost_robot(&mut self, position: ChunkPosition<f32>) {
         self.static_kd_tree_positions.push(position);
         self.static_kd_tree_id.push(StaticId::Ghost);
     }
@@ -219,22 +219,22 @@ impl Chunk {
 
         for (id, robot) in self.robots.iter_enumerate_unordered() {
             let position = robot.movement_module.get_position();
-            elements.push_robot(position, id);
+            elements.push_robot(ChunkPosition::new(position.x, position.y), id);
         }
 
         for fabricator in self.fabricators.iter() {
             let position = fabricator.position.map(|x| x as f32);
-            elements.push_fabricator(position);
+            elements.push_fabricator(ChunkPosition::new(position.x, position.y));
 
-            if let Some(pos) = fabricator.get_ghost_position() {
-                elements.push_ghost_robot(pos);
+            if let Some(position) = fabricator.get_ghost_position() {
+                elements.push_ghost_robot(ChunkPosition::new(position.x, position.y));
             }
         }
 
         elements
     }
 
-    pub(super) fn handle_collisions(&mut self, chunk_id: glm::IVec2) {
+    pub(super) fn handle_collisions(&mut self) {
         let ChunkElements {
             dynamic_kd_tree_id,
             dynamic_kd_tree_positions,
@@ -268,8 +268,7 @@ impl Chunk {
                 }
             }
 
-            let rounded_pos = pos.map(|x| x.round() as i32);
-            let chunk_pos = rounded_pos.map(|x| (x.rem_euclid(CHUNK_SIZE as i32)) as u8);
+            let rounded_pos = pos.map(|x| x.round() as u8);
             let offsets: [glm::U8Vec2; _] = [
                 glm::vec2(255,   1), glm::vec2(0,   1), glm::vec2(1,   1),
                 glm::vec2(255,   0), glm::vec2(0,   0), glm::vec2(1,   0),
@@ -277,14 +276,12 @@ impl Chunk {
             ];
 
             for offset in offsets {
-                let check_pos = glm::vec2(
-                    chunk_pos.x.wrapping_add(offset.x),
-                    chunk_pos.y.wrapping_add(offset.y),
+                let check_pos = ChunkPosition::new(
+                    rounded_pos.x.wrapping_add(offset.x),
+                    rounded_pos.y.wrapping_add(offset.y),
                 );
-                let quad_pos = (chunk_id * (CHUNK_SIZE as i32) + check_pos.map(|x| x as i32))
-                    .map(|x| x as f32);
 
-                if let Some(bbox) = self.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(quad_pos) {
+                if let Some(bbox) = self.get_grid()[check_pos.y as usize][check_pos.x as usize].get_bbox(check_pos.map(|x| x as f32)) {
                     let Some((cur_bbox, prev_bbox)) = id.get_bbox(self) else { continue };
                     let resolved = resolve_static_aabb(&bbox, &cur_bbox, &prev_bbox);
                     id.on_resolved(self, &resolved);
