@@ -2,7 +2,7 @@
 use std::array;
 use nalgebra_glm as glm;
 
-use crate::{MainContext, game::logic::{fabricator::Fabricator, robot::Robot}, open_simplex::{FractalSample, OpenSimplex}, stable_index_vector::StableIndexVector};
+use crate::{MainContext, game::logic::{fabricator::Fabricator, robot::Robot, target::Targets}, open_simplex::{FractalSample, OpenSimplex}, stable_index_vector::StableIndexVector};
 
 pub const CHUNK_MAG: usize = 8;
 pub const CHUNK_SIZE: usize = 1 << CHUNK_MAG;
@@ -26,6 +26,7 @@ pub struct Chunk {
     pending_updates: Vec<glm::U8Vec2>,
     pub fabricators: Vec<Fabricator>,
     pub robots: StableIndexVector<Robot>,
+    pub targets: Targets,
 }
 
 pub struct MinableGrid<'a> {
@@ -77,17 +78,17 @@ impl<'a> MinableGrid<'a> {
 }
 
 impl Chunk {
-    pub fn new(fabricators: Vec<Fabricator>, robots: StableIndexVector<Robot>) -> Self {
+    pub fn new(grid: [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE], fabricators: Vec<Fabricator>, robots: StableIndexVector<Robot>, targets: Targets) -> Self {
         Self {
-            grid: [[GridPosition::None; _]; _],
+            grid,
             pending_updates: vec![],
-            fabricators, robots,
+            fabricators, robots, targets,
         }
     }
 
-    pub fn new_proc_generated(chunk_id: glm::IVec2, noise: &OpenSimplex) -> Self {
+    pub fn proc_generated(chunk_id: glm::IVec2, noise: &OpenSimplex) -> [[GridPosition; CHUNK_SIZE]; CHUNK_SIZE] {
         let start_position = chunk_id.map(|x| x as f32) * CHUNK_SIZE as f32;
-        let grid = array::from_fn(|line| array::from_fn(|column| {
+        array::from_fn(|line| array::from_fn(|column| {
             let current_position = start_position + glm::vec2(column as f32, line as f32);
             let value = noise.fractal_sample(current_position, &FractalSample::new_harmonic::<6>(255.0, 0.05, 0.5, 2.0));
             if value <= 0.0 {
@@ -95,14 +96,7 @@ impl Chunk {
             } else {
                 GridPosition::Resource((value as u8).max(1))
             }
-        }));
-
-        return Self {
-            grid,
-            pending_updates: vec![],
-            fabricators: vec![],
-            robots: StableIndexVector::new(),
-        };
+        }))
     }
 
     pub fn get_pending_updates(&self) -> &[glm::U8Vec2] {

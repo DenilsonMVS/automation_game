@@ -17,6 +17,7 @@ pub mod colored_text;
 pub mod go_back_arrow;
 pub mod memory_visualizer;
 pub mod fabricator;
+pub mod targets;
 
 pub struct RenderState<'a> {
     world: ViewWorld<'a>,
@@ -154,7 +155,9 @@ impl<'a> RenderState<'a> {
             }
         }
 
-        for (_, chunk) in logic_state.chunks.iter() {
+        for (chunk_id, chunk) in logic_state.chunks.iter() {
+            chunk.targets.send(*chunk_id, context);
+
             for robot in chunk.robots.iter_unordered() {
                 robot.send(context);
             }

@@ -14,6 +14,7 @@ pub mod movement_module;
 pub mod robot;
 pub mod fabricator;
 pub mod collision;
+pub mod target;
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
@@ -55,5 +56,15 @@ impl GameState {
 
     pub fn get_fabricator_mut(&mut self, chunk_id: glm::IVec2, fabricator_idx: u32) -> Option<&mut Fabricator> {
         self.chunks.get_mut(&chunk_id).and_then(|chunk| chunk.fabricators.get_mut(fabricator_idx as usize))
+    }
+
+    pub fn get_target_counts(&self) -> (usize, usize) {
+        self.chunks.iter().fold(
+            (0, 0),
+            |(total_reached, total), (_, chunk)| {
+                let (chunk_reached, chunk_total) = chunk.targets.count(chunk.robots.iter_unordered());
+                (total_reached + chunk_reached, total + chunk_total)
+            }
+        )
     }
 }
