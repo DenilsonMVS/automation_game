@@ -163,7 +163,9 @@ impl<T: Unpin> StableIndexVector<T> {
             }
 
             let (old_layout, _, _, _) = Self::calculate_layout(self.capacity);
-            alloc::dealloc(self.ptr, old_layout); 
+            if !self.ptr.is_null() {
+                alloc::dealloc(self.ptr, old_layout); 
+            }
 
             self.ptr = new_ptr;
             self.capacity = new_cap;
