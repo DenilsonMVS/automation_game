@@ -1,70 +1,105 @@
-use std::collections::HashMap;
-use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::{compute_context::ComputeContext, computer::MEMORY_SIZE, fabricator::Fabricator, instruction::Instruction, memory::{InstructionMemory, RegisterMemory}, robot::Robot, world::Chunk}};
 
-
-pub mod world;
-pub mod compute_context;
-pub mod computer;
-pub mod display_module;
-pub mod instruction;
-pub mod memory;
-pub mod mining_module;
-pub mod movement_module;
-pub mod robot;
-pub mod fabricator;
-pub mod collision;
-pub mod target;
+pub mod top_level;
+pub mod physics;
 
 const INSTRUCTION_PERIOD: f32 = 0.25;
 
-#[derive(Debug)]
-pub struct GameState {
-    pub chunks: HashMap<glm::I32Vec2, Chunk>,
+use std::{sync::{Arc, atomic::{AtomicBool, Ordering}, mpsc}, thread, time::{Duration, Instant}};
+use crate::{game::{logic::{physics::{PhysicsSnapshot, PhysicsState, RobotPhysics}, top_level::{TopLevelSnapshot, TopLevelState, computer::MEMORY_SIZE, instruction::Instruction, }}, render::RenderMessage}, snapshot_manager::{self, Consumer, Producer}};
+use nalgebra_glm as glm;
+
+pub enum LogicMessage {
+    PushRobot([Instruction; MEMORY_SIZE], glm::Vec2),
+    StartRobotWatch(usize),
+    StopRobotWatch(usize),
 }
 
-impl GameState {
-    pub fn new(chunks: HashMap<glm::I32Vec2, Chunk>) -> Self {
-        Self { chunks }
+pub enum PhysicsMessage {
+    PushRobot(RobotPhysics),
+    ModifyChunk(Vec<(glm::IVec2, bool)>),
+}
+
+
+#[derive(Debug)]
+pub struct JoinState {
+    pub physics: Consumer<PhysicsSnapshot>,
+    pub logic: Consumer<TopLevelSnapshot>,
+    running: Arc<AtomicBool>,
+    physics_tx: mpsc::Sender<PhysicsMessage>,
+    logic_tx: mpsc::Sender<LogicMessage>,
+}
+
+trait SimulationState: Send + 'static {
+    type Snapshot: Send + Sync + 'static;
+    type Message: Send + 'static;
+    fn update(&mut self, delta: f32, rx: &mpsc::Receiver<Self::Message>) -> Self::Snapshot;
+}
+
+impl JoinState {
+    fn start_thread<T: SimulationState>(
+        running: Arc<AtomicBool>,
+        period: Duration,
+        mut sim_state: T,
+        mut producer: Producer<T::Snapshot>,
+        rx: mpsc::Receiver<T::Message>,
+    ) {
+        thread::Builder::new()
+            .spawn(move || {
+                let delta = period.as_secs_f32();
+                while running.load(Ordering::Relaxed) {
+                    let start = Instant::now();
+                    producer.publish(sim_state.update(delta, &rx));
+                    thread::sleep(period.saturating_sub(start.elapsed()));
+                }
+            })
+            .unwrap();
     }
 
-    pub fn update(&mut self, context: &mut MainContext) {
-        for (_, chunk) in self.chunks.iter_mut() {
-            chunk.update(context);
+    pub fn new(render_tx: mpsc::Sender<RenderMessage>) -> Self {
+        let (logic_producer, logic_consumer) = snapshot_manager::channel(TopLevelSnapshot::new());
+        let (physics_producer, physics_consumer) = snapshot_manager::channel(PhysicsSnapshot::new());
+        let running = Arc::new(AtomicBool::new(true));
+
+        let (physics_tx, physics_rx) = mpsc::channel();
+        let (logic_tx, logic_rx) = mpsc::channel();
+
+        let logic_state = TopLevelState::new(physics_consumer.clone(), render_tx);
+        Self::start_thread(
+            running.clone(),
+            Duration::from_millis(100),
+            logic_state, logic_producer, logic_rx,
+        );
+
+        let physics_state = PhysicsState::new(logic_consumer.clone());
+        Self::start_thread(
+            running.clone(),
+            Duration::from_millis(20),
+            physics_state, physics_producer, physics_rx,
+        );
+
+        Self {
+            physics: physics_consumer,
+            logic: logic_consumer,
+            running,
+            physics_tx,
+            logic_tx,
         }
     }
 
-    pub fn write_code(&mut self, chunk_id: glm::IVec2, robot_id: u32, code: [Instruction; MEMORY_SIZE]) {
-        if let Some(robot) = self.get_robot_mut(chunk_id, robot_id) {
-            robot.computer.instructions = InstructionMemory::new(code);
-            robot.computer.registers = RegisterMemory::new([0; MEMORY_SIZE]);
-            robot.context = ComputeContext::Computer;
-        }
+    pub fn push_robot(&self, instructions: [Instruction; MEMORY_SIZE], position: glm::Vec2) {
+        self.logic_tx.send(LogicMessage::PushRobot(instructions, position)).unwrap();
+        self.physics_tx.send(PhysicsMessage::PushRobot(RobotPhysics { position, speed: glm::vec2(0.0, 0.0) })).unwrap();
     }
 
-    pub fn get_robot(&self, chunk_id: glm::IVec2, robot_id: u32) -> Option<&Robot> {
-        self.chunks.get(&chunk_id).and_then(|chunk| chunk.robots.get(robot_id as usize))
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::Relaxed);
     }
 
-    pub fn get_robot_mut(&mut self, chunk_id: glm::IVec2, robot_id: u32) -> Option<&mut Robot> {
-        self.chunks.get_mut(&chunk_id).and_then(|chunk| chunk.robots.get_mut(robot_id as usize))
+    pub fn get_physics_tx(&self) -> mpsc::Sender<PhysicsMessage> {
+        self.physics_tx.clone()
     }
 
-    pub fn get_fabricator(&self, chunk_id: glm::IVec2, fabricator_idx: u32) -> Option<&Fabricator> {
-        self.chunks.get(&chunk_id).and_then(|chunk| chunk.fabricators.get(fabricator_idx as usize))
-    }
-
-    pub fn get_fabricator_mut(&mut self, chunk_id: glm::IVec2, fabricator_idx: u32) -> Option<&mut Fabricator> {
-        self.chunks.get_mut(&chunk_id).and_then(|chunk| chunk.fabricators.get_mut(fabricator_idx as usize))
-    }
-
-    pub fn get_target_counts(&self) -> (usize, usize) {
-        self.chunks.iter().fold(
-            (0, 0),
-            |(total_reached, total), (_, chunk)| {
-                let (chunk_reached, chunk_total) = chunk.targets.count(chunk.robots.iter_unordered());
-                (total_reached + chunk_reached, total + chunk_total)
-            }
-        )
+    pub fn get_logic_tx(&self) -> mpsc::Sender<LogicMessage> {
+        self.logic_tx.clone()
     }
 }

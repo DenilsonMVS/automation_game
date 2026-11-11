@@ -1,115 +1,148 @@
-pub mod graphics;
-pub mod game;
-pub mod open_simplex;
-pub mod ui;
-pub mod stable_index_vector;
-pub mod kd_tree;
-
-use std::num::{NonZeroU32};
+use std::{num::NonZeroU32, sync::mpsc} ;
 
 use glutin::{context::PossiblyCurrentContext, surface::{GlSurface, Surface, WindowSurface}};
-use winit::{event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::Key, window::Window};
-
-use crate::{game::{levels::{SceneOption, SceneOptionId, main_menu::MainMenu}, save::Save, scene::Scene}, graphics::{App, ApplicationState, renderer::{BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::{Font, Fonts}, scissor_group::ScissorStack, simple_shape_renderer::{HasSimpleShapeRenderer, SimpleShapeRenderer}}}, ui::{HasUi, Ui, rendered_button::RenderedButtonContext}};
+use winit::{event::{ElementState, MouseScrollDelta, WindowEvent}, event_loop::{ActiveEventLoop, EventLoop}, keyboard::{Key, KeyCode, NamedKey, PhysicalKey}, window::Window};
 use nalgebra_glm as glm;
+use crate::{
+    game::{logic::{JoinState, top_level::{computer::{X0, X3, X4, X14, X15}, instruction::{Instruction, Syscall}}}, render::{RenderMessage, RenderState}}, graphics::{
+        App, ApplicationState, renderer::{
+            BlendFactor, Capability, ClearField, DepthFunc, Fence, Renderer, fonts::font::Font,
+        },
+    }, ui::Ui,
+};
 
-pub struct MainContext<'a, 'b> {
-    pub groups: &'a mut ScissorStack<'b>,
-    pub simple_shape_renderer: &'a mut SimpleShapeRenderer<'b>,
-    pub font: &'a mut Font<'b>,
-    pub ui: &'a mut Ui,
-    pub save: &'a mut Save,
-    pub next_scene: &'a mut Option<SceneOptionId>,
-}
+pub mod graphics;
+pub mod ui;
+pub mod game;
+pub mod open_simplex;
+pub mod snapshot_manager;
 
-impl<'a, 'b> MainContext<'a, 'b> {
-    pub fn get_button_context<'s>(&'s mut self) -> RenderedButtonContext<'s, 'b> {
-        RenderedButtonContext { 
-            font: self.font, 
-            simple_shape_renderer: self.simple_shape_renderer,
-            groups: self.groups,
-        }
-    }
-}
-
-impl<'a, 'b> HasUi for MainContext<'a, 'b> {
-    fn get_ui(&mut self) -> &mut Ui {
-        self.ui
-    }
-}
-
-impl<'a, 'b> HasSimpleShapeRenderer<'b> for MainContext<'a, 'b> {
-    fn get_simple_shape_renderer(&mut self) -> &mut SimpleShapeRenderer<'b> {
-        self.simple_shape_renderer
-    }
-
-    fn get_groups(&mut self) -> &mut ScissorStack<'b> {
-        self.groups
-    }
-
-    fn get(&mut self) -> (&mut SimpleShapeRenderer<'b>, &mut ScissorStack<'b>) {
-        (self.simple_shape_renderer, self.groups)
-    }
-}
-
-pub struct State<'a> {
+pub struct State {
     window: Window,
-    ui: Ui,
+    renderer: Renderer,
+    fence: Option<Fence>,
     gl_context: PossiblyCurrentContext,
     gl_surface: Surface<WindowSurface>,
-    scene: SceneOption<'a>,
-    renderer: &'a Renderer,
-    fence: Option<Fence>,
-    fonts: Fonts<'a>,
-    font: Font<'a>,
-    simple_shape_renderer: SimpleShapeRenderer<'a>,
-    groups: ScissorStack<'a>,
-    save: Save,
+    ui: Ui,
+
+    mono: Font,
+
+    simulation: JoinState,
+    render: RenderState,
+    render_rx: mpsc::Receiver<RenderMessage>,
+
+    w: bool,
+    a: bool,
+    s: bool,
+    d: bool,
 }
 
-impl<'a> ApplicationState<'a> for State<'a> {
+impl ApplicationState for State {
     fn new(
         window: Window,
         gl_context: PossiblyCurrentContext,
         gl_surface: Surface<WindowSurface>,
-        renderer: &'a Renderer,
+        renderer: Renderer,
     ) -> Self {
-        renderer.enable(Capability::Multisample);
         renderer.enable(Capability::Blend);
-        renderer.enable(Capability::DepthTest);
         renderer.depth_func(DepthFunc::Less);
         renderer.blend_func(BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha);
 
         renderer.clear_color(&glm::vec4(0.8, 0.8, 0.8, 1.0));
+        
+        let (render_tx, render_rx) = mpsc::channel();
 
         let ui = Ui::new(Self::get_window_size());
-        let scene = MainMenu::new(renderer).into();
 
-        let fonts = Fonts::new(renderer);
-        let font = fonts.new_font(renderer, include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap();
-        let simple_shape_renderer = SimpleShapeRenderer::new(renderer);
-        let save = Save::load().unwrap_or_default();
+        let simulation = JoinState::new(render_tx);
+        let instructions = [
+            // [0] Consulta limite e salva em X3
+            Instruction::new_sys(Syscall::MaxStorage),
+            Instruction::new_addi(X3, X15, 0),
+
+            // [2] Configura canal e exibe 0 inicial (X4 começa em 0)
+            Instruction::new_addi(X14, X0, 1),
+            Instruction::new_addi(X15, X4, 0),
+            Instruction::new_sys(Syscall::Display),
+
+            // --- CICLO DO BLOCO ATUAL ---
+            // [5] Se cheio (X4 == X3), pula para andar direto à direita no índice [13]
+            // Destino 13: 13 - (5 + 1) = 7
+            Instruction::new_beq(X4, X3, 7),
+
+            // [6] Escaneia o bloco
+            Instruction::new_sys(Syscall::Scan),
+
+            // [7] Se acabou o minério (X15 == 0), pula para andar à direita no índice [13]
+            // Destino 13: 13 - (7 + 1) = 5
+            Instruction::new_beq(X15, X0, 5),
+
+            // --- MINERAÇÃO NO MESMO BLOCO ---
+            // [8] Minera 1 unidade
+            Instruction::new_sys(Syscall::Mine),
+            // [9] X4 += 1
+            Instruction::new_addi(X4, X4, 1),
+            // [10] X15 = X4
+            Instruction::new_addi(X15, X4, 0),
+            // [11] Atualiza display
+            Instruction::new_sys(Syscall::Display),
+
+            // [12] Volta para reverificar o MESMO bloco no índice [5]
+            // Destino 5: 5 - (12 + 1) = -8 = 16 - 8 = 8
+            Instruction::new_beq(X0, X0, 8),
+
+            // --- AVANÇO À DIREITA (COMPARTILHADO) ---
+            // [13] Anda para a direita
+            Instruction::new_sys(Syscall::MoveRight),
+
+            // [14] Se ainda NÃO estiver cheio (X4 != X3), volta para avaliar novo bloco no índice [5]
+            // Destino 5: 5 - (14 + 1) = -10 = 16 - 10 = 6
+            Instruction::new_bne(X4, X3, 6),
+
+            // [15] Se CHEIO (caiu por fallthrough do bne), volta para MoveRight no índice [13]
+            // Destino 13: 13 - (15 + 1) = 13 - 16 = -3 = 13
+            Instruction::new_beq(X0, X0, 13),
+        ];
+
+        simulation.push_robot(instructions, glm::vec2(0.0, 0.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 1.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 2.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 3.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 4.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 5.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 6.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 7.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 8.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 9.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 10.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 11.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 12.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 13.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 14.0));
+        simulation.push_robot(instructions, glm::vec2(0.0, 15.0));
+
+        let render = RenderState::new(simulation.get_logic_tx());
 
         Self {
-            save,
             window,
+            renderer,
             gl_context,
             gl_surface,
-            ui, 
-            renderer,
-            scene,
             fence: None,
-            fonts, font,
-            simple_shape_renderer,
-            groups: ScissorStack::new(renderer),
+            mono: Font::from_bytes(include_bytes!("../res/fonts/ubuntu_mono.ttf")).unwrap(),
+            ui,
+            w: false, a: false, s: false, d: false,
+            simulation,
+            render,
+            render_rx,
         }
     }
 
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent) {
         match &event {
             WindowEvent::CloseRequested => {
+                self.simulation.stop();
                 event_loop.exit();
-                self.save.save();
             },
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::Resized(new_size) => {
@@ -122,36 +155,41 @@ impl<'a> ApplicationState<'a> for State<'a> {
                 }
                 unsafe { gl::Viewport(0, 0, new_size.width as i32, new_size.height as i32); }
             },
-            WindowEvent::CursorMoved { position, .. } =>
-                self.ui.update_mouse_position(glm::vec2(position.x as f32, position.y as f32)),
-            WindowEvent::MouseWheel { delta, .. } =>
-                match delta {
-                    MouseScrollDelta::LineDelta(_, y) => self.ui.on_mouse_scroll(*y),
-                    _ => {},
-                },
-            WindowEvent::MouseInput { button: MouseButton::Left, state, .. } =>
-                match state {
-                    ElementState::Pressed => self.ui.mouse_pressed(),
-                    ElementState::Released => self.ui.mouse_released(),
-                },
+            WindowEvent::MouseInput { state, .. } => self.ui.update_mouse_state(*state),
+            WindowEvent::CursorMoved { position, .. } => {
+                let pos_f32 = glm::vec2(position.x as f32, position.y as f32);
+                self.ui.update_mouse_position(pos_f32);
+            },
             WindowEvent::KeyboardInput { event, .. } => {
-                self.ui.on_key_event(event);
+                if event.repeat { return; }
 
-                if event.repeat {
-                    return;
+                let new_value = event.state == ElementState::Pressed;
+                match event.physical_key {
+                    PhysicalKey::Code(KeyCode::KeyW) => self.w = new_value,
+                    PhysicalKey::Code(KeyCode::KeyA) => self.a = new_value,
+                    PhysicalKey::Code(KeyCode::KeyS) => self.s = new_value,
+                    PhysicalKey::Code(KeyCode::KeyD) => self.d = new_value,
+                    _ => {},
                 }
 
-                if event.state == ElementState::Released {
-                    match event.logical_key {
-                        Key::Named(winit::keyboard::NamedKey::F11) => {
-                            if self.window.fullscreen().is_some() {
-                                self.window.set_fullscreen(None);
-                            } else {
-                                self.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
-                            }
-                        },
-                        _ => {},
-                    }
+                match (event.state, &event.logical_key) {
+                    (ElementState::Released, Key::Named(NamedKey::F11)) => {
+                        if self.window.fullscreen().is_some() {
+                            self.window.set_fullscreen(None);
+                        } else if let Some(monitor) = self.window.current_monitor() {
+                            self.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(Some(monitor))));
+                        }
+                    },
+                    (ElementState::Released, Key::Named(NamedKey::Escape)) =>
+                        event_loop.exit(),
+                    _ => {},
+                }
+            },
+            WindowEvent::MouseWheel { delta, .. } => {
+                match delta {
+                    MouseScrollDelta::LineDelta(_, y) =>
+                        self.ui.camera.zoom *= (y * 0.05).exp(),
+                    _ => {},
                 }
             },
             _ => (),
@@ -167,69 +205,69 @@ impl<'a> ApplicationState<'a> for State<'a> {
     }
 }
 
-impl<'a> State<'a> {
+const fn bool_to_f32(v: bool) -> f32 {
+    if v { 1.0 } else { 0.0 }
+}
+
+impl State {
     fn redraw(&mut self) {
-        self.ui.on_render_start(&self.window);
-        self.groups.reset();
-
-        {
-            let mut next_scene = None;
-            let mut main_context = MainContext {
-                simple_shape_renderer: &mut self.simple_shape_renderer,
-                font: &mut self.font,
-                ui: &mut self.ui,
-                groups: &mut self.groups,
-                save: &mut self.save,
-                next_scene: &mut next_scene,
-            };
-
-            main_context.simple_shape_renderer.reset();
-            main_context.font.reset();
-
-            main_context.groups.push(main_context.ui.get_ndc_render_box());
-
-            self.scene.game_logic(&mut main_context);
-
-            if let Some(fence) = &self.fence {
-                fence.wait();
-            }
-
-            self.scene.send(&mut main_context);
-            
-            self.renderer.clear(&[ClearField::Color, ClearField::Depth]);
-            
-            self.scene.generate_output(&mut main_context);
-
-            if let Some(scene) = main_context.next_scene.take() {
-                self.scene = scene.create_scene(self.renderer);
-            }
+        if let Some(fence) = &self.fence {
+            fence.wait();
         }
 
-        self.groups.finish();
-        self.simple_shape_renderer.finish();
-        self.font.finish();
+        self.renderer.simple_shape_renderer.reset();
+        self.renderer.font_renderer.reset();
+        self.mono.reset();
 
-        let proj_matrix = self.ui.get_projection_matrix();
+        {
+            let delta = self.ui.get_delta();
+            let camera = &mut self.ui.camera;
+            let camera_move_vec = (
+                bool_to_f32(self.w) * glm::vec2( 0.0,  1.0) + 
+                bool_to_f32(self.a) * glm::vec2(-1.0,  0.0) + 
+                bool_to_f32(self.s) * glm::vec2( 0.0, -1.0) + 
+                bool_to_f32(self.d) * glm::vec2( 1.0,  0.0)) / camera.zoom * delta;
 
-        self.renderer.enable(Capability::ScissorTest);
-            self.simple_shape_renderer.draw(self.renderer, &self.ui, &proj_matrix, &self.groups);
-            self.renderer.depth_mask(false);
-                self.fonts.draw(&mut self.font, &self.groups, &self.ui, &proj_matrix);
-                self.simple_shape_renderer.draw_transparent(&self.ui, &self.groups);
-            self.renderer.depth_mask(true);
-        self.renderer.disable(Capability::ScissorTest);
+            camera.position += camera_move_vec;
+        }
 
-        self.fence = Some(self.renderer.new_fence());
+        let ndc_matrix = self.ui.get_projection_matrix();
+        let world_matrix = self.ui.camera.get_vp_matrix(&ndc_matrix);
 
+        let physics_state = self.simulation.physics.acquire();
+        let logic_state = self.simulation.logic.acquire();
+        self.render.update(
+            &mut self.ui,
+            &*physics_state,
+            &*logic_state,
+            &mut self.renderer,
+            &mut self.mono,
+            &self.render_rx,
+        );
+
+        self.renderer.clear(&[ClearField::Color, ClearField::Depth]);
+
+        self.render.draw(&world_matrix, &mut self.renderer);
+        
+        self.renderer.enable(Capability::DepthTest);
+        self.renderer.simple_shape_renderer.draw(0, &world_matrix);
+
+        self.renderer.disable(Capability::DepthTest);
+        self.renderer.font_renderer.draw(&world_matrix, &mut self.mono, 0);
+
+        self.renderer.simple_shape_renderer.draw(1, &ndc_matrix);    
+        self.renderer.font_renderer.draw(&ndc_matrix, &mut self.mono, 1);    
+
+        self.fence = self.renderer.new_fence();
         self.gl_surface.swap_buffers(&self.gl_context).unwrap();
         self.window.request_redraw();
 
-        self.ui.on_render_end();
+        self.ui.on_frame_end(&self.window);
     }
 }
 
 fn main() {
     let event_loop = EventLoop::new().unwrap();
-    let mut app = App::<State>::new();
+    let mut app = App::<State>::new().unwrap();
     event_loop.run_app(&mut app).unwrap();
 }

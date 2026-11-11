@@ -1,17 +1,24 @@
-use std::{marker::PhantomData};
 
-use crate::graphics::renderer::{GlEnum, Renderer, buffer::GenericBuffer, drawable::DrawMode, scissor_group::DrawArraysIndirectCommand, types::{GlType, GlTypeEnum}};
+use crate::graphics::renderer::{GlEnum, buffer::Buffer, draw_mode::DrawMode, types::{GlType, GlTypeEnum}};
 
 
-pub struct FieldType {
-    pub gl_type: GlTypeEnum,
-    pub size: i32,
-    pub normalized: bool,
-    pub offset: u32,
+#[repr(C)]
+pub(crate) struct DrawArraysIndirectCommand {
+    pub(crate) count: u32,
+    pub(crate) instance_count: u32,
+    pub(crate) first: u32,
+    pub(crate) base_instance: u32,
+}
+
+pub(crate) struct FieldType {
+    pub(crate) gl_type: GlTypeEnum,
+    pub(crate) size: i32,
+    pub(crate) normalized: bool,
+    pub(crate) offset: u32,
 }
 
 impl FieldType {
-    pub const fn new<T: GlType>(normalized: bool, offset: u32) -> Self {
+    pub(crate) const fn new<T: GlType>(normalized: bool, offset: u32) -> Self {
         Self {
             normalized,
             size: T::FIELD_TYPE_SIZE,
@@ -21,7 +28,7 @@ impl FieldType {
     }
 }
 
-pub trait StaticVertexLayout: Sized {
+pub(crate) trait StaticVertexLayout: Sized {
     fn get_fields() -> &'static [FieldType];
     fn get_stride() -> i32 {
         std::mem::size_of::<Self>() as i32
@@ -29,20 +36,19 @@ pub trait StaticVertexLayout: Sized {
     fn get_divisor() -> u32;
 }
 
-pub trait VertexLayout: GenericBuffer {
+pub(crate) trait VertexLayout: Buffer {
     fn get_fields(&self) -> &'static [FieldType];
     fn get_stride(&self) -> i32;
     fn get_divisor(&self) -> u32 { 0 }
 }
 
 #[derive(Debug)]
-pub struct VertexArrayObject<'a> {
+pub(crate) struct VertexArrayObject {
     id: u32,
-    _marker: PhantomData<&'a Renderer>,
 }
 
-impl<'a> VertexArrayObject<'a> {
-    pub fn new(_renderer: &'a Renderer, buffers: &[& (dyn VertexLayout + 'a)]) -> Self {
+impl VertexArrayObject {
+    pub(crate) fn new(buffers: &[& dyn VertexLayout]) -> Self {
         let mut id: u32 = 0u32;
         unsafe {
             gl::CreateVertexArrays(1, &mut id);
@@ -98,10 +104,22 @@ impl<'a> VertexArrayObject<'a> {
             }
         }
 
-        return Self { id, _marker: PhantomData };
+        return Self { id };
     }
 
-    pub fn draw_instanced(&self, vertex_count: i32, instance_count: i32, draw_mode: DrawMode) {
+    pub(crate) fn rebind(&self, binding_index: u32, buffer: &dyn VertexLayout) {
+        unsafe {
+            gl::VertexArrayVertexBuffer(
+                self.id,
+                binding_index,
+                buffer.get_id(),
+                0,
+                buffer.get_stride(),
+            );
+        }
+    }
+
+    pub(crate) fn draw_instanced(&self, vertex_count: i32, instance_count: i32, draw_mode: DrawMode) {
 		unsafe {
             gl::BindVertexArray(self.id);
 			gl::DrawArraysInstanced(
@@ -113,15 +131,26 @@ impl<'a> VertexArrayObject<'a> {
 		}
 	}
 
-    pub fn draw_multi_instanced(&self,
-        command_buffer_id: u32,
+    pub(crate) fn draw(&self, vertex_count: i32, draw_mode: DrawMode) {
+        unsafe {
+            gl::BindVertexArray(self.id);            
+            gl::DrawArrays(
+                draw_mode.to_gl_enum(),
+                0,
+                vertex_count
+            );
+        }
+    }
+
+    pub(crate) fn draw_multi_instanced(&self,
+        command_buffer: &dyn Buffer,
         command_start: u32,
         amount_commands: u32,
         draw_mode: DrawMode,
     ) {
         unsafe {
             gl::BindVertexArray(self.id);
-            gl::BindBuffer(gl::DRAW_INDIRECT_BUFFER, command_buffer_id);
+            gl::BindBuffer(gl::DRAW_INDIRECT_BUFFER, command_buffer.get_id());
             let offset_bytes = command_start as usize * std::mem::size_of::<DrawArraysIndirectCommand>();
             let offset_ptr = offset_bytes as *const std::ffi::c_void;
             gl::MultiDrawArraysIndirect(
@@ -132,20 +161,9 @@ impl<'a> VertexArrayObject<'a> {
             );
         }
     }
-
-    pub fn draw(&self, vertex_count: i32, draw_mode: DrawMode) {
-        unsafe {
-            gl::BindVertexArray(self.id);            
-            gl::DrawArrays(
-                draw_mode.to_gl_enum(),
-                0,
-                vertex_count
-            );
-        }
-    }
 }
 
-impl<'a> Drop for VertexArrayObject<'a> {
+impl Drop for VertexArrayObject {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteVertexArrays(1, &mut self.id);

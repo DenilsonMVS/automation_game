@@ -1,70 +1,77 @@
+use crate::graphics::renderer::{Renderer, fonts::{TextAlign, TextRenderConfig, font::Font}, positioning::{PositionMode, RenderBox}};
 use nalgebra_glm as glm;
-use crate::{MainContext, game::logic::robot::Robot, graphics::{renderer::{positioning::{PositionMode, RenderBox}}}};
 
 const ROBOT_SIZE: f32 = 0.8;
 const WEEL_DIAMETER: f32 = 0.26;
 const WEEL_DISTANCE: f32 = 0.37;
 pub const ROBOT_DEPTH: u16 = 50000;
 const WEELS_DEPTH: u16 = ROBOT_DEPTH + 1;
-const WEEL_COLOR: [u8; 3] = [45, 40, 40];
+const DISPLAY_DEPTH: u16 = ROBOT_DEPTH - 1;
 
-pub(super) fn send_ghost(position: glm::Vec2, color: glm::U8Vec3, alpha: u8, context: &mut MainContext) {
+pub struct Robot {
+    pub position: glm::Vec2,
+    pub speed: glm::Vec2,
+    pub display: Option<u8>,
+}
+
+pub fn send_robot(robot: &Robot, renderer: &mut Renderer, font: &mut Font, extra_time: f32) {
+    let position = robot.position + robot.speed * extra_time;
+
     let edge_offsets = [
-        (glm::vec2(-1.0, -1.0), PositionMode::BottomLeft),
-        (glm::vec2( 1.0, -1.0), PositionMode::BottomRight),
-        (glm::vec2( 1.0,  1.0), PositionMode::TopRight),
-        (glm::vec2(-1.0,  1.0), PositionMode::TopLeft),
+        glm::vec2(-1.0, -1.0),
+        glm::vec2( 1.0, -1.0),
+        glm::vec2( 1.0,  1.0),
+        glm::vec2(-1.0,  1.0),
     ];
 
-    for (offset, _) in edge_offsets {
-        context.simple_shape_renderer.send_ellipse(
+    let simple_shape = &mut renderer.simple_shape_renderer;
+
+    for offset in edge_offsets {
+        let bbox = RenderBox::new(
             position + offset * WEEL_DISTANCE,
             glm::vec2(WEEL_DIAMETER, WEEL_DIAMETER),
             PositionMode::Center,
-            glm::vec4(WEEL_COLOR[0], WEEL_COLOR[1], WEEL_COLOR[2], alpha),
-            WEELS_DEPTH, Some(&context.ui.camera),
-            context.groups
+        );
+
+        simple_shape.send_ellipse(&bbox, get_weel_color(), WEELS_DEPTH, 0);
+    }
+    
+    simple_shape.send_render_box(
+        &get_bbox(position),
+        get_robot_default_color(),
+        ROBOT_DEPTH, 0,
+    );
+
+    if let Some(value) = robot.display {
+        let value = value.to_string();
+        renderer.font_renderer.push(
+            &TextRenderConfig::new(
+                &[(&value, glm::vec4(20, 45, 90, 255))],
+                position,
+                0.5,
+            )
+            .with_depth(DISPLAY_DEPTH)
+            .with_max_line_width(0.5)
+            .with_align(TextAlign::Center),
+            font,
+            0,
         );
     }
-
-    let render_box = Robot::get_render_box(position);
-    context.simple_shape_renderer.send_render_box(
-        &render_box,
-        glm::vec4(color.x, color.y, color.z, alpha),
-        ROBOT_DEPTH, Some(&context.ui.camera),
-        context.groups
-    );
 }
 
-impl Robot {
-    pub fn draw_vec(&self, vec: glm::Vec2, color: glm::U8Vec4, context: &mut MainContext) {
-        let size = glm::length(&vec);
-        context.simple_shape_renderer.send_rotated_rectangle(
-            self.movement_module.get_position(),
-            glm::vec2(0.5, 0.04) * size,
-            PositionMode::CenterLeft,
-            glm::vec2(-vec.y, vec.x),
-            color, 2000, Some(&context.ui.camera), context.groups);
-        
-        context.simple_shape_renderer.send_symmetrical_triangle(
-            self.movement_module.get_position() + vec * 0.6,
-            self.movement_module.get_position() + vec * 0.5,
-            size * 0.1,
-            color, 2000, Some(&context.ui.camera), context.groups);
-    }
 
-    pub fn get_render_box(position: glm::Vec2) -> RenderBox {
-        RenderBox::new_simple(
-            position,
-            PositionMode::Center,
-            glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
-        )
-    }
+fn get_weel_color() -> glm::U8Vec4 {
+    glm::vec4(45, 40, 40, 255)
+}
 
-    pub fn send(&self, context: &mut MainContext) {
-        let color = self.get_color();
-        send_ghost(self.movement_module.get_position(), glm::vec3(color.x, color.y, color.z), 255, context);
+fn get_robot_default_color() -> glm::U8Vec4 {
+    glm::vec4(120, 200, 190, 255)
+}
 
-        self.get_display_module().send(context.font, context.groups, self.movement_module.get_position(), context.ui.get_camera());
-    }
+pub fn get_bbox(position: glm::Vec2) -> RenderBox {
+    RenderBox::new(
+        position,
+        glm::vec2(ROBOT_SIZE, ROBOT_SIZE),
+        PositionMode::Center,
+    )
 }

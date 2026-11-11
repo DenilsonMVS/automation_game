@@ -1,27 +1,6 @@
 
 use nalgebra_glm as glm;
 
-use crate::graphics::camera::Camera;
-
-pub const MAXIMUM_ABS_SPACE: f32 = 8.0;
-pub const SCALE_FACTOR: f32 = i16::MAX as f32 / MAXIMUM_ABS_SPACE;
-
-pub const fn f32_to_short(v: f32) -> i16 {
-    (v * SCALE_FACTOR).ceil().clamp(i16::MIN as f32, i16::MAX as f32) as i16
-}
-
-pub fn vec_to_short<const S: usize>(v: &glm::TVec<f32, S>) -> glm::TVec<i16, S> {
-    v.map(|x| f32_to_short(x))
-}
-
-pub fn vec_to_short_recenter(v: glm::Vec2, camera: &Camera) -> glm::I16Vec2 {
-    vec_to_short(&((v - camera.get_position()) * camera.get_zoom()))
-}
-
-pub fn recenter(v: glm::Vec2, camera: &Camera) -> glm::Vec2 {
-    (v - camera.get_position()) * camera.get_zoom()
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PositionMode {
 	TopLeft,    TopCenter,    TopRight,
@@ -30,12 +9,6 @@ pub enum PositionMode {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum BaseDimensions {
-    Width(f32),
-    Height(f32),
-}
-
-#[derive(Debug, Clone, Copy, Default)]
 pub struct RenderBox {
     pub min: glm::Vec2,
     pub max: glm::Vec2,
@@ -44,17 +17,9 @@ pub struct RenderBox {
 impl RenderBox {
     pub fn new(
         position: glm::Vec2,
+        size: glm::Vec2,
         position_mode: PositionMode,
-        original_size: glm::Vec2,
-        base_dimension: BaseDimensions,
     ) -> Self {
-        let aspect_ratio = original_size.x / original_size.y;
-    
-        let size = match base_dimension {
-            BaseDimensions::Width(w) => glm::vec2(w, w / aspect_ratio),
-            BaseDimensions::Height(h) => glm::vec2(h * aspect_ratio, h),
-        };
-
         let offset = match position_mode {
             PositionMode::TopLeft      => glm::vec2(0.0, -size.y),
             PositionMode::TopCenter    => glm::vec2(-size.x / 2.0, -size.y),
@@ -75,93 +40,20 @@ impl RenderBox {
         return Self { min, max };
     }
 
-    pub fn clamp_to_bounds(&self, bounds: &RenderBox) -> RenderBox {
-        let new_min = glm::vec2(
-            self.min.x.max(bounds.min.x),
-            self.min.y.max(bounds.min.y),
-        );
+    pub fn sub_box(&self, offset: glm::Vec2, size: glm::Vec2, mode: PositionMode, anchor: PositionMode) -> RenderBox {
+        let anchor = self.get_point(anchor);
+        RenderBox::new(anchor + offset, size, mode)
+    }
 
-        let new_max = glm::vec2(
-            self.max.x.min(bounds.max.x),
-            self.max.y.min(bounds.max.y),
-        );
-
-        let safe_max = glm::vec2(
-            new_max.x.max(new_min.x),
-            new_max.y.max(new_min.y),
-        );
-
-        Self {
-            min: new_min,
-            max: safe_max,
+    pub fn offset(&self, amount: glm::Vec2) -> RenderBox {
+        RenderBox {
+            min: self.min + amount,
+            max: self.max + amount,
         }
-    }
-
-    pub fn recenter(&self, camera: &Camera) -> Self {
-        Self {
-            min: recenter(self.min, camera),
-            max: recenter(self.max, camera),
-        }
-    }
-
-    pub fn intersects(&self, other: &RenderBox) -> bool {
-        let separate_x = self.max.x <= other.min.x || self.min.x >= other.max.x;
-        let separate_y = self.max.y <= other.min.y || self.min.y >= other.max.y;
-        !(separate_x || separate_y)
-    }
-
-    pub fn cut(&self, amount: f32) -> Self {
-        Self {
-            min: self.min + glm::vec2(amount, amount),
-            max: self.max - glm::vec2(amount, amount),
-        }
-    }
-
-    pub fn ndc_to_world_pos(&self, camera: &Camera) -> Self {
-        Self {
-            min: camera.ndc_to_world_pos(self.min),
-            max: camera.ndc_to_world_pos(self.max),
-        }
-    }
-
-    pub fn world_to_ndc_pos(&self, camera: &Camera) -> Self {
-        Self {
-            min: camera.world_to_ndc_pos(self.min),
-            max: camera.world_to_ndc_pos(self.max),
-        }
-    }
-
-    pub fn get_center(&self) -> glm::Vec2 {
-        (self.max + self.min) * 0.5
     }
 
     pub fn get_size(&self) -> glm::Vec2 {
         self.max - self.min
-    }
-
-    pub fn new_simple(
-        position: glm::Vec2,
-        position_mode: PositionMode,
-        size: glm::Vec2,
-    ) -> Self {
-        let offset = match position_mode {
-            PositionMode::TopLeft      => glm::vec2(0.0, -size.y),
-            PositionMode::TopCenter    => glm::vec2(-size.x / 2.0, -size.y),
-            PositionMode::TopRight     => glm::vec2(-size.x, -size.y),
-            
-            PositionMode::CenterLeft   => glm::vec2(0.0, -size.y / 2.0),
-            PositionMode::Center       => glm::vec2(-size.x / 2.0, -size.y / 2.0),
-            PositionMode::CenterRight  => glm::vec2(-size.x, -size.y / 2.0),
-            
-            PositionMode::BottomLeft   => glm::vec2(0.0, 0.0),
-            PositionMode::BottomCenter => glm::vec2(-size.x / 2.0, 0.0),
-            PositionMode::BottomRight  => glm::vec2(-size.x, 0.0),
-        };
-
-        let min = position + offset;
-        let max = min + size;
-
-        return Self { min, max };
     }
 
     pub fn get_top_right(&self) -> glm::Vec2 {
@@ -181,13 +73,40 @@ impl RenderBox {
     }
 
     pub fn is_point_inside(&self, point: glm::Vec2) -> bool {
-        self.min.x <= point.x && self.max.x >= point.x &&
-        self.min.y <= point.y && self.max.y >= point.y
+        self.min.x <= point.x && point.x <= self.max.x &&
+        self.min.y <= point.y && point.y <= self.max.y
     }
 
-    pub fn apply_offset(&self, offset: glm::Vec2) -> Self {
-        Self { min: self.min + offset, max: self.max + offset }
+    pub fn get_center(&self) -> glm::Vec2 {
+        (self.min + self.max) / 2.0
     }
+
+    pub fn get_point(&self, mode: PositionMode) -> glm::Vec2 {
+        let center = self.get_center();
+        match mode {
+            PositionMode::TopLeft      => glm::vec2(self.min.x, self.max.y),
+            PositionMode::TopCenter    => glm::vec2(center.x,   self.max.y),
+            PositionMode::TopRight     => glm::vec2(self.max.x, self.max.y),
+
+            PositionMode::CenterLeft   => glm::vec2(self.min.x, center.y),
+            PositionMode::Center       => center,
+            PositionMode::CenterRight  => glm::vec2(self.max.x, center.y),
+
+            PositionMode::BottomLeft   => glm::vec2(self.min.x, self.min.y),
+            PositionMode::BottomCenter => glm::vec2(center.x,   self.min.y),
+            PositionMode::BottomRight  => glm::vec2(self.max.x, self.min.y),
+        }
+    }
+}
+
+pub fn get_screen_bbox(window_size: glm::Vec2) -> RenderBox {
+    let size = 2.0 * if window_size.x > window_size.y {
+        glm::vec2(window_size.x / window_size.y, 1.0)
+    } else {
+        glm::vec2(1.0, window_size.y / window_size.x)
+    };
+
+    RenderBox::new(glm::vec2(0.0, 0.0), size, PositionMode::Center)
 }
 
 pub struct OrientedBox {
@@ -198,67 +117,14 @@ pub struct OrientedBox {
 }
 
 impl OrientedBox {
-    pub fn new(
-        position: glm::Vec2,
-        position_mode: PositionMode,
-        original_size: glm::Vec2,
-        base_dimension: BaseDimensions,
-        up_vector: glm::Vec2,
-    ) -> OrientedBox {
-        let up = glm::normalize(&up_vector);
-        let right = glm::vec2(up.y, -up.x);
-
-        let aspect_ratio = original_size.x / original_size.y;
-        let size = match base_dimension {
-            BaseDimensions::Width(w) => glm::vec2(w, w / aspect_ratio),
-            BaseDimensions::Height(h) => glm::vec2(h * aspect_ratio, h),
-        };
-
-        let half_w = size.x / 2.0;
-        let half_h = size.y / 2.0;
-
-        let center_offset = match position_mode {
-            PositionMode::TopLeft      => right * half_w - up * half_h,
-            PositionMode::TopCenter    => -up * half_h,
-            PositionMode::TopRight     => -right * half_w - up * half_h,
-            PositionMode::CenterLeft   => right * half_w,
-            PositionMode::Center       => glm::vec2(0.0, 0.0),
-            PositionMode::CenterRight  => -right * half_w,
-            PositionMode::BottomLeft   => right * half_w + up * half_h,
-            PositionMode::BottomCenter => up * half_h,
-            PositionMode::BottomRight  => -right * half_w + up * half_h,
-        };
-
-        let center = position + center_offset;
-
-        let half_up = up * half_h;
-        let half_right = right * half_w;
-
-        return OrientedBox {
-            top_left:  center + half_up - half_right,
-            top_right: center + half_up + half_right,
-            bot_left:  center - half_up - half_right,
-            bot_right: center - half_up + half_right,
-        };
-    }
-
-    pub fn recenter(&self, camera: &Camera) -> OrientedBox {
-        Self {
-            top_left: recenter(self.top_left, camera),
-            top_right: recenter(self.top_right, camera),
-            bot_left: recenter(self.bot_left, camera),
-            bot_right: recenter(self.bot_right, camera)
-        }
-    }
-
     pub fn new_rotated(
         position: glm::Vec2,
         position_mode: PositionMode,
         size: glm::Vec2,
-        up_vector: glm::Vec2,
+        forward: glm::Vec2,
     ) -> Self {
-        let up = glm::normalize(&up_vector);
-        let right = glm::vec2(up.y, -up.x);
+        let right = glm::normalize(&forward);
+        let up = glm::vec2(-right.y, right.x);
 
         let half_w = size.x / 2.0;
         let half_h = size.y / 2.0;
@@ -287,43 +153,12 @@ impl OrientedBox {
             bot_right: center - half_up + half_right,
         };
     }
-
-    pub fn get_top_right(&self) -> glm::Vec2 {
-        self.top_right
-    }
-
-    pub fn get_bottom_left(&self) -> glm::Vec2 {
-        self.bot_left
-    }
 }
 
+pub fn screen_position_to_ndc(screen_position: glm::Vec2, window_size: glm::Vec2) -> glm::Vec2 {
+    let screen_bbox = get_screen_bbox(window_size);
+    let norm = screen_position.component_div(&window_size);
+    let inv_y = glm::vec2(norm.x, -norm.y + 1.0);
 
-pub fn scale_dimension(original_size: glm::Vec2, base_dimension: BaseDimensions) -> f32 {
-    match base_dimension {
-        BaseDimensions::Height(new_h) => (new_h / original_size.y) * original_size.x,
-        BaseDimensions::Width(new_w) => (new_w / original_size.x) * original_size.y,
-    }
-}
-
-pub fn screen_pos_to_world_pos(
-    screen_pos: glm::Vec2,
-    window_size: glm::Vec2,
-    i_proj_matrix: &glm::Mat4,
-) -> glm::Vec2 {
-    let width = window_size.x;
-    let height = window_size.y;
-    
-    let ndc_x = (2.0 * screen_pos.x as f32) / width as f32 - 1.0;
-    let ndc_y = 1.0 - (2.0 * screen_pos.y as f32) / height as f32;
-    let ndc_vec = glm::vec4(ndc_x, ndc_y, 0.0, 1.0);
-    let transformed = i_proj_matrix * ndc_vec;
-
-    return glm::vec2(transformed.x, transformed.y);
-}
-
-pub enum SimpleTransform {
-    None,
-    FlipHorizontal,
-    FlipVertical,
-    Rotate180,
+    screen_bbox.min.component_mul(&(glm::vec2(1.0, 1.0) - inv_y)) + screen_bbox.max.component_mul(&inv_y)
 }

@@ -120,8 +120,6 @@ pub fn program_interface(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut item_struct = parse_macro_input!(input as ItemStruct);
 	let name = &item_struct.ident;
 
-	item_struct.generics.params.push(syn::parse_quote!('a));
-
 	let mut field_info = Vec::new();
 
 	if let Fields::Named(ref mut fields) = item_struct.fields {
@@ -135,7 +133,7 @@ pub fn program_interface(args: TokenStream, input: TokenStream) -> TokenStream {
 			field.vis = syn::Visibility::Public(syn::parse_quote!(pub));
 		}
 
-		fields.named.push(syn::parse_quote!(pub program: Program<'a>));
+		fields.named.push(syn::parse_quote!(pub program: Program));
 	}
 
 	let shader_inits = shader_args.args.iter().map(|(kind, path)| {
@@ -179,9 +177,9 @@ pub fn program_interface(args: TokenStream, input: TokenStream) -> TokenStream {
 	let expanded = quote! {
 		#item_struct
 
-		impl<'a> #name<'a> {
-			pub fn init(renderer: &'a Renderer) -> anyhow::Result<Self> {
-				let program = Program::new(renderer, &[
+		impl #name {
+			pub fn init() -> anyhow::Result<Self> {
+				let program = Program::new(&[
 					#(#shader_inits),*
 				])?;
 
@@ -200,8 +198,8 @@ pub fn program_interface(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 
-		impl<'a> std::ops::Deref for #name<'a> {
-			type Target = Program<'a>;
+		impl std::ops::Deref for #name {
+			type Target = Program;
 			fn deref(&self) -> &Self::Target {
 				&self.program
 			}

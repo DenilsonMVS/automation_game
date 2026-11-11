@@ -1,67 +1,12 @@
-use std::{array, collections::HashMap};
-use macros::{GlVertex, program_interface};
+use std::collections::HashMap;
+
+use crate::{game::{logic::top_level::{self, chunk::{CHUNK_MAG, CHUNK_SIZE, GridPosition}}, render::chunk::ViewChunk}, graphics::renderer::{Capability, Renderer, program::{Program, ShaderType, uniform::UniformValue}}};
+use macros::program_interface;
 use nalgebra_glm as glm;
-
-use crate::{game::logic::{GameState, world::{CHUNK_MAG, CHUNK_SIZE, Chunk, GridPosition}}, graphics::renderer::{Renderer, buffer::DynamicUnitBuffer, drawable::DrawMode, program::{Program, ShaderType}, uniform::UniformValue, vertex_array_object::{FieldType, StaticVertexLayout, VertexArrayObject}}};
-
-#[derive(Debug, Clone, Copy, GlVertex)]
-#[vertex(divisor = 1)]
-struct ChunkPosition {
-    id: u8,
-    #[normalized]
-    size: u8,
-}
-
-impl GridPosition {
-    fn get_render_info(&self) -> ChunkPosition {
-        match self {
-            Self::None => ChunkPosition { id: 0, size: 0 },
-            Self::Resource(quantity) => ChunkPosition {
-                size: {
-                    let max_qtd = 255;
-                    ((*quantity as f32 / max_qtd as f32).sqrt() * 255.0).clamp(0.0, 255.0) as u8
-                },
-                id: 1,
-            },
-            Self::Obstacle => ChunkPosition { id: 2, size: 255 },
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ViewChunk<'a> {
-    vao: VertexArrayObject<'a>,
-    vbo: DynamicUnitBuffer<'a, ChunkPosition>,
-}
-
-impl<'a> ViewChunk<'a> {
-    fn new(renderer: &'a Renderer, grid: &[[GridPosition; CHUNK_SIZE]; CHUNK_SIZE]) -> Self {
-        let buffer_data: [_; CHUNK_SIZE * CHUNK_SIZE] = array::from_fn(|idx| {
-            let i = idx / CHUNK_SIZE;
-            let j = idx % CHUNK_SIZE;
-            return grid[i][j].get_render_info();
-        });
-
-        let vbo = DynamicUnitBuffer::new(renderer, &buffer_data);
-        let vao = VertexArrayObject::new(renderer, &[&vbo]);
-        return Self { vao, vbo };
-    }
-
-    fn send_updates(&mut self, logic_chunk: &Chunk) {
-        for update_pos in logic_chunk.get_pending_updates() {
-            let index = update_pos.y as usize * CHUNK_SIZE + update_pos.x as usize;
-            self.vbo.write(index, &logic_chunk.get_local_position(*update_pos).get_render_info());
-        }
-    }
-
-    fn draw(&self) {
-        self.vao.draw_instanced(4, (CHUNK_SIZE * CHUNK_SIZE) as i32, DrawMode::TriangleFan);
-    }
-}
 
 #[program_interface(
 	vert = "../../../res/shaders/chunk.vert",
-	frag = "../../../res/shaders/simple_color.frag"
+	frag = "../../../res/shaders/filled.frag"
 )]
 struct ChunkProgram {
     u_vp: glm::Mat4,
@@ -69,40 +14,46 @@ struct ChunkProgram {
     u_chunk_start_pos: glm::Vec2,
 }
 
-pub struct ViewWorld<'a> {
-    chunks: HashMap<glm::IVec2, ViewChunk<'a>>,
-    chunk_program: ChunkProgram<'a>,
+pub struct World {
+    chunks: HashMap<glm::IVec2, ViewChunk>,
+    chunk_program: ChunkProgram,
 }
 
-impl<'a> ViewWorld<'a> {
-    pub fn new(renderer: &'a Renderer, logic_state: &GameState) -> Self {
-        let chunks: HashMap<glm::IVec2, ViewChunk> = logic_state.chunks
-            .iter()
-            .map(|(position, chunk)|
-                (*position, ViewChunk::new(renderer, chunk.get_grid())))
-            .collect();
-
-        let chunk_program = ChunkProgram::init(renderer).unwrap();
+impl World {
+    pub fn new() -> Self {
+        let chunk_program = ChunkProgram::init().unwrap();
         chunk_program.set_u_cunk_mag(&(CHUNK_MAG as i32));
-
-        return Self { chunks, chunk_program };
+        
+        Self {
+            chunks: HashMap::new(),
+            chunk_program,
+        }
     }
 
-    pub fn send(&mut self, logic_state: &GameState) {
-        for (position, logic_chunk) in logic_state.chunks.iter() {
-            if let Some(view_chunk) = self.chunks.get_mut(position) {
-                view_chunk.send_updates(logic_chunk);
+    pub fn modify_chunk(&mut self, modifications: &[(glm::IVec2, GridPosition)]) {
+        for (global_position, value) in modifications.iter() {
+            let chunk_id = global_position.map(|x| x.div_euclid(CHUNK_SIZE as i32));
+            let chunk_pos = global_position.map(|x| x.rem_euclid(CHUNK_SIZE as i32));
+            if let Some(chunk) = self.chunks.get_mut(&chunk_id) {
+                chunk.update(chunk_pos, *value);
             }
         }
     }
 
-    pub fn draw(&self, proj_matrix: &glm::Mat4) {
+    pub fn add_chunk(&mut self, position: glm::IVec2, chunk: &top_level::chunk::Chunk) {
+        self.chunks.insert(position, ViewChunk::new(chunk));
+    }
+
+    pub fn draw(&self, renderer: &mut Renderer, u_vp: &glm::Mat4) {
+        renderer.disable(Capability::DepthTest);
+        renderer.enable(Capability::Multisample);
+
         self.chunk_program.bind();
-        self.chunk_program.set_u_vp(proj_matrix);
-        for (id, chunk) in self.chunks.iter() {
-            self.chunk_program.set_u_chunk_start_pos(&id.map(|x| (x * CHUNK_SIZE as i32) as f32));
+        self.chunk_program.set_u_vp(u_vp);
+
+        for (pos, chunk) in self.chunks.iter() {
+            self.chunk_program.set_u_chunk_start_pos(&pos.map(|x| x as f32));
             chunk.draw();
         }
     }
 }
-

@@ -1,18 +1,19 @@
 
+use std::{os::raw::c_void, ptr::NonNull};
+
 use nalgebra_glm as glm;
+use anyhow::Result;
+use crate::graphics::renderer::{fonts::FontRenderer, simple_shape::SimpleShapeRenderer};
+
 pub mod buffer;
 pub mod vertex_array_object;
 pub mod types;
+pub mod draw_mode;
 pub mod program;
-pub mod drawable;
+pub mod simple_shape;
 pub mod texture;
-pub mod uniform;
 pub mod fonts;
-pub mod atlas;
 pub mod positioning;
-pub mod simple_texture;
-pub mod simple_shape_renderer;
-pub mod scissor_group;
 
 trait GlEnum: Sized {
     fn to_gl_enum(&self) -> u32;
@@ -174,38 +175,53 @@ impl GlEnum for BlendFactor {
 }
 
 pub struct Fence {
-	fence: gl::types::GLsync,
+	fence: NonNull<c_void>,
 }
 
 impl Fence {
-	fn new() -> Self {
-		Self { fence: unsafe { gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) } }
-	}
+	pub fn new() -> Option<Self> {
+        unsafe {
+            let sync: gl::types::GLsync = gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0);
+            NonNull::new(sync as *mut c_void).map(|fence| Self { fence })
+        }
+    }
 
-	pub fn wait(&self) {
-		unsafe {
-			gl::ClientWaitSync(self.fence, gl::SYNC_FLUSH_COMMANDS_BIT, gl::TIMEOUT_IGNORED);
-		}
-	}
+	pub fn wait(&self) -> gl::types::GLenum {
+        unsafe {
+            gl::ClientWaitSync(
+                self.fence.as_ptr() as gl::types::GLsync,
+                gl::SYNC_FLUSH_COMMANDS_BIT,
+                gl::TIMEOUT_IGNORED,
+            )
+        }
+    }
 }
 
 impl Drop for Fence {
-	fn drop(&mut self) {
-		unsafe {
-			gl::DeleteSync(self.fence);
-		}
-	}
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteSync(self.fence.as_ptr() as gl::types::GLsync);
+        }
+    }
 }
 
 
-pub struct Renderer;
+pub struct Renderer {
+	pub simple_shape_renderer: SimpleShapeRenderer,
+	pub font_renderer: FontRenderer,
+}
 
 impl Renderer {
-    pub(super) const fn new() -> Self {
-        Self
+    pub(super) fn new() -> Result<Self> {
+		let simple_shape_renderer = SimpleShapeRenderer::new()?;
+		let font_renderer = FontRenderer::new()?;
+        Ok(Self {
+			simple_shape_renderer,
+			font_renderer,
+		})
     }
 
-	pub fn new_fence(&self) -> Fence {
+	pub fn new_fence(&self) -> Option<Fence> {
 		Fence::new()
 	}
 

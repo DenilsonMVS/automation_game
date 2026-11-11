@@ -1,11 +1,11 @@
-use std::{marker::PhantomData, os::raw::c_void};
+use std::os::raw::c_void;
 
 use image::{GenericImageView, load_from_memory};
 use nalgebra_glm as glm;
-use crate::graphics::renderer::{GlEnum, Renderer};
+use crate::graphics::renderer::GlEnum;
 use anyhow::Result;
 
-pub enum MagFiltering {
+pub(crate) enum MagFiltering {
     Nearest,
     Linear
 }
@@ -27,7 +27,7 @@ impl GlEnum for MagFiltering {
     }
 }
 
-pub enum MinFiltering {
+pub(crate) enum MinFiltering {
     Nearest,
 	Linear,
 	NearestMipmapNearest,
@@ -70,7 +70,7 @@ impl GlEnum for MinFiltering {
 	}
 }
 
-pub enum TextureWrap {
+pub(crate) enum TextureWrap {
     Repeat,
 	MirroredRepeat,
 	ClampToEdge,
@@ -98,14 +98,12 @@ impl GlEnum for TextureWrap {
 	}
 }
 
-pub struct Texture<'a> {
+pub(crate) struct Texture {
     id: u32,
-    _marker: PhantomData<&'a Renderer>,
 }
 
-impl<'a> Texture<'a> {
-    pub fn from_image_bytes(
-        _renderer: &'a Renderer,
+impl Texture {
+    pub(crate) fn from_image_bytes(
         bytes: &[u8],
         mag_filter: MagFiltering,
         min_filter: MinFiltering,
@@ -152,17 +150,17 @@ impl<'a> Texture<'a> {
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, wrap.to_gl_enum() as i32);
         }
 
-        return Ok(Self { id, _marker: PhantomData });
+        return Ok(Self { id });
     }
 
-    pub fn bind_to_unit(&self, unit: u32) {
+    pub(crate) fn bind_to_unit(&self, unit: u32) {
         unsafe {
             gl::ActiveTexture(gl::TEXTURE0 + unit);
             gl::BindTexture(gl::TEXTURE_2D, self.id);
         }
     }
 
-    pub fn from_font_raw(_renderer: &'a Renderer, bytes: &[glm::U8Vec3], width: usize) -> Self {
+    pub(crate) fn from_font_raw(bytes: &[glm::U8Vec3], width: usize) -> Self {
         let mut id = 0u32;
 
         let height = bytes.len() / width;
@@ -191,14 +189,11 @@ impl<'a> Texture<'a> {
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
         }
 
-        return Self {
-            id,
-            _marker: PhantomData
-        };
+        Self { id }
     }
 }
 
-impl<'a> Drop for Texture<'a>  {
+impl Drop for Texture  {
     fn drop(&mut self) {
         unsafe {
             gl::DeleteTextures(1, &self.id);

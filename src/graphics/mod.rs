@@ -55,6 +55,7 @@ extern "system" fn gl_debug_output(
 }
 
 use std::num::{NonZero, NonZeroU32};
+use std::sync::atomic::{AtomicBool, Ordering};
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::{ContextApi, ContextAttributesBuilder, GlProfile, PossiblyCurrentContext, Version};
 use glutin::display::GetGlDisplay;
@@ -68,27 +69,30 @@ use winit::window::{Window, WindowId};
 use crate::graphics::renderer::Renderer;
 use nalgebra_glm as glm;
 
-const RENDERER: Renderer = Renderer::new();
-
-pub trait ApplicationState<'a> {
+pub trait ApplicationState {
     fn get_window_title() -> &'static str;
     fn get_window_size() -> glm::Vec2;
-    fn new(window: Window, gl_context: PossiblyCurrentContext, gl_surface: Surface<WindowSurface>, renderer: &'a Renderer) -> Self;
+    fn new(window: Window, gl_context: PossiblyCurrentContext, gl_surface: Surface<WindowSurface>, renderer: Renderer) -> Self;
     fn event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent);
 }
 
-pub struct App<'a, T: ApplicationState<'a>> {
+pub struct App<T: ApplicationState> {
     state: Option<T>,
-    _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl<'a, T: ApplicationState<'a>> App<'a, T> {
-    pub fn new() -> Self {
-        Self { state: None, _marker: std::marker::PhantomData }
+static APP_EXISTS: AtomicBool = AtomicBool::new(false);
+
+impl<T: ApplicationState> App<T> {
+    pub fn new() -> Option<Self> {
+        if APP_EXISTS.swap(true, Ordering::SeqCst) {
+            None
+        } else {
+            Some(Self { state: None })
+        }
     }
 }
 
-impl<'a, T: ApplicationState<'a>> ApplicationHandler for App<'a, T> {
+impl<T: ApplicationState> ApplicationHandler for App<T> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_size = T::get_window_size();
         let window_attrs = Window::default_attributes()
@@ -152,7 +156,8 @@ impl<'a, T: ApplicationState<'a>> ApplicationHandler for App<'a, T> {
             gl::DebugMessageCallback(Some(gl_debug_output), std::ptr::null());
         }
 
-        self.state = Some(T::new(window, gl_context, gl_surface, &RENDERER));
+        let renderer = Renderer::new().unwrap();
+        self.state = Some(T::new(window, gl_context, gl_surface, renderer));
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {

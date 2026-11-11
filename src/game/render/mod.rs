@@ -1,176 +1,126 @@
-use crate::{MainContext, game::{logic::{GameState, fabricator::Fabricator, robot::Robot}, render::{robot::ROBOT_DEPTH, robot_info::{EntityId, RobotInfo, RobotInfoContext}, world::ViewWorld}}, graphics::renderer::{Renderer, positioning::{PositionMode, RenderBox}}, ui::{events::ActionType, simple_area::SimpleArea, simple_area_manager::AreaId, ui_element::UiElement}};
+use std::sync::mpsc;
+
 use nalgebra_glm as glm;
 use winit::window::CursorIcon;
+use crate::{game::{logic::{LogicMessage, physics::PhysicsSnapshot, top_level::{self, TopLevelSnapshot, chunk::GridPosition, }}, render::{robot::{Robot, send_robot}, robot_info::RobotInfo, world::World}}, graphics::renderer::{Renderer, fonts::font::Font}, ui::{ListeningArea, Ui}};
 
-pub const UI_BASE_DEPTH: u16 = 1000;
-
-pub const INFO_WIDTH: f32 = 1.2;
-pub const INFO_HEIGHT: f32 = 1.6;
-
-pub mod display_module;
+pub mod chunk;
 pub mod robot;
 pub mod world;
 pub mod robot_info;
-pub mod instruction_editor;
-pub mod instruction_view;
-pub mod colored_text;
-pub mod go_back_arrow;
-pub mod memory_visualizer;
-pub mod fabricator;
-pub mod targets;
 
-pub struct RenderState<'a> {
-    world: ViewWorld<'a>,
-    robot_info: Option<RobotInfo>,
-    buttons: Vec<(EntityId, AreaId)>,
+
+#[derive(Debug, Clone)]
+pub enum RenderMessage {
+    ChunkGenerated((glm::IVec2, Box<top_level::chunk::Chunk>)),
+    ModifyChunk(Vec<(glm::IVec2, GridPosition)>),
 }
 
-impl<'a> RenderState<'a> {
-    pub fn new(renderer: &'a Renderer, logic_state: &GameState) -> Self {
+pub struct RenderState {
+    world: World,
+    robot_buttons: Vec<u64>,
+    robot_info: Option<RobotInfo>,
+    logic_tx: mpsc::Sender<LogicMessage>,
+}
+
+impl RenderState {
+    pub fn new(logic_tx: mpsc::Sender<LogicMessage>) -> Self {
         Self {
-            world: ViewWorld::new(renderer, logic_state),
+            world: World::new(),
+            robot_buttons: vec![],
             robot_info: None,
-            buttons: vec![],
+            logic_tx,
         }
     }
 
-    fn get_robot_info_bbox(ndc_bbox: &RenderBox) -> RenderBox {
-        const MARGIN: f32 = 0.03;
-        RenderBox::new_simple(
-            ndc_bbox.get_top_left() + glm::vec2(MARGIN, -MARGIN),
-            PositionMode::TopLeft,
-            glm::vec2(INFO_WIDTH, INFO_HEIGHT),
-        )
-    }
-
-    pub fn update(&mut self, logic_state: &mut GameState, context: &mut MainContext, update_buttons: bool) {
-        match context.ui.events.mouse_actions {
-            ActionType::NonePress => self.robot_info = None,
-            ActionType::AreaPress(id, _) => {
-                for (_, (entity, button)) in self.buttons.iter().enumerate() {
-                    if
-                        id == *button &&
-                        self.robot_info.as_ref().map(|r| r.id) != Some(*entity)
-                    {
-                        let instructions = match entity {
-                            EntityId::Robot(chunk_id, id) => logic_state.get_robot(*chunk_id, *id).map(|robot| robot.computer.instructions.get()),
-                            EntityId::Fabricator(chunk_id, idx) => logic_state.get_fabricator(*chunk_id, *idx).map(|fabricator| fabricator.get_code()),
-                        };
-
-                        if let Some(instructions) = instructions {
-                            self.robot_info = Some(RobotInfo::new(
-                                *entity,
-                                *instructions,
-                            ));
-                        }
-                    }
-                }
-            },
-            _ => {},
-        }
-
-        if let Some(robot_info) = &mut self.robot_info {
-            match robot_info.id {
-                EntityId::Robot(chunk_id, id) => {
-                    if let Some(robot) = logic_state.get_robot(chunk_id, id) {
-                        let context = &mut RobotInfoContext {
-                            mc: context,
-                            data: Some(robot.computer.registers.get()),
-                        };
-
-                        let ndc_bbox = context.mc.ui.get_ndc_render_box();
-                        robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
-                        if let Some(code) = robot_info.finished() {
-                            logic_state.write_code(chunk_id, id, code);
-                            self.robot_info = None;
-                        }
-                    }
-                },
-                EntityId::Fabricator(chunk_id, id) => {
-                    let context = &mut RobotInfoContext {
-                        mc: context,
-                        data: None,
-                    };
-
-                    let ndc_bbox = context.mc.ui.get_ndc_render_box();
-                    robot_info.update(&Self::get_robot_info_bbox(&ndc_bbox), UI_BASE_DEPTH, context);
-                    if
-                        let Some(code) = robot_info.finished() &&
-                        let Some(fabricator) = logic_state.get_fabricator_mut(chunk_id, id)
-                    {
-                        fabricator.start_code = code;
-                        self.robot_info = None;
-                    }
-                },
+    fn handle_messages(&mut self, rx: &mpsc::Receiver<RenderMessage>) {
+        for message in rx.try_iter() {
+            match message {
+                RenderMessage::ChunkGenerated((position, chunk)) =>
+                    self.world.add_chunk(position, &chunk),
+                RenderMessage::ModifyChunk(modifications) =>
+                    self.world.modify_chunk(&modifications),
             }
         }
+    }
 
-        self.buttons.clear();
-        if !update_buttons {
-            return;
+    pub fn update(
+        &mut self,
+        ui: &mut Ui,
+        physics: &PhysicsSnapshot,
+        logic: &TopLevelSnapshot,
+        renderer: &mut Renderer,
+        font: &mut Font,
+        rx: &mpsc::Receiver<RenderMessage>,
+    ) {
+        self.handle_messages(rx);
+
+        let camera = ui.camera;
+
+        let top_area = ui.get_top_area();
+        let mut hovering_robot_idx = None;
+
+        for (i, robot) in physics.robots.iter().enumerate() {
+            let id = if let Some(&existing_id) = self.robot_buttons.get(i) {
+                existing_id
+            } else {
+                let new_id = ui.new_id();
+                self.robot_buttons.push(new_id);
+                new_id
+            };
+
+            if Some(id) == top_area {
+                hovering_robot_idx = Some(i);
+            }
+
+            let bbox = camera.world_to_ndc_box(&robot::get_bbox(robot.position));
+            ui.push_area(ListeningArea {
+                bbox, id,
+                depth: 64000,
+                cursor: CursorIcon::Pointer,
+            });
+        }
+
+        if ui.just_released() {
+            if let Some(idx) = hovering_robot_idx {
+                if let Some(cur_info) = &self.robot_info {
+                    let cur_idx = cur_info.get_robot_idx();
+                    if cur_idx != idx {
+                        self.robot_info = Some(RobotInfo::new(idx));
+                        self.logic_tx.send(LogicMessage::StartRobotWatch(idx)).unwrap();
+                        self.logic_tx.send(LogicMessage::StopRobotWatch(cur_idx)).unwrap();
+                    }
+                } else {
+                    self.robot_info = Some(RobotInfo::new(idx));
+                    self.logic_tx.send(LogicMessage::StartRobotWatch(idx)).unwrap();
+                }
+            } else if top_area.is_none() {
+                if let Some(cur_info) = &self.robot_info {
+                    self.logic_tx.send(LogicMessage::StopRobotWatch(cur_info.get_robot_idx())).unwrap();
+                }
+                self.robot_info = None;
+            }
         }
         
-        for (chunk_id, chunk) in logic_state.chunks.iter() {
-            for (i, robot) in chunk.robots.iter_enumerate_unordered() {
-                self.buttons.push((
-                    EntityId::Robot(*chunk_id, i as u32),
-                    context.ui.simple_area_manager.push(SimpleArea::new(
-                        Robot::get_render_box(robot.movement_module.get_position()).world_to_ndc_pos(&context.ui.camera),
-                        ROBOT_DEPTH,
-                    ).with_cursor(CursorIcon::Pointer))
-                ));
-            }
-
-            for (i, fabricator) in chunk.fabricators.iter().enumerate() {
-                self.buttons.push((
-                    EntityId::Robot(*chunk_id, i as u32),
-                    context.ui.simple_area_manager.push(SimpleArea::new(
-                        Fabricator::get_bbox(fabricator.position.map(|x| x as f32)).world_to_ndc_pos(&context.ui.camera),
-                        ROBOT_DEPTH,
-                    ).with_cursor(CursorIcon::Pointer))
-                ));
-            }
-        }
-    }
-
-    pub fn send(&mut self, logic_state: &GameState, context: &mut MainContext) {
         if let Some(robot_info) = &mut self.robot_info {
-            match robot_info.id {
-                EntityId::Robot(chunk_id, id) => {
-                    if let Some(robot) = logic_state.get_robot(chunk_id, id) {
-                        let context = &mut RobotInfoContext {
-                            mc: context,
-                            data: Some(robot.computer.registers.get()),
-                        };
-                        robot_info.send(context);
-                    }
-                },
-                EntityId::Fabricator(..) => {
-                    let context = &mut RobotInfoContext {
-                        mc: context,
-                        data: None,
-                    };
-                    robot_info.send(context);
-                }
-            }
+            robot_info.update(ui, renderer, font, &logic.watched_robots);
         }
 
-        for (chunk_id, chunk) in logic_state.chunks.iter() {
-            chunk.targets.send(*chunk_id, context);
-
-            for robot in chunk.robots.iter_unordered() {
-                robot.send(context);
-            }
-
-            for fabricator in chunk.fabricators.iter() {
-                fabricator.send(context);
-            }
+        let extra_time = physics.finish_time.elapsed().as_secs_f32();
+        for (physics, display) in
+            physics.robots.iter()
+            .zip(logic.robot_display_values.iter())
+        {
+            let robot = Robot {
+                position: physics.position,
+                speed: physics.speed,
+                display: *display,
+            };
+            send_robot(&robot, renderer, font, extra_time);
         }
-
-        self.world.send(logic_state);
     }
 
-    pub fn draw(&self, proj_matrix: &glm::Mat4) {
-        self.world.draw(proj_matrix);
+    pub fn draw(&self, u_vp: &glm::Mat4, renderer: &mut Renderer) {
+        self.world.draw(renderer, u_vp);
     }
 }

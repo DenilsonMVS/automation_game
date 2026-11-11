@@ -13,14 +13,14 @@ out vec4 v_color;
 const vec2 OFFSETS[4] = vec2[](
     vec2(-0.5,  0.5),
     vec2(-0.5, -0.5),
-    vec2( 0.5, -0.5),
-    vec2( 0.5,  0.5)
+    vec2( 0.5,  0.5),
+    vec2( 0.5, -0.5)
 );
 
 const vec3 COLORS[3] = vec3[](
-    vec3(0.0,   0.0,  0.0),
+    vec3(  0.0,  0.0,   0.0),
     vec3(0.078, 0.59, 0.078),
-    vec3(0.1, 0.1, 0.2)
+    vec3(  0.1,  0.1,   0.2)
 );
 
 void main() {
@@ -30,7 +30,7 @@ void main() {
     vec2 vertice_global_position = u_chunk_start_pos + vertice_rel_position;
 
     vec2 transformed = (u_vp * vec4(vertice_global_position, 0, 1)).xy;
-    gl_Position = vec4(transformed, 0.999999, 1);
+    gl_Position = vec4(transformed, 1, 1);
 
     v_color = vec4(COLORS[a_id], 1);
 }
