@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use macros::{GlVertex, program_interface};
 use nalgebra_glm as glm;
 use anyhow::Result;
-use crate::graphics::renderer::{buffer::{block_buffer::BlockBuffer, stream_buffer::StreamBuffer}, draw_mode::DrawMode, fonts::font::Font, positioning::PositionMode, program::{Program, ShaderType, uniform::UniformValue}, vertex_array_object::{DrawArraysIndirectCommand, FieldType, StaticVertexLayout, VertexArrayObject}};
+use crate::graphics::renderer::{buffer::{block_buffer::BlockBuffer, stream_buffer::StreamBuffer}, draw_mode::DrawMode, fonts::font::{Font, PX_RANGE}, positioning::PositionMode, program::{Program, ShaderType, uniform::UniformValue}, vertex_array_object::{DrawArraysIndirectCommand, FieldType, StaticVertexLayout, VertexArrayObject}};
 
 pub(crate) mod font;
 
@@ -87,6 +87,7 @@ pub(crate) struct GlyphAttrs {
 struct FontProgram {
     u_texture: i32,
     u_projection: glm::Mat4,
+    u_px_range: f32,
 }
 
 pub struct FontRenderer {
@@ -100,6 +101,7 @@ impl FontRenderer {
     pub(crate) fn new() -> Result<Self> {
         let font_program = FontProgram::init()?;
         font_program.set_u_texture(&0);
+        font_program.set_u_px_range(&PX_RANGE);
 
         let glyph_buffer = BlockBuffer::<GlyphAttrs>::new();
         let glyph_vao = VertexArrayObject::new(&[&glyph_buffer]);
