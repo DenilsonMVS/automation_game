@@ -1,4 +1,4 @@
-use std::{array, usize};
+use std::array;
 use nalgebra_glm as glm;
 
 const STRETCH_CONSTANT2: f32 = -0.211324865405187; // (1/sqrt(2+1)-1)/2

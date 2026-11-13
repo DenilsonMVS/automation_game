@@ -1,4 +1,4 @@
-use crate::{game::{logic::top_level::instruction::{Instruction, Syscall, UnpackedInstruction}, render::robot_info::{ITEM_HEIGHT, ITEM_PADDING}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::UiState};
+use crate::{game::{logic::top_level::instruction::{Instruction, Syscall, UnpackedInstruction}, render::robot_info::{ITEM_HEIGHT, ITEM_PADDING}}, graphics::renderer::{fonts::{TextAlign, TextRenderConfig}, positioning::{PositionMode, RenderBox}}, ui::{UiElement, UiState}};
 use nalgebra_glm as glm;
 
 impl UnpackedInstruction {
@@ -120,37 +120,31 @@ impl UnpackedInstruction {
     }
 }
 
-impl Instruction {
-    pub(super) fn update<'a>(
-        &self,
-        state: &mut UiState<'a>,
+impl UiElement for Instruction {
+    fn update(&mut self,
         parent_bbox: &RenderBox,
         parent_depth: u16,
+        ctx: &mut UiState,
     ) {
+        const FONT_HEIGHT: f32 = ITEM_HEIGHT - ITEM_PADDING * 2.0;
+
+        let depth = parent_depth - 1;
         let unpacked = self.unpack();
 
         let asm = unpacked.format_assembly();
         let parts = unpacked.format_with_colors(&asm);
-        
-        const FONT_HEIGHT: f32 = ITEM_HEIGHT - ITEM_PADDING * 2.0;
-        let mono_width = state.font.get_monospace_width(FONT_HEIGHT);
 
-        let top_left = parent_bbox.get_top_left() + glm::vec2(ITEM_PADDING, - ITEM_PADDING);
-
-        let mut offset = 0;
-        for (text, color) in parts {
-            state.renderer.font_renderer.push(
-                &TextRenderConfig::new(
-                    &[(text, color)],
-                    glm::vec2(top_left.x + (offset as f32) * mono_width, top_left.y),
-                    FONT_HEIGHT,
-                )
-                .with_align(TextAlign::Left)
-                .with_depth(parent_depth - 2)
-                .with_mode(PositionMode::TopLeft),
-                state.font, 1,
-            );
-            offset += text.len() + 1;
-        }
+        let top_left = parent_bbox.get_top_left() + glm::vec2(ITEM_PADDING, -ITEM_PADDING);
+        ctx.renderer.font_renderer.push(
+            &TextRenderConfig::new(
+                &parts,
+                glm::vec2(top_left.x, top_left.y),
+                FONT_HEIGHT,
+            ).
+            with_align(TextAlign::Left)
+            .with_depth(depth)
+            .with_mode(PositionMode::TopLeft),
+            ctx.font, 1,
+        );
     }
 }

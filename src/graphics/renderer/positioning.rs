@@ -40,9 +40,9 @@ impl RenderBox {
         return Self { min, max };
     }
 
-    pub fn sub_box(&self, offset: glm::Vec2, size: glm::Vec2, mode: PositionMode, anchor: PositionMode) -> RenderBox {
-        let anchor = self.get_point(anchor);
-        RenderBox::new(anchor + offset, size, mode)
+    pub fn sub_box(&self, offset: glm::Vec2, size: glm::Vec2, anchor: PositionMode, parent_anchor: PositionMode) -> RenderBox {
+        let parent_anchor_position = self.get_point(parent_anchor);
+        RenderBox::new(parent_anchor_position + offset, size, anchor)
     }
 
     pub fn offset(&self, amount: glm::Vec2) -> RenderBox {

@@ -4,13 +4,52 @@ use std::time::Instant;
 use nalgebra_glm as glm;
 use winit::{event::ElementState, window::{CursorIcon, Window}};
 
-use crate::{graphics::{camera::Camera, renderer::{Renderer, fonts::font::Font, positioning::{RenderBox, get_screen_bbox, screen_position_to_ndc}}}, ui::area_conflit_resolve::resolve_conflicts};
+use crate::{game::{logic::top_level::{instruction::Instruction, robot::RobotLogic}, render::robot_info::{InstructionBox, register::Register}}, graphics::{camera::Camera, renderer::{Renderer, fonts::font::Font, positioning::{RenderBox, get_screen_bbox, screen_position_to_ndc}}}, ui::{area_conflit_resolve::resolve_conflicts, rect::Rect, table::Table, text::Text}};
 pub mod area_conflit_resolve;
+pub mod rect;
+pub mod text;
+pub mod table;
+pub mod layout;
+
+pub trait UiElement {
+    fn update(&mut self,
+        parent_bbox: &RenderBox,
+        parent_depth: u16,
+        ctx: &mut UiState,
+    );
+}
+
+pub enum UiNode {
+    Rect(Rect),
+    Text(Text),
+    InstructionBox(InstructionBox),
+    Instruction(Instruction),
+    Register(Register),
+    Table(Table),
+}
+
+impl UiElement for UiNode {
+    fn update(&mut self,
+        parent_bbox: &RenderBox,
+        parent_depth: u16,
+        ctx: &mut UiState,
+    ) {
+        match self {
+            Self::Rect(rect) => rect.update(parent_bbox, parent_depth, ctx),
+            Self::Text(text) => text.update(parent_bbox, parent_depth, ctx),
+            Self::InstructionBox(ibox) => ibox.update(parent_bbox, parent_depth, ctx),
+            Self::Instruction(inst) => inst.update(parent_bbox, parent_depth, ctx),
+            Self::Register(reg) => reg.update(parent_bbox, parent_depth, ctx),
+            Self::Table(tab) => tab.update(parent_bbox, parent_depth, ctx),
+        }
+    }
+}
 
 pub struct UiState<'a> {
     pub renderer: &'a mut Renderer,
     pub ui: &'a mut Ui,
     pub font: &'a mut Font,
+    pub watched_robot: Option<RobotLogic>,
 }
 
 

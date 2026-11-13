@@ -86,12 +86,12 @@ impl RenderState {
                 if let Some(cur_info) = &self.robot_info {
                     let cur_idx = cur_info.get_robot_idx();
                     if cur_idx != idx {
-                        self.robot_info = Some(RobotInfo::new(idx));
+                        self.robot_info = Some(RobotInfo::new(idx, ui));
                         self.logic_tx.send(LogicMessage::StartRobotWatch(idx)).unwrap();
                         self.logic_tx.send(LogicMessage::StopRobotWatch(cur_idx)).unwrap();
                     }
                 } else {
-                    self.robot_info = Some(RobotInfo::new(idx));
+                    self.robot_info = Some(RobotInfo::new(idx, ui));
                     self.logic_tx.send(LogicMessage::StartRobotWatch(idx)).unwrap();
                 }
             } else if top_area.is_none() {
